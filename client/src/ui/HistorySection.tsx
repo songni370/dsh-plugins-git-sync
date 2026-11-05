@@ -47,9 +47,6 @@ export function HistorySection(props: HistorySectionProps): ReactElement {
       trailing={
         <div className="dgs-btnRow">
           <span className="dgs-hint">{t('historyCount', { count: entries.length })}</span>
-          <Button small onClick={props.onRefresh} disabled={props.loading}>
-            {t('refresh')}
-          </Button>
           <button
             type="button"
             className="dgs-disclosure"

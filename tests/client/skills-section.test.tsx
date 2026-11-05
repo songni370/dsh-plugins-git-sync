@@ -24,6 +24,7 @@ describe('skill card', () => {
     )
     expect(html).toContain('id="dgs-skills-body" hidden=""')
     expect(html).toContain('共 12 个技能')
+    expect(html).not.toContain('刷新')
   })
 
   it('shows only the first ten skills on the default page', () => {

@@ -62,9 +62,6 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
       trailing={
         <div className="dgs-btnRow">
           <span className="dgs-hint">{t('skillsCount', { count: rows.length })}</span>
-          <Button small onClick={props.onRefresh} disabled={props.loading} loading={props.loading}>
-            {t('refresh')}
-          </Button>
           <button
             type="button"
             className="dgs-disclosure"

@@ -33,6 +33,7 @@ export function ScopeSection(props: ScopeSectionProps): ReactElement {
       <div className="dgs-scopeSwitches">
         <Switch
           label={t('configScopePlugins')}
+          hint={t('configScopePluginsHint')}
           checked={scopes.plugins}
           disabled={saving || (!scopes.skills && scopes.plugins)}
           onChange={checked => {
@@ -41,6 +42,7 @@ export function ScopeSection(props: ScopeSectionProps): ReactElement {
         />
         <Switch
           label={t('configScopeSkills')}
+          hint={t('configScopeSkillsHint')}
           checked={scopes.skills}
           disabled={saving || (!scopes.plugins && scopes.skills)}
           onChange={checked => {

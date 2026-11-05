@@ -21,6 +21,8 @@ describe('backup contents card', () => {
     expect(html).toContain('aria-label="技能"')
     expect(html.match(/aria-checked="true"/g)).toHaveLength(2)
     expect(html).toContain('关闭后不会上传或恢复对应内容')
+    expect(html).toContain('API Key、Token、密码等内容不会上传')
+    expect(html).toContain('可能含私有提示词或脚本')
   })
 
   it('disables the last enabled scope so at least one stays on', () => {

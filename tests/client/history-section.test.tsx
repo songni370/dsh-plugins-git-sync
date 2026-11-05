@@ -54,5 +54,6 @@ describe('history card', () => {
       />,
     )
     expect(html).toContain('id="dgs-history-body" hidden=""')
+    expect(html).not.toContain('刷新')
   })
 })
