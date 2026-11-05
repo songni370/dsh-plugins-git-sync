@@ -9,6 +9,7 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 ### Changed
 
 - 插件页图标更换为新的鲸鱼喷水插画。
+- 配置改为按字段做三方合并：两台设备改了不同配置项时自动保留两边，只有同一个配置项被改成不同值（或版本/启停也冲突）时才弹出冲突选择。
 
 ## [0.2.10] - 2026-10-30
 

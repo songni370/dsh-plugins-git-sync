@@ -230,7 +230,6 @@ export interface SyncConfig {
   autoSync: AutoSyncConfig
   /** Device name shown in history and status. */
   deviceName: string
-  /** Whether a sync may remove plugins that another device deleted. */
 }
 
 /** Configuration as shown to the UI: secrets never leave the host. */

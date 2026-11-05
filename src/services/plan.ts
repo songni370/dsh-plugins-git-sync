@@ -31,6 +31,7 @@ import type {
   SyncPlan,
 } from '../types.js'
 import { changedConfigKeys, changedFields, statesEqual, type PluginState } from './model.js'
+import { mergeConfigs } from './config-merge.js'
 
 /** Per-plugin remote metadata used to explain a conflict. */
 export interface RemoteMeta {
@@ -207,6 +208,47 @@ function remotePushActions(local: PluginState, remote: PluginState | null | unde
       detail: '上传插件配置 / upload plugin configuration',
       destructive: false,
       configs: local.configs,
+    })
+  }
+  return actions
+}
+
+/**
+ * Merge configs changed independently on two devices.
+ *
+ * This is deliberately limited to the case where version and enabled state
+ * already agree. If those differ, the user still has to choose a whole state;
+ * merging configs around that choice would hide which side's configuration was
+ * kept. `null` means "not mergeable" (config sync off, or a real key conflict).
+ */
+function mergedConfigActions(
+  base: PluginState | null | undefined,
+  local: PluginState,
+  remote: PluginState,
+  includeConfigs: boolean,
+): PlanAction[] | null {
+  if (!includeConfigs || local.version !== remote.version || local.enabled !== remote.enabled) return null
+  const result = mergeConfigs(base?.configs, local.configs, remote.configs)
+  if (result.conflicts.length > 0) return null
+  const actions: PlanAction[] = []
+  if (changedConfigKeys(local.configs, result.merged).length > 0) {
+    actions.push({
+      kind: 'restore-config',
+      pluginId: local.id,
+      pluginName: local.displayName ?? local.name,
+      detail: '合并并应用插件配置 / merge and apply plugin configuration',
+      destructive: false,
+      configs: result.merged,
+    })
+  }
+  if (changedConfigKeys(remote.configs, result.merged).length > 0) {
+    actions.push({
+      kind: 'push-config',
+      pluginId: local.id,
+      pluginName: local.displayName ?? local.name,
+      detail: '合并并上传插件配置 / merge and upload plugin configuration',
+      destructive: false,
+      configs: result.merged,
     })
   }
   return actions
@@ -616,6 +658,14 @@ export function planSync(input: PlanInput): SyncPlan {
       // The repository copy is gone while this device still has the plugin.
       // Not a conflict: re-create it in the repository.
       if (local !== null) actions.push(...remotePushActions(local, remote, includeConfigs))
+      diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
+      continue
+    }
+    // Both sides changed, but different settings can be merged field by field
+    // instead of asking the user to throw away one device's edits.
+    const merged = local !== null ? mergedConfigActions(base, local, remote, includeConfigs) : null
+    if (merged !== null) {
+      actions.push(...merged)
       diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
       continue
     }

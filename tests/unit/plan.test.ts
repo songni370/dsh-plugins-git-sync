@@ -249,6 +249,41 @@ describe('two-way sync plan', () => {
     expect(skipped.conflicts).toHaveLength(1)
   })
 
+  it('merges configuration keys changed on different devices without a conflict', () => {
+    const plan = planSync(input({
+      base: { alpha: plugin('alpha', { configs: { timeout: 10, retries: 2 } }) },
+      local: { alpha: plugin('alpha', { configs: { timeout: 20, retries: 2 } }) },
+      remote: { alpha: plugin('alpha', { configs: { timeout: 10, retries: 3 } }) },
+    }))
+    expect(plan.conflicts).toHaveLength(0)
+    expect(actionsOf(plan, 'restore-config', 'alpha')).toHaveLength(1)
+    expect(actionsOf(plan, 'push-config', 'alpha')).toHaveLength(1)
+    expect(actionsOf(plan, 'restore-config')[0]?.configs).toEqual({ timeout: 20, retries: 3 })
+    expect(actionsOf(plan, 'push-config')[0]?.configs).toEqual({ timeout: 20, retries: 3 })
+    expect(plan.requiresConfirmation).toBe(false)
+  })
+
+  it('still reports a conflict when both devices changed the same config key', () => {
+    const plan = planSync(input({
+      base: { alpha: plugin('alpha', { configs: { timeout: 10 } }) },
+      local: { alpha: plugin('alpha', { configs: { timeout: 20 } }) },
+      remote: { alpha: plugin('alpha', { configs: { timeout: 30 } }) },
+    }))
+    expect(plan.actions).toHaveLength(0)
+    expect(plan.conflicts).toHaveLength(1)
+    expect(plan.conflicts[0]?.fields).toContain('config.timeout')
+  })
+
+  it('does not merge configs when the installed version also differs', () => {
+    const plan = planSync(input({
+      base: { alpha: plugin('alpha', { version: '1.0.0', configs: { timeout: 10, retries: 2 } }) },
+      local: { alpha: plugin('alpha', { version: '1.1.0', configs: { timeout: 20, retries: 2 } }) },
+      remote: { alpha: plugin('alpha', { version: '1.2.0', configs: { timeout: 10, retries: 3 } }) },
+    }))
+    expect(plan.actions).toHaveLength(0)
+    expect(plan.conflicts).toHaveLength(1)
+  })
+
   it('asks whether to delete the repository copy when the local plugin is gone', () => {
     const base = { alpha: plugin('alpha') }
     const local = {}

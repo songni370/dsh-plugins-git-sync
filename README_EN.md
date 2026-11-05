@@ -109,8 +109,10 @@ The device keeps a **baseline** of the last agreed state and compares `base / lo
 | Both changed identically | Skip |
 | Present here, missing in the repository | Not a conflict; back it up into the repository |
 | Missing here, still in the repository | Conflict: delete from repository or keep repository |
+| Different config keys changed on each side | Merge field by field; keep both changes |
 | Both changed differently | Conflict; wait for your choice |
 
+- Configs are merged key by key: changes to different keys on two devices are kept automatically. You are only asked when the same key changed to different values, or when the version/enabled state also conflicts.
 - A repository entry is only deleted after you explicitly choose “Delete from repository”; “Keep repository” keeps it and lets the rest of the sync run.
 - When the repository is missing a plugin this device has, nothing is removed here; it is backed up again.
 - Deleting repository entries is destructive and only runs after confirmation.

@@ -220,10 +220,12 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 | 有 | 无 | 任意 | 任意 | 不算冲突：`push-plugin` 把本机插件重新写入仓库；不可安装时追加「仅记录」警告 |
 | 无（本机删除） | 有 | 是 | 否 | 冲突 `local-deleted`；选择 `local` → `remove-remote`（破坏性）；选择 `remote` → 恢复本机；`skip` 保留冲突 |
 | 有/无 | 有（改动） | 否 | 是 | `install/upgrade/downgrade`（+`enable/disable`/`restore-config`）应用远端状态 |
-| 有 | 有 | 是 | 是 | 若 `statesEqual(local, remote)` → 收敛（无动作）；否则冲突 `both-changed` |
+| 有 | 有 | 是 | 是 | 配置按字段三方合并；仍不同则冲突 `both-changed` |
 | 无 | 无 | — | — | 无动作 |
 
 本机有、仓库没有时，即使基线显示仓库曾经删除过它，也不再产生 `remote-deleted` 冲突；同步会按本机状态重新备份。仓库条目的删除只在本机删除后的 `local-deleted` 冲突中发生，并且必须由用户显式选择。
+
+两边都改、但版本和启停状态一致时，`mergeConfigs(base.configs, local.configs, remote.configs)` 会按 key 合并：只有一侧改动的 key 取该侧，两侧改成相同值也算收敛；两侧改成不同值（含一侧删除、另一侧修改）的 key 记为冲突。合并成功时生成 `restore-config`（写回本机）和/或 `push-config`（写回仓库），不弹冲突。版本或启停状态也变了时不自动合并配置，仍由用户选择整侧状态。
 
 冲突解决（`resolution.choice`）：
 
