@@ -296,7 +296,7 @@ describe('settings page render', () => {
     // The direction selector is gone; diff always previews a two-way sync.
     expect(container.querySelector('#dgs-diff-direction')).toBeNull()
   })
-  it('renders diff results inside the operations card, not in a global area', async () => {
+  it('opens the diff preview in a modal instead of below the actions', async () => {
     await settle()
     const diffButton = Array.from(container.querySelectorAll('button')).find(button =>
       (button.textContent ?? '').includes('检查差异'),
@@ -309,11 +309,12 @@ describe('settings page render', () => {
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0))
     })
-    const panel = container.querySelector('.dgs-diffPanel')
-    expect(panel).not.toBeNull()
-    const card = panel?.closest('.dgs-card')
-    expect(card).not.toBeNull()
-    expect(card?.querySelector('.dgs-actionsMain')).not.toBeNull()
+    const modal = container.querySelector('.dgs-modal')
+    expect(modal).not.toBeNull()
+    expect(modal?.textContent).toContain('差异预览')
+    expect(modal?.textContent).toContain('仅预览')
+    expect(container.querySelector('.dgs-diffPanel')).toBeNull()
+    expect(modal?.closest('.dgs-card')).toBeNull()
   })
 
   it('merges auto-sync into the operations card as a collapsed panel', async () => {

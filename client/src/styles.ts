@@ -1038,43 +1038,6 @@ export const CSS = `
   display: inline;
   white-space: normal;
 }
-.dgs-diffPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 14px;
-  border: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-2, #f7f8fa);
-}
-.dgs-diffHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.dgs-diffHeadText {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.dgs-diffTitle {
-  margin: 0;
-  font-size: 14px;
-  line-height: 22px;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary, #1f2328);
-}
-.dgs-diffDesc {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary, #5c6570);
-}
 .dgs-planSummary {
   display: flex;
   flex-wrap: wrap;

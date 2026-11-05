@@ -26,7 +26,11 @@ export interface ModalProps {
   t: Translate
   title: string
   description?: string
-  confirmLabel: string
+  /** Omit for a close-only dialog (for example a read-only preview). */
+  confirmLabel?: string
+  confirmVariant?: 'primary' | 'danger'
+  hideCancel?: boolean
+  cancelLabel?: string
   busy?: boolean
   onConfirm: () => void
   onClose: () => void
@@ -104,12 +108,20 @@ export function Modal(props: ModalProps): ReactElement {
         </div>
         {props.children === undefined ? null : <div className="dgs-modalBody">{props.children}</div>}
         <div className="dgs-modalFoot">
-          <Button onClick={props.onClose} disabled={props.busy === true}>
-            {props.t('cancel')}
-          </Button>
-          <Button variant="danger" onClick={props.onConfirm} disabled={props.busy === true}>
-            {props.busy === true ? props.t('confirmRunning') : props.confirmLabel}
-          </Button>
+          {props.hideCancel === true ? null : (
+            <Button onClick={props.onClose} disabled={props.busy === true}>
+              {props.cancelLabel ?? props.t('cancel')}
+            </Button>
+          )}
+          {props.confirmLabel === undefined ? null : (
+            <Button
+              variant={props.confirmVariant ?? 'danger'}
+              onClick={props.onConfirm}
+              disabled={props.busy === true}
+            >
+              {props.busy === true ? props.t('confirmRunning') : props.confirmLabel}
+            </Button>
+          )}
         </div>
       </div>
     </div>

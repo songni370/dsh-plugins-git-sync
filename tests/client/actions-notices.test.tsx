@@ -18,12 +18,10 @@ function render(busy: 'sync' | 'diff' | null = null): string {
       busy={busy}
       hostBusy={false}
       enabled
-      diff={null}
       onBackup={() => undefined}
       onRestore={() => undefined}
       onSync={() => undefined}
       onDiff={() => undefined}
-      onClearDiff={() => undefined}
       notices={
         <>
           <Banner tone="warn">BUSY-NOTICE</Banner>

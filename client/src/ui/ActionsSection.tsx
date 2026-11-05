@@ -2,17 +2,15 @@
  * "Operations" card: the four manual actions and the read-only difference
  * preview.
  *
- * The three content-changing actions are delegated to the page, which opens
- * the confirmation dialog for them. Only "check differences" renders its
- * result here — it never modifies anything, so it needs no dialog.
+ * All actions are delegated to the page: content-changing ones open the
+ * confirmation dialog, and "check differences" opens a read-only preview
+ * dialog.
  * @module ui/ActionsSection
  */
 
 import type { ReactElement, ReactNode } from 'react'
-import type { DiffResponse } from '../../../src/http/api-types'
 import type { Translate } from '../i18n'
-import { Button, Card, LinkButton } from './controls'
-import { PlanPreview } from './PlanPreview'
+import { Button, Card } from './controls'
 
 /** Action names used for the busy indicator and disabled set. */
 export type ActionName = 'backup' | 'restore' | 'rollback' | 'sync' | 'diff' | 'config' | 'auto' | 'exclusion'
@@ -26,12 +24,10 @@ export interface ActionsSectionProps {
   hostBusy: boolean
   /** Actions need a saved repository URL. */
   enabled: boolean
-  diff: DiffResponse | null
   onBackup: () => void
   onRestore: () => void
   onSync: () => void
   onDiff: () => void
-  onClearDiff: () => void
   /** Automatic-sync panel, merged into this card below the manual actions. */
   autoPanel?: ReactNode
   /** Result of a manual operation, shown inside this card. */
@@ -85,19 +81,6 @@ export function ActionsSection(props: ActionsSectionProps): ReactElement {
       </div>
 
       {props.notices === undefined ? null : <div className="dgs-actionsNotices">{props.notices}</div>}
-
-      {props.diff === null ? null : (
-        <section className="dgs-diffPanel" aria-label={t('diffTitle')}>
-          <div className="dgs-diffHead">
-            <div className="dgs-diffHeadText">
-              <h4 className="dgs-diffTitle">{t('diffTitle')}</h4>
-              <p className="dgs-diffDesc">{t('diffDesc')}</p>
-            </div>
-            <LinkButton onClick={props.onClearDiff}>{t('close')}</LinkButton>
-          </div>
-          <PlanPreview t={t} plan={props.diff.plan} />
-        </section>
-      )}
 
       {props.autoPanel === undefined ? null : (
         <div className="dgs-autoSection">{props.autoPanel}</div>

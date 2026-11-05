@@ -39,7 +39,7 @@ The plugin's own detail page also has a compact **Backup settings** card showing
 
 - **Backup contents**: its own card above the repository card; plugin and skill switches are independent and both on by default. Turning one off stops uploading and restoring that content while existing repository backups remain.
 - **Repository card**: detects HTTPS / SSH / local paths, shows only the matching auth fields, and displays where plugin and skill files live in the repository; collapsed once configured.
-- **Operations**: `Sync`, `Check differences`, `Back up to Git` and `Restore from Git` are four direct buttons; nothing is hidden in a menu.
+- **Operations**: `Sync`, `Check differences`, `Back up to Git` and `Restore from Git` are four direct buttons; nothing is hidden in a menu. `Check differences` opens its result in a dialog.
   - `Sync` runs directly when there are no conflicts or delete/overwrite steps; only those open a confirmation preview.
 - **Sync status**: badge, plugin and skill count-tile groups (groups separated by spacing; local / repository / to upload / to download; plus conflicts for plugins and excluded for skills) and metadata, in the same card as the operations. The tile groups follow the backup-content switches, so a disabled scope hides its status.
 - **Automatic sync**: collapsed by default, shows on/off and trigger summary; expand to edit startup delay and triggers.

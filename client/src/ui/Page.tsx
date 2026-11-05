@@ -785,14 +785,10 @@ export function Page({ t }: PageProps): ReactElement {
             busy={busy}
             hostBusy={hostBusy}
             enabled={configured}
-            diff={diff}
             onBackup={() => void runBackup()}
             onRestore={() => void previewRestore('restore')}
             onSync={() => void previewSync()}
             onDiff={() => void runDiff()}
-            onClearDiff={() => {
-              setDiff(null)
-            }}
             statusPanel={<StatusSection t={t} status={view} skills={skills} embedded />}
             notices={
               <>
@@ -859,6 +855,21 @@ export function Page({ t }: PageProps): ReactElement {
         </>
       )}
 
+      {diff === null ? null : (
+        <Modal
+          t={t}
+          title={t('diffTitle')}
+          description={t('diffDesc')}
+          confirmLabel={t('close')}
+          confirmVariant="primary"
+          hideCancel
+          onConfirm={() => setDiff(null)}
+          onClose={() => setDiff(null)}
+        >
+          <PlanPreview t={t} plan={diff.plan} />
+        </Modal>
+      )}
+
       {modal === null ? null : (
         <Modal
           t={t}
@@ -883,7 +894,7 @@ export function Page({ t }: PageProps): ReactElement {
         </Modal>
       )}
 
-      {modal === null ? (
+      {modal === null && diff === null ? (
         <ToastStack
           t={t}
           items={(Object.keys(feedback) as FeedbackArea[]).flatMap(area => {
