@@ -77,27 +77,27 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
           status.lastOperation.ok ? 'ok' : 'failed',
         )} · ${formatDateTime(status.lastOperation.at, t('unknown'))}`
 
-  const tiles: CountTile[] = [
-    { key: t('statusLocalPlugins'), value: String(status.localPluginCount), label: t('statusLocalPlugins') },
+  const pluginTiles: CountTile[] = [
+    { key: 'local-plugins', value: String(status.localPluginCount), label: t('statusLocalPlugins') },
     {
-      key: t('statusRemotePlugins'),
+      key: 'remote-plugins',
       value: status.remotePluginCount === null ? '—' : String(status.remotePluginCount),
       label: t('statusRemotePlugins'),
     },
     {
-      key: t('statusPendingUp'),
+      key: 'pending-up',
       value: String(status.pendingUploads),
       label: t('statusPendingUp'),
       ...(status.pendingUploads > 0 ? { tone: 'warn' as const } : {}),
     },
     {
-      key: t('statusPendingDown'),
+      key: 'pending-down',
       value: String(status.pendingDownloads),
       label: t('statusPendingDown'),
       ...(status.pendingDownloads > 0 ? { tone: 'warn' as const } : {}),
     },
     {
-      key: t('statusConflicts'),
+      key: 'conflicts',
       value: String(status.conflictCount),
       label: t('statusConflicts'),
       ...(status.conflictCount > 0 ? { tone: 'error' as const } : {}),
@@ -105,18 +105,45 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
   ]
 
   const skillRows = props.skills?.skills ?? []
-  const skillProgress = skillRows.length === 0
-    ? null
-    : {
-        synced: skillRows.filter(skill => skill.syncStatus === 'synced').length,
-        upload: skillRows.filter(skill => skill.syncStatus === 'local-only' || skill.syncStatus === 'modified').length,
-        download: skillRows.filter(skill => skill.syncStatus === 'remote-only').length,
-        excluded: skillRows.filter(skill => skill.syncStatus === 'excluded').length,
-      }
+  const localSkillCount = skillRows.filter(skill =>
+    skill.presence === undefined ? skill.syncStatus !== 'remote-only' : skill.presence !== 'remote-only',
+  ).length
+  const remoteSkillCount = skillRows.filter(skill =>
+    skill.presence === undefined ? skill.syncStatus !== 'local-only' : skill.presence !== 'local-only',
+  ).length
+  const skillPendingUp = skillRows.filter(
+    skill => skill.syncStatus === 'local-only' || skill.syncStatus === 'modified',
+  ).length
+  const skillPendingDown = skillRows.filter(skill => skill.syncStatus === 'remote-only').length
+  const skillExcluded = skillRows.filter(skill => skill.syncStatus === 'excluded').length
+  const skillTiles: CountTile[] = [
+    { key: 'local-skills', value: String(localSkillCount), label: t('statusLocalSkills') },
+    { key: 'remote-skills', value: String(remoteSkillCount), label: t('statusRemoteSkills') },
+    {
+      key: 'skills-pending-up',
+      value: String(skillPendingUp),
+      label: t('statusPendingUp'),
+      ...(skillPendingUp > 0 ? { tone: 'warn' as const } : {}),
+    },
+    {
+      key: 'skills-pending-down',
+      value: String(skillPendingDown),
+      label: t('statusPendingDown'),
+      ...(skillPendingDown > 0 ? { tone: 'warn' as const } : {}),
+    },
+    {
+      key: 'skills-excluded',
+      value: String(skillExcluded),
+      label: t('statusSkillExcluded'),
+    },
+  ]
 
-  const body = (
-    <>
-      <div className="dgs-statusTiles">
+  const showPlugins = status.config.backupScopes?.plugins !== false
+  const showSkills = status.config.backupScopes?.skills !== false && props.skills !== null && props.skills !== undefined
+
+  function renderTiles(tiles: CountTile[], className: string): ReactElement {
+    return (
+      <div className={className}>
         {tiles.map(tile => (
           <div
             key={tile.key}
@@ -131,16 +158,13 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
           </div>
         ))}
       </div>
+    )
+  }
 
-      {skillProgress === null ? null : (
-        <div className="dgs-skillStatusRow">
-          <span className="dgs-statusMetaLabel">{t('statusSkills')}</span>
-          <span>{t('statusSkillSynced', { count: skillProgress.synced })}</span>
-          <span>{t('statusSkillPendingUp', { count: skillProgress.upload })}</span>
-          <span>{t('statusSkillPendingDown', { count: skillProgress.download })}</span>
-          <span>{t('statusSkillExcluded', { count: skillProgress.excluded })}</span>
-        </div>
-      )}
+  const body = (
+    <>
+      {showPlugins ? renderTiles(pluginTiles, 'dgs-statusTiles') : null}
+      {showSkills ? renderTiles(skillTiles, 'dgs-statusTiles dgs-statusTilesSkills') : null}
 
       <div className="dgs-statusMeta">
         <MetaCell label={t('statusDevice')} value={status.config.device.name} title={status.config.device.name} />

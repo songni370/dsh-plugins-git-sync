@@ -112,6 +112,8 @@ export interface SkillSummary {
   files: number
   bytes: number
   syncStatus: SkillSyncStatus
+  /** Where the skill exists; omitted by older Hosts. */
+  presence?: 'both' | 'local-only' | 'remote-only'
 }
 
 /** Deployed-skill list response. */

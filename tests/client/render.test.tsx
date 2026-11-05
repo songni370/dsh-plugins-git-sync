@@ -238,12 +238,11 @@ describe('settings page render', () => {
     expect(container.textContent).toContain('同步状态')
   })
 
-  it('shows skill progress in the sync status area', async () => {
+  it('shows skill tiles in the sync status area', async () => {
     await settle()
-    expect(container.textContent).toContain('已备份 1')
-    expect(container.textContent).toContain('待上传 0')
-    expect(container.textContent).toContain('待下载 0')
-    expect(container.textContent).toContain('已排除 0')
+    expect(container.textContent).toContain('本地技能')
+    expect(container.textContent).toContain('仓库技能')
+    expect(container.textContent).toContain('已排除')
   })
 
   it('collapses an already configured repository card and expands it on demand', async () => {
@@ -378,7 +377,7 @@ describe('settings page render', () => {
       expect(text).toContain(label)
     }
     expect(container.querySelector('.dgs-statusTiles')).not.toBeNull()
-    expect(container.querySelectorAll('.dgs-statusTile')).toHaveLength(5)
+    expect(container.querySelectorAll('.dgs-statusTile')).toHaveLength(10)
     expect(container.querySelectorAll('.dgs-statusMetaItem')).toHaveLength(6)
     // The status block now lives inside the operations card, below the actions.
     const actionsCard = container.querySelector('.dgs-actionsMain')?.closest('.dgs-card')
