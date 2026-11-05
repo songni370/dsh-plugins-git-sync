@@ -8,7 +8,7 @@
  * snapshot.
  * @module skills/skills
  */
-import type { SkillBackup } from '../types.js';
+import type { SkillBackup, SkillEntry, SkillSyncStatus } from '../types.js';
 /** Result of scanning the local skills directory. */
 export interface ScannedSkills {
     backup: SkillBackup;
@@ -27,6 +27,12 @@ export declare function scanSkills(dshHome: string, now?: string): Promise<Scann
  */
 export declare function mergeSkills(local: SkillBackup, remote: SkillBackup | null): SkillBackup;
 /** Result of restoring a skill snapshot. */
+/** Total stored bytes of one skill, decoded for base64 files. */
+export declare function skillBytes(skill: SkillEntry): number;
+/** Compare two skills by path, content, encoding and executable bit. */
+export declare function sameSkill(skill: SkillEntry, other: SkillEntry): boolean;
+/** Backup status of a skill on this device and in the repository. */
+export declare function skillSyncStatus(local: SkillEntry | undefined, remote: SkillEntry | undefined): SkillSyncStatus;
 export interface RestoredSkills {
     restored: string[];
     skipped: string[];

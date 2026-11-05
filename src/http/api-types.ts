@@ -25,6 +25,7 @@ import type {
   SyncConfig,
   SyncConfigView,
   SyncPlan,
+  SkillSyncStatus,
   SyncState,
 } from '../types.js'
 
@@ -105,11 +106,12 @@ export interface PluginListResponse {
   availableProfiles: string[]
 }
 
-/** One deployed skill, named and sized for the settings list. */
+/** One deployed or repository-side skill, named and sized for the settings list. */
 export interface SkillSummary {
   name: string
   files: number
   bytes: number
+  syncStatus: SkillSyncStatus
 }
 
 /** Deployed-skill list response. */

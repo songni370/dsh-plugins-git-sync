@@ -13,6 +13,7 @@ const skills: SkillListResponse = {
     name: `skill-${index}`,
     files: index + 1,
     bytes: (index + 1) * 1024,
+    syncStatus: 'synced',
   })),
   warnings: [],
 }
@@ -25,6 +26,25 @@ describe('skill card', () => {
     expect(html).toContain('id="dgs-skills-body" hidden=""')
     expect(html).toContain('共 12 个技能')
     expect(html).not.toContain('刷新')
+  })
+
+  it('shows the backup status for every skill', () => {
+    const mixed: SkillListResponse = {
+      skills: [
+        { name: 'synced-skill', files: 1, bytes: 10, syncStatus: 'synced' },
+        { name: 'local-skill', files: 1, bytes: 10, syncStatus: 'local-only' },
+        { name: 'remote-skill', files: 1, bytes: 10, syncStatus: 'remote-only' },
+        { name: 'modified-skill', files: 2, bytes: 20, syncStatus: 'modified' },
+      ],
+      warnings: [],
+    }
+    const html = renderToStaticMarkup(
+      <SkillsSection t={t} skills={mixed} loading={false} error={null} onRefresh={() => undefined} />,
+    )
+    expect(html).toContain('已备份')
+    expect(html).toContain('仅本机')
+    expect(html).toContain('仅仓库')
+    expect(html).toContain('有修改')
   })
 
   it('shows only the first ten skills on the default page', () => {

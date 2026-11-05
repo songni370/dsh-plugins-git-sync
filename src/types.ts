@@ -189,6 +189,9 @@ export interface SkillBackup {
   skills: SkillEntry[]
 }
 
+/** How one deployed skill compares with the repository copy. */
+export type SkillSyncStatus = 'synced' | 'local-only' | 'remote-only' | 'modified'
+
 /** `profiles/<profile>/configs/<id>.json`. */
 export interface RemoteConfigEntry {
   pluginId: string

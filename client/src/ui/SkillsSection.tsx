@@ -1,23 +1,32 @@
 /**
  * "Skills" card: the DSH skills deployed on this device.
  *
- * The Host sends names and sizes only; skill file contents never reach the
- * settings page. The card sits below the plugin list, starts collapsed, and
+ * The Host sends names, sizes and backup status only; skill file contents never
+ * reach the settings page. The card sits below the plugin list, starts collapsed, and
  * paginates like the plugin list so a large skill library stays manageable.
  * @module ui/SkillsSection
  */
 
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
-import type { SkillListResponse } from '../../../src/http/api-types'
+import type { SkillListResponse, SkillSummary } from '../../../src/http/api-types'
 import type { Translate } from '../i18n'
 import { formatBytes } from '../format'
-import { Banner, Button, Card, LinkButton, Loading, Select } from './controls'
+import type { Tone } from './controls'
+import { Badge, Banner, Button, Card, LinkButton, Loading, Select } from './controls'
 
 /** Rows-per-page choices for the skill list. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'dsh-plugins-git-sync.skills-page-size'
+
+/** Copy and tone for every backup status the Host can report for a skill. */
+const SKILL_SYNC_META: Record<SkillSummary['syncStatus'], { key: string; tone: Tone }> = {
+  synced: { key: 'skillStatusSynced', tone: 'success' },
+  'local-only': { key: 'skillStatusLocalOnly', tone: 'idle' },
+  'remote-only': { key: 'skillStatusRemoteOnly', tone: 'idle' },
+  modified: { key: 'skillStatusModified', tone: 'warn' },
+}
 
 /** Remember the user's page size across visits. */
 function storedPageSize(): number {
@@ -98,14 +107,20 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
 
       <div id="dgs-skills-body" hidden={!open}>
         <ul className="dgs-skillList">
-          {pageRows.map(skill => (
-            <li className="dgs-skillItem" key={skill.name}>
-              <span className="dgs-skillName">{skill.name}</span>
-              <span className="dgs-skillMeta">
-                {t('skillsMeta', { files: skill.files, size: formatBytes(skill.bytes) })}
-              </span>
-            </li>
-          ))}
+          {pageRows.map(skill => {
+            const meta = SKILL_SYNC_META[skill.syncStatus] ?? SKILL_SYNC_META['local-only']
+            return (
+              <li className="dgs-skillItem" key={skill.name}>
+                <span className="dgs-skillName">{skill.name}</span>
+                <span className="dgs-skillTail">
+                  <span className="dgs-skillMeta">
+                    {t('skillsMeta', { files: skill.files, size: formatBytes(skill.bytes) })}
+                  </span>
+                  <Badge tone={meta.tone}>{t(meta.key)}</Badge>
+                </span>
+              </li>
+            )
+          })}
         </ul>
 
         {rows.length === 0 ? null : (

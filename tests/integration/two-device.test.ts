@@ -292,14 +292,23 @@ describe('two-device synchronization', () => {
     expect(listed.warnings).toEqual([])
     expect(listed.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'beta-skill'])
     expect(listed.skills.every(skill => skill.files === 1 && skill.bytes > 0)).toBe(true)
+    expect(listed.skills.every(skill => skill.syncStatus === 'synced')).toBe(true)
 
     const winBeta = join(ctx.win.root, 'skills', 'beta-skill')
     await mkdir(winBeta, { recursive: true })
     await writeFile(join(winBeta, 'SKILL.md'), '# Beta kept on win\n')
+    await ctx.win.engine.previewSync()
+    const winListed = await ctx.win.engine.listSkills()
+    expect(winListed.skills.find(skill => skill.name === 'alpha-skill')?.syncStatus).toBe('remote-only')
+    expect(winListed.skills.find(skill => skill.name === 'beta-skill')?.syncStatus).toBe('modified')
+
     const restore = await ctx.win.engine.restore({ confirmDestructive: true })
     expect(restore.ok).toBe(true)
     expect(await readFile(join(ctx.win.root, 'skills', 'alpha-skill', 'SKILL.md'), 'utf8')).toBe('# Alpha from mac\n')
     expect(await readFile(join(winBeta, 'SKILL.md'), 'utf8')).toBe('# Beta kept on win\n')
+    const afterRestore = await ctx.win.engine.listSkills()
+    expect(afterRestore.skills.find(skill => skill.name === 'alpha-skill')?.syncStatus).toBe('synced')
+    expect(afterRestore.skills.find(skill => skill.name === 'beta-skill')?.syncStatus).toBe('modified')
   }, 120_000)
 
   it('keeps each backup scope independent and leaves a disabled scope untouched', async () => {

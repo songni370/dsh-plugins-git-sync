@@ -88,7 +88,7 @@ function pluginsPayload(): PluginListResponse {
 /** Build the deployed-skill payload. */
 function skillsPayload(): SkillListResponse {
   return {
-    skills: [{ name: 'ponytail', files: 1, bytes: 1234 }],
+    skills: [{ name: 'ponytail', files: 1, bytes: 1234, syncStatus: 'synced' }],
     warnings: [],
   }
 }

@@ -38,6 +38,7 @@ import type {
   RemoteProfileState,
   RepoStore,
   SkillBackup,
+  SkillEntry,
   SyncBaseline,
   SyncConfig,
   SyncConfigView,
@@ -66,7 +67,7 @@ import {
 import { executeLocalActions, isLocalAction } from './executor.js'
 import { createSnapshotService, snapshotConfigs, type SnapshotService } from './snapshot.js'
 import { fileExists } from '../state/store.js'
-import { mergeSkills, restoreMissingSkills, scanSkills } from '../skills/skills.js'
+import { mergeSkills, restoreMissingSkills, scanSkills, skillBytes, skillSyncStatus } from '../skills/skills.js'
 import { join } from 'node:path'
 
 /** Everything the engine needs, injected by the plugin entry. */
@@ -440,19 +441,38 @@ export class SyncEngine {
     return result
   }
 
-  /** List deployed skills without sending their file contents to the page. */
+  /** List deployed and repository skills without sending file contents to the page. */
   async listSkills(): Promise<SkillListResponse> {
+    const config = await this.readConfig()
+    const state = await this.readState()
     const scanned = await scanSkills(this.dshHome)
+    let remoteSkills: readonly SkillEntry[] = []
+    if (config.repoUrl.trim() !== '') {
+      try {
+        const { store, workDir } = this.repoFor(config)
+        if ((await fileExists(workDir)) && store.prepared()) {
+          const read = await this.readRemote(store, config, state.lastCommit)
+          remoteSkills = read.skills?.skills ?? []
+        }
+      } catch {
+        // A missing or malformed repository must not hide local skills.
+      }
+    }
+    const localMap = new Map(scanned.backup.skills.map(skill => [skill.name, skill]))
+    const remoteMap = new Map(remoteSkills.map(skill => [skill.name, skill]))
+    const names = [...new Set([...localMap.keys(), ...remoteMap.keys()])].sort()
     return {
-      skills: scanned.backup.skills.map(skill => ({
-        name: skill.name,
-        files: skill.files.length,
-        bytes: skill.files.reduce(
-          (total, file) =>
-            total + (file.encoding === 'base64' ? Buffer.from(file.content, 'base64').length : Buffer.byteLength(file.content, 'utf8')),
-          0,
-        ),
-      })),
+      skills: names.map(name => {
+        const local = localMap.get(name)
+        const remote = remoteMap.get(name)
+        const present = local ?? remote
+        return {
+          name,
+          files: present?.files.length ?? 0,
+          bytes: present === undefined ? 0 : skillBytes(present),
+          syncStatus: skillSyncStatus(local, remote),
+        }
+      }),
       warnings: scanned.warnings,
     }
   }

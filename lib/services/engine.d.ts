@@ -113,7 +113,7 @@ export declare class SyncEngine {
     }>;
     /** Test repository connectivity, optionally with unsaved values. */
     testConnection(patch?: Partial<SyncConfig>): Promise<ConnectionTestResult>;
-    /** List deployed skills without sending their file contents to the page. */
+    /** List deployed and repository skills without sending file contents to the page. */
     listSkills(): Promise<SkillListResponse>;
     /** List plugins with their sync status for the settings page. */
     listPlugins(): Promise<PluginListResponse>;

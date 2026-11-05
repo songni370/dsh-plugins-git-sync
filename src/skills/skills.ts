@@ -13,7 +13,7 @@ import { lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SyncError } from '../core/errors.js'
 import { isSafeRelativePath } from '../core/paths.js'
-import type { SkillBackup, SkillEntry, SkillFileRecord } from '../types.js'
+import type { SkillBackup, SkillEntry, SkillFileRecord, SkillSyncStatus } from '../types.js'
 
 /** A skill directory name must be a single, conservative path segment. */
 const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
@@ -166,6 +166,40 @@ export function mergeSkills(local: SkillBackup, remote: SkillBackup | null): Ski
 }
 
 /** Result of restoring a skill snapshot. */
+/** Total stored bytes of one skill, decoded for base64 files. */
+export function skillBytes(skill: SkillEntry): number {
+  return skill.files.reduce(
+    (total, file) =>
+      total + (file.encoding === 'base64' ? Buffer.from(file.content, 'base64').length : Buffer.byteLength(file.content, 'utf8')),
+    0,
+  )
+}
+
+/** Compare two skills by path, content, encoding and executable bit. */
+export function sameSkill(skill: SkillEntry, other: SkillEntry): boolean {
+  if (skill.files.length !== other.files.length) return false
+  return skill.files.every((file, index) => {
+    const counterpart = other.files[index]
+    return (
+      counterpart !== undefined &&
+      file.path === counterpart.path &&
+      file.content === counterpart.content &&
+      file.encoding === counterpart.encoding &&
+      (file.executable === true) === (counterpart.executable === true)
+    )
+  })
+}
+
+/** Backup status of a skill on this device and in the repository. */
+export function skillSyncStatus(
+  local: SkillEntry | undefined,
+  remote: SkillEntry | undefined,
+): SkillSyncStatus {
+  if (local !== undefined && remote !== undefined) return sameSkill(local, remote) ? 'synced' : 'modified'
+  if (local !== undefined) return 'local-only'
+  return 'remote-only'
+}
+
 export interface RestoredSkills {
   restored: string[]
   skipped: string[]

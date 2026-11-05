@@ -558,6 +558,14 @@ export const CSS = `
   word-break: break-all;
 }
 
+.dgs-skillTail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .dgs-skillMeta {
   color: var(--dsw-alias-text-secondary);
   font-size: 12px;

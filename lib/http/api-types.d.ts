@@ -8,7 +8,7 @@
  * browser bundle.
  * @module http/api-types
  */
-import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SyncState } from '../types.js';
+import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillSyncStatus, SyncState } from '../types.js';
 /** Route prefix shared by every endpoint. */
 export declare const API_PREFIX = "/api/dsh-plugins-git-sync";
 /** Error body. */
@@ -76,11 +76,12 @@ export interface PluginListResponse {
     activeProfile: string;
     availableProfiles: string[];
 }
-/** One deployed skill, named and sized for the settings list. */
+/** One deployed or repository-side skill, named and sized for the settings list. */
 export interface SkillSummary {
     name: string;
     files: number;
     bytes: number;
+    syncStatus: SkillSyncStatus;
 }
 /** Deployed-skill list response. */
 export interface SkillListResponse {

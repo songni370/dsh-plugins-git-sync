@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest'
 import {
   mergeSkills,
   restoreMissingSkills,
+  sameSkill,
   scanSkills,
+  skillBytes,
+  skillSyncStatus,
   validateSkillBackup,
 } from '../../src/skills/skills.js'
 
@@ -83,6 +86,19 @@ describe('skills backup', () => {
     expect(await readFile(join(home, 'skills', 'existing', 'SKILL.md'), 'utf8')).toBe('keep me')
     expect(await readFile(join(home, 'skills', 'new-skill', 'SKILL.md'), 'utf8')).toBe('hello')
     expect((await stat(join(home, 'skills', 'new-skill', 'bin', 'run'))).mode & 0o111).not.toBe(0)
+  })
+
+  it('classifies backup status by local and repository copies', () => {
+    const local = { name: 'demo', files: [{ path: 'SKILL.md', content: 'local', encoding: 'utf8' as const }] }
+    const same = { name: 'demo', files: [{ path: 'SKILL.md', content: 'local', encoding: 'utf8' as const }] }
+    const remote = { name: 'demo', files: [{ path: 'SKILL.md', content: 'remote', encoding: 'utf8' as const }] }
+    expect(sameSkill(local, same)).toBe(true)
+    expect(sameSkill(local, remote)).toBe(false)
+    expect(skillSyncStatus(local, same)).toBe('synced')
+    expect(skillSyncStatus(local, undefined)).toBe('local-only')
+    expect(skillSyncStatus(undefined, remote)).toBe('remote-only')
+    expect(skillSyncStatus(local, remote)).toBe('modified')
+    expect(skillBytes(remote)).toBe(6)
   })
 
   it('rejects unsafe skill documents', () => {
