@@ -8,7 +8,7 @@
  * @module services/snapshot
  */
 
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { STATE_SCHEMA_VERSION } from '../constants.js'
 import { SyncError, errorMessage } from '../core/errors.js'
@@ -80,13 +80,30 @@ function assertSnapshotId(id: string): void {
 }
 
 /** Create the snapshot service rooted at `<data>/snapshots`. */
-export function createSnapshotService(options: { snapshotDir: string }): SnapshotService {
+export function createSnapshotService(options: { snapshotDir: string; keep?: number }): SnapshotService {
+  const keep = Math.max(1, options.keep ?? 20)
   const fileFor = (id: string): string => join(options.snapshotDir, id, 'snapshot.json')
 
   const nextId = (): string => {
     const now = new Date()
-    const pad = (value: number): string => String(value).padStart(2, '0')
-    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}-${Math.random().toString(36).slice(2, 6)}`
+    const pad = (value: number, width = 2): string => String(value).padStart(width, '0')
+    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}${pad(now.getMilliseconds(), 3)}-${Math.random().toString(36).slice(2, 6)}`
+  }
+
+  /** Keep the newest snapshots; retention must never break a backup. */
+  const prune = async (currentId: string): Promise<void> => {
+    try {
+      const entries = await readdir(options.snapshotDir, { withFileTypes: true })
+      const ids = entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name)
+        .sort()
+        .reverse()
+      const others = ids.filter(id => id !== currentId)
+      await Promise.all(others.slice(Math.max(0, keep - 1)).map(id => rm(join(options.snapshotDir, id), { recursive: true, force: true })))
+    } catch {
+      // The new snapshot is already written; an old one may be cleaned next time.
+    }
   }
 
   return {
@@ -103,6 +120,7 @@ export function createSnapshotService(options: { snapshotDir: string }): Snapsho
       }
       await ensurePrivateDir(join(options.snapshotDir, id))
       await writeFileAtomic(fileFor(id), `${JSON.stringify(snapshot, null, 2)}\n`)
+      await prune(id)
       return id
     },
 

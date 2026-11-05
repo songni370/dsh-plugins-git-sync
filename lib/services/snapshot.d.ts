@@ -59,6 +59,7 @@ export interface RollbackReport {
 /** Create the snapshot service rooted at `<data>/snapshots`. */
 export declare function createSnapshotService(options: {
     snapshotDir: string;
+    keep?: number;
 }): SnapshotService;
 /** Configuration values that a snapshot should keep for a plugin. */
 export declare function snapshotConfigs(inventory: DeviceInventory, excluded: readonly string[]): Record<string, JsonObject>;
