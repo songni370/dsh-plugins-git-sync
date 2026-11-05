@@ -95,6 +95,10 @@ export const CSS = `
   line-height: 18px;
   color: var(--dsw-alias-label-secondary, #5c6570);
 }
+.dgs-detailSection {
+  order: -1;
+}
+
 .dgs-card {
   display: flex;
   flex-direction: column;

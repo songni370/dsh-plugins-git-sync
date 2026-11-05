@@ -16,6 +16,7 @@ import {
   subscribePluginsTab,
 } from '../plugins-tab-visibility'
 import type { Translate } from '../i18n'
+import { CSS } from '../styles'
 import { PACKAGE_NAME } from '../../../src/constants'
 import { Badge, Card, Switch } from './controls'
 
@@ -49,17 +50,20 @@ export function PluginDetailSection({ t, subject }: PluginDetailSectionProps): R
   if (!isOurPluginSubject(subject)) return null
 
   return (
-    <Card
-      title={t('detailTitle')}
-      description={t('detailDesc')}
-      trailing={<Badge tone="idle">{t('configScopeValue')}</Badge>}
-    >
-      <Switch
-        label={t('tabVisibilityLabel')}
-        hint={t('tabVisibilityHint')}
-        checked={tabEnabled}
-        onChange={setPluginsTabEnabled}
-      />
-    </Card>
+    <div className="dgs-root dgs-detailSection">
+      <style>{CSS}</style>
+      <Card
+        title={t('detailTitle')}
+        description={t('detailDesc')}
+        trailing={<Badge tone="idle">{t('configScopeValue')}</Badge>}
+      >
+        <Switch
+          label={t('tabVisibilityLabel')}
+          hint={t('tabVisibilityHint')}
+          checked={tabEnabled}
+          onChange={setPluginsTabEnabled}
+        />
+      </Card>
+    </div>
   )
 }
