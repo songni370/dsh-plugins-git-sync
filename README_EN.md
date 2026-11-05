@@ -10,7 +10,7 @@ Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and depl
 
 ![Plugin Backup initial configuration](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-config.png)
 
-*Initial state: enter a Git repository URL to start; the device name is only an example.*
+*Backup contents and repository settings; the example repository address is masked.*
 
 Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory and deployed skills to a private repository and pull them down elsewhere. The plugin inventory is plain JSON and skills are stored as real files, all readable and diffable with ordinary Git tools.
 
@@ -115,7 +115,7 @@ The device keeps a **baseline** of the last agreed state and compares `base / lo
 | Missing here, still in the repository | Conflict: delete from repository or keep repository |
 | Both changed differently | Conflict; wait for your choice |
 
-- Configs are merged key by key: changes to different keys on two devices are kept automatically. You are only asked when the same key changed to different values, or when the version/enabled state also conflicts.
+- Plugin configuration is never synchronized: only plugin names, versions, enabled state, install source and deployed skills are backed up.
 - A repository entry is only deleted after you explicitly choose “Delete from repository”; “Keep repository” keeps it and lets the rest of the sync run.
 - When the repository is missing a plugin this device has, nothing is removed here; it is backed up again.
 - Deleting repository entries is destructive and only runs after confirmation.
