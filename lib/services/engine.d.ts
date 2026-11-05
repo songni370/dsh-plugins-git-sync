@@ -29,6 +29,8 @@ export interface EngineDeps {
     installer: PluginInstaller;
     pluginVersion: string;
     dshVersion: string;
+    /** DSH home; defaults to the parent of the data directory. */
+    dshHome?: string;
     activeProfile: string;
     availableProfiles: string[];
     platform: string;
@@ -94,6 +96,7 @@ export declare class SyncEngine {
     private repoCache;
     private busy;
     private lastError;
+    private readonly dshHome;
     constructor(deps: EngineDeps);
     /** Whether an operation currently runs. */
     isBusy(): boolean;
@@ -143,6 +146,8 @@ export declare class SyncEngine {
     }>;
     /** Perform a two-way synchronization. */
     sync(options?: SyncOptions): Promise<OperationResult>;
+    /** Restore missing skills from a remote snapshot and turn problems into warnings. */
+    private tryRestoreSkills;
     /** Read backup history from Git. */
     history(options?: {
         limit?: number;

@@ -349,7 +349,8 @@ export function buildSchemaDocument(pluginVersion: string = MANIFEST_GENERATOR.v
       [REPO_SCHEMA_FILE]: '本说明文档 / this document',
       [REPO_README_FILE]: '仓库说明 / human-readable repository notes',
       [`${REPO_PROFILES_DIR}/<profile>/${REPO_PLUGINS_FILE}`]: '共享插件状态 / shared plugin state per profile',
-      [`${REPO_PROFILES_DIR}/<profile>/${REPO_CONFIGS_DIR}/<plugin-id>.json`]: '非敏感插件配置 / non-secret plugin configuration',
+      [`${REPO_PROFILES_DIR}/<profile>/skills.json`]: '部署的 DSH 技能快照 / deployed DSH skills snapshot per profile',
+      [`${REPO_PROFILES_DIR}/<profile>/${REPO_CONFIGS_DIR}/<plugin-id>.json`]: '旧版配置目录，不再写入 / legacy config directory, no longer written',
       [`${REPO_DEVICES_DIR}/<deviceId>/<profile>.json`]: '设备快照 / device snapshot',
     },
     commitTrailers: {

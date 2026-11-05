@@ -33,6 +33,7 @@ import {
   parseManifestJson,
   parseRemoteConfigEntryJson,
   parseRemoteProfileStateJson,
+  parseRepoJson,
   isSafeDeviceId,
 } from '../manifest/manifest.js'
 import { isSafeBranchName, validateRepoUrl } from '../state/store.js'
@@ -49,6 +50,7 @@ import type {
   JsonValue,
   RemoteConfigEntry,
   RemoteProfileState,
+  SkillBackup,
   RepoPrepareResult,
   RepoStore,
   RepoWriteOptions,
@@ -56,6 +58,7 @@ import type {
   SyncLogger,
 } from '../types.js'
 import { classifyGitFailure } from './git-runner.js'
+import { validateSkillBackup } from '../skills/skills.js'
 import {
   assertProfileName,
   backupPaths,
@@ -66,6 +69,7 @@ import {
   manifestPath,
   normalizeBackupDirectory,
   profileStatePath,
+  skillsPath,
   resolveTarget,
   workTreePath,
   writeWorkTreeFile,
@@ -887,6 +891,17 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     return chosen === null ? null : chosen.device
   }
 
+  const readSkills = async (profile: string, commit?: string): Promise<SkillBackup | null> => {
+    await ensurePrepared()
+    const { backupDir } = settings()
+    assertProfileName(profile)
+    const repoRelative = skillsPath(backupDir, profile)
+    const text = commit === undefined
+      ? await readRepoFile(workDir, repoRelative)
+      : await showAtRevision(assertRevision(commit), repoRelative)
+    return text === null ? null : validateSkillBackup(parseRepoJson(text, 'skills.json'))
+  }
+
   const readAtCommit = async (
     commit: string,
     profile: string,
@@ -894,6 +909,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     manifest: Manifest | null
     state: RemoteProfileState | null
     configs: Record<string, Record<string, JsonValue>>
+    skills: SkillBackup | null
     device: DeviceInfo | null
   }> => {
     await ensurePrepared()
@@ -902,6 +918,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     const revision = assertRevision(commit)
     const manifestText = await showAtRevision(revision, manifestPath(backupDir))
     const stateText = await showAtRevision(revision, profileStatePath(backupDir, profile))
+    const skillsText = await showAtRevision(revision, skillsPath(backupDir, profile))
     const configs: Record<string, Record<string, JsonValue>> = {}
     const configsDir = configsDirPath(backupDir, profile)
     const listing = await options.run.run(['ls-tree', '--name-only', '-z', revision, '--', `${configsDir}/`], {
@@ -927,6 +944,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
       manifest: manifestText === null ? null : parseManifestJson(manifestText),
       state: stateText === null ? null : parseRemoteProfileStateJson(stateText),
       configs,
+      skills: skillsText === null ? null : validateSkillBackup(parseRepoJson(skillsText, 'skills.json')),
       device,
     }
   }
@@ -1007,6 +1025,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     readManifest,
     readProfileState,
     readConfigs,
+    readSkills,
     readDeviceSnapshots,
     readAtCommit,
     write,

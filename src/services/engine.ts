@@ -37,6 +37,7 @@ import type {
   RemotePluginEntry,
   RemoteProfileState,
   RepoStore,
+  SkillBackup,
   SyncBaseline,
   SyncConfig,
   SyncConfigView,
@@ -65,6 +66,7 @@ import {
 import { executeLocalActions, isLocalAction } from './executor.js'
 import { createSnapshotService, snapshotConfigs, type SnapshotService } from './snapshot.js'
 import { fileExists } from '../state/store.js'
+import { mergeSkills, restoreMissingSkills, scanSkills } from '../skills/skills.js'
 import { join } from 'node:path'
 
 /** Everything the engine needs, injected by the plugin entry. */
@@ -78,6 +80,8 @@ export interface EngineDeps {
   installer: PluginInstaller
   pluginVersion: string
   dshVersion: string
+  /** DSH home; defaults to the parent of the data directory. */
+  dshHome?: string
   activeProfile: string
   availableProfiles: string[]
   platform: string
@@ -129,6 +133,7 @@ interface RemoteRead {
   manifest: Manifest | null
   state: RemoteProfileState | null
   configs: Record<string, Record<string, JsonValue>>
+  skills: SkillBackup | null
   devices: Record<string, DeviceSnapshot>
   head: string | null
 }
@@ -136,7 +141,7 @@ interface RemoteRead {
 /** Nullable JSON object alias used in this module. */
 type JsonValue = import('../types.js').JsonValue
 
-const EMPTY_REMOTE: RemoteRead = { manifest: null, state: null, configs: {}, devices: {}, head: null }
+const EMPTY_REMOTE: RemoteRead = { manifest: null, state: null, configs: {}, skills: null, devices: {}, head: null }
 
 /**
  * Whether a plugin belongs in the user-facing inventory.
@@ -261,9 +266,11 @@ export class SyncEngine {
   private repoCache: { key: string; store: RepoStore; workDir: string } | null = null
   private busy = false
   private lastError: string | null = null
+  private readonly dshHome: string
 
   constructor(deps: EngineDeps) {
     this.deps = deps
+    this.dshHome = deps.dshHome ?? join(deps.paths.dataDir, '..')
     this.snapshots = createSnapshotService({ snapshotDir: deps.paths.snapshotDir })
   }
 
@@ -551,12 +558,23 @@ export class SyncEngine {
             { details: { plan: safeJsonCopy(plan) as unknown as import('../types.js').JsonValue } },
           )
         }
+        const scannedSkills = await scanSkills(this.dshHome)
+        const skillSnapshot = mergeSkills(scannedSkills.backup, read.skills)
+        const skillsChanged = JSON.stringify(read.skills?.skills ?? []) !== JSON.stringify(skillSnapshot.skills)
         const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string>; deletions: string[] } =>
-          this.buildRemoteFiles({ config, plan, local: inventory, read: currentRead, device: state.device, baselineRead: read })
+          this.buildRemoteFiles({
+            config,
+            plan,
+            local: inventory,
+            read: currentRead,
+            device: state.device,
+            baselineRead: read,
+            skills: skillSnapshot.skills.length === 0 ? null : skillSnapshot,
+          })
         const firstFiles = build(read, local)
         const now = new Date().toISOString()
         const repositoryHasData = read.manifest !== null || read.state !== null
-        const nothingToRecord = plan.actions.length === 0 && repositoryHasData
+        const nothingToRecord = plan.actions.length === 0 && !skillsChanged && repositoryHasData
         const trailers = {
           operation: 'backup',
           deviceId: state.device.id,
@@ -573,7 +591,15 @@ export class SyncEngine {
               rebuild: async () => {
                 const freshRead = await this.readRemote(store, config, null)
                 const freshPlan = planBackup(this.planInput(config, local, freshRead, await this.readState()))
-                return this.buildRemoteFiles({ config, plan: freshPlan, local, read: freshRead, device: state.device, baselineRead: freshRead })
+                return this.buildRemoteFiles({
+                  config,
+                  plan: freshPlan,
+                  local,
+                  read: freshRead,
+                  device: state.device,
+                  baselineRead: freshRead,
+                  skills: skillSnapshot.skills.length === 0 ? null : skillSnapshot,
+                })
               },
               message: this.commitMessage('backup', options.message),
               trailers,
@@ -617,7 +643,7 @@ export class SyncEngine {
           pushed: write.pushed,
           noChanges: !write.changed,
           actionOutcomes: outcomes,
-          warnings: plan.warnings,
+          warnings: [...plan.warnings, ...scannedSkills.warnings],
         }
         this.deps.logger.info(`备份完成 / backup finished (changed=${String(write.changed)}, pushed=${String(write.pushed)})`, {
           commit: write.commit,
@@ -777,6 +803,9 @@ export class SyncEngine {
             snapshot: snapshotId,
           }
         }
+        const scannedSkills = await scanSkills(this.dshHome)
+        const skillSnapshot = mergeSkills(scannedSkills.backup, read.skills)
+        const skillsChanged = JSON.stringify(read.skills?.skills ?? []) !== JSON.stringify(skillSnapshot.skills)
         const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string>; deletions: string[] } =>
           this.buildRemoteFiles({
             config,
@@ -785,16 +814,25 @@ export class SyncEngine {
             read: currentRead,
             device: state.device,
             baselineRead: read,
+            skills: skillSnapshot.skills.length === 0 ? null : skillSnapshot,
           })
         const firstFiles = build(read, local)
-        const write = plan.actions.some(action => !isLocalAction(action))
+        const write = (plan.actions.some(action => !isLocalAction(action)) || skillsChanged)
           ? await store.write({
               files: firstFiles.files,
               deletions: firstFiles.deletions,
               rebuild: async () => {
                 const freshRead = await this.readRemote(store, config, null)
                 const freshPlan = planSync({ ...this.planInput(config, await this.scanLocal(config, true), freshRead, state), resolutions: options.resolutions })
-                return this.buildRemoteFiles({ config, plan: freshPlan, local: await this.scanLocal(config), read: freshRead, device: state.device, baselineRead: freshRead })
+                return this.buildRemoteFiles({
+                  config,
+                  plan: freshPlan,
+                  local: await this.scanLocal(config),
+                  read: freshRead,
+                  device: state.device,
+                  baselineRead: freshRead,
+                  skills: skillSnapshot.skills.length === 0 ? null : skillSnapshot,
+                })
               },
               message: this.commitMessage('sync', undefined),
               trailers: {
@@ -832,6 +870,7 @@ export class SyncEngine {
         }
         await this.deps.stateStore.write(state)
         this.lastError = null
+        const restoredSkills = await this.tryRestoreSkills(read.skills)
         return {
           ok: true,
           operation: 'sync',
@@ -841,7 +880,7 @@ export class SyncEngine {
           pushed: write.pushed,
           noChanges: false,
           actionOutcomes: outcomes,
-          warnings: plan.warnings,
+          warnings: [...plan.warnings, ...scannedSkills.warnings, ...restoredSkills.warnings],
           snapshot: snapshotId,
         }
       } catch (error) {
@@ -851,6 +890,19 @@ export class SyncEngine {
         this.busy = false
       }
     }, { wait: true })
+  }
+
+  /** Restore missing skills from a remote snapshot and turn problems into warnings. */
+  private async tryRestoreSkills(backup: SkillBackup | null): Promise<{ warnings: string[]; restored: string[] }> {
+    if (backup === null) return { warnings: [], restored: [] }
+    try {
+      const result = await restoreMissingSkills(backup, this.dshHome)
+      const warnings = [...result.warnings]
+      if (result.restored.length > 0) warnings.push(`已恢复技能 / restored skills: ${result.restored.join(', ')}`)
+      return { warnings, restored: result.restored }
+    } catch (error) {
+      return { warnings: [`恢复技能失败 / cannot restore skills: ${errorMessage(error)}`], restored: [] }
+    }
   }
 
   /** Read backup history from Git. */
@@ -1000,6 +1052,7 @@ export class SyncEngine {
     read: RemoteRead
     device: DeviceInfo
     baselineRead: RemoteRead
+    skills?: SkillBackup | null
   }): { files: Record<string, string>; deletions: string[] } {
     const localMap = localStates(input.local)
     const upserts = new Map<string, { entry: RemotePluginEntry; configs?: JsonObject }>()
@@ -1054,6 +1107,7 @@ export class SyncEngine {
       now: new Date().toISOString(),
       previousManifest: input.read.manifest,
       previousState: input.read.state,
+      skills: input.skills,
       upserts: [...upserts.values()],
       removals: [...removals],
       configDeletions: [...configDeletions],
@@ -1083,6 +1137,7 @@ export class SyncEngine {
     let manifest: Manifest | null = null
     let state: RemoteProfileState | null = null
     let configs: Record<string, Record<string, JsonValue>> = {}
+    let skills: SkillBackup | null = null
     let devices: Record<string, DeviceSnapshot> = {}
     try {
       manifest = await store.readManifest()
@@ -1100,11 +1155,16 @@ export class SyncEngine {
       if (!isMissingRepository(error)) throw error
     }
     try {
+      skills = await store.readSkills(this.deps.activeProfile)
+    } catch (error) {
+      if (!isMissingRepository(error)) throw error
+    }
+    try {
       devices = await store.readDeviceSnapshots()
     } catch {
       devices = {}
     }
-    return { manifest, state, configs, devices, head }
+    return { manifest, state, configs, skills, devices, head }
   }
 
   /** Read a repository state at one commit. */
@@ -1117,6 +1177,7 @@ export class SyncEngine {
       manifest: snapshot.manifest,
       state: snapshot.state,
       configs: snapshot.configs,
+      skills: snapshot.skills,
       devices: snapshot.device === null ? {} : {},
       head: commit,
     }
@@ -1152,6 +1213,9 @@ export class SyncEngine {
           )
         }
         if (plan.actions.length === 0) {
+          const skillRestore = options.operation === 'restore'
+            ? await this.tryRestoreSkills(read.skills)
+            : { warnings: [], restored: [] }
           state.lastOperation = { operation: options.operation, at: new Date().toISOString(), ok: true, changedPlugins: 0 }
           await this.deps.stateStore.write(state)
           return {
@@ -1159,9 +1223,9 @@ export class SyncEngine {
             operation: options.operation,
             startedAt,
             finishedAt: new Date().toISOString(),
-            noChanges: true,
+            noChanges: skillRestore.restored.length === 0,
             actionOutcomes: [],
-            warnings: plan.warnings,
+            warnings: [...plan.warnings, ...skillRestore.warnings],
           }
         }
         if (plan.requiresConfirmation && options.confirmDestructive !== true) {
@@ -1171,6 +1235,9 @@ export class SyncEngine {
             { details: { plan: safeJsonCopy(plan) as unknown as JsonValue } },
           )
         }
+        const skillRestore = options.operation === 'restore'
+          ? await this.tryRestoreSkills(read.skills)
+          : { warnings: [], restored: [] }
         snapshotId = await this.snapshots.create({
           operation: options.operation,
           profile: this.deps.activeProfile,
@@ -1240,7 +1307,7 @@ export class SyncEngine {
           commit: options.commit ?? prepared.head,
           noChanges: false,
           actionOutcomes: outcomes,
-          warnings: plan.warnings,
+          warnings: [...plan.warnings, ...skillRestore.warnings],
           snapshot: snapshotId,
         }
       } catch (error) {

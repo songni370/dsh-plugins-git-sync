@@ -22,6 +22,7 @@ import type {
   RemoteConfigEntry,
   RemotePluginEntry,
   RemoteProfileState,
+  SkillBackup,
   SyncBaseline,
 } from '../types.js'
 import { toBaselineEntry, type PluginState } from './model.js'
@@ -75,6 +76,11 @@ export function joinRepoPath(...segments: readonly string[]): string {
 /** Path of one profile's shared plugin state. */
 export function profileStatePath(backupDir: string, profile: string): string {
   return joinRepoPath(backupDir, REPO_PROFILES_DIR, profile, 'plugins.json')
+}
+
+/** Path of one profile's skill snapshot. */
+export function skillsPath(backupDir: string, profile: string): string {
+  return joinRepoPath(backupDir, REPO_PROFILES_DIR, profile, 'skills.json')
 }
 
 /** Path of one plugin's config file. */
@@ -183,6 +189,8 @@ export interface BuildBackupFilesInput {
   removals: readonly string[]
   /** Config files to delete without tombstoning the plugin (config became empty). */
   configDeletions?: readonly string[]
+  /** Skill snapshot for this profile; undefined leaves the remote file untouched. */
+  skills?: SkillBackup | null
   /** This device's snapshot for this profile. */
   deviceSnapshot: DeviceSnapshot
   /** Device ids already known to the repository. */
@@ -205,7 +213,7 @@ This repository is written automatically by **DSH Plugin Git Sync** (\`${PACKAGE
 - 请勿手动修改这些文件；下次同步会按清单格式校验，非法内容会被拒绝。
   Do not edit these files by hand: the next sync validates them and rejects malformed input.
 - 这里只保存插件清单、版本、来源和经过过滤的配置；**不会**保存 Token、密码、私钥、Cookie 或机器绝对路径。
-  Only plugin inventory, versions, sources and filtered configuration are stored here. Tokens, passwords, private keys, cookies and machine paths are never written.
+  Only plugin inventory, versions, sources, enablement and the deployed DSH skills are stored here. Plugin configuration, Agent presets and UI settings are never written. Tokens, passwords, private keys, cookies and machine paths are never written.
 - 恢复前请在「DSH 插件 Git 同步」设置页查看预览；破坏性操作需要确认。
   Preview restores in the "DSH Plugin Git Sync" settings page; destructive operations require confirmation.
 
@@ -215,7 +223,8 @@ This repository is written automatically by **DSH Plugin Git Sync** (\`${PACKAGE
 manifest.json                          schema version, per-profile plugin counts, devices
 metadata/schema.json                   machine-readable description of this layout
 profiles/<profile>/plugins.json        shared desired plugin state (with tombstones)
-profiles/<profile>/configs/<id>.json   filtered plugin configuration
+profiles/<profile>/skills.json         deployed DSH skills snapshot
+profiles/<profile>/configs/<id>.json   legacy filtered plugin configuration (no longer written)
 devices/<deviceId>/<profile>.json      last published inventory of one device
 \`\`\`
 `
@@ -255,11 +264,20 @@ export function buildBackupFiles(input: BuildBackupFilesInput): BackupFiles {
     now: input.now,
   })
 
+  const skillFile = skillsPath(input.backupDir, input.profile)
+  if (input.skills !== undefined) {
+    if (input.skills === null || input.skills.skills.length === 0) {
+      deletions.push(skillFile)
+    }
+  }
   const files: Record<string, string> = {
     [joinRepoPath(input.backupDir, REPO_MANIFEST_FILE)]: serializeManifest(manifest),
     [joinRepoPath(input.backupDir, REPO_SCHEMA_FILE)]: buildSchemaDocument(input.generatorVersion),
     [joinRepoPath(input.backupDir, 'README.md')]: backupReadme(),
     [profileStatePath(input.backupDir, input.profile)]: serializeJson(toProfileState(input.profile, input.now, entries)),
+    ...(input.skills !== undefined && input.skills !== null && input.skills.skills.length > 0
+      ? { [skillFile]: serializeJson(input.skills as unknown as JsonValue) }
+      : {}),
     [deviceSnapshotPath(input.backupDir, input.deviceId, input.profile)]: serializeJson({
       ...input.deviceSnapshot,
       plugins: input.deviceSnapshot.plugins.map(sanitizePluginRecord),

@@ -249,6 +249,7 @@ export function apply(ctx: DshContext): void {
       installer,
       pluginVersion,
       dshVersion,
+      dshHome,
       activeProfile,
       availableProfiles,
       platform: process.platform,

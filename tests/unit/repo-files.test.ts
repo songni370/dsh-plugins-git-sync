@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildBackupFiles, configPath, profileStatePath, sanitizeModuleName, sanitizePluginRecord, toRemoteEntry } from '../../src/services/repo-files.js'
+import { buildBackupFiles, configPath, profileStatePath, sanitizeModuleName, sanitizePluginRecord, skillsPath, toRemoteEntry } from '../../src/services/repo-files.js'
 import { MANIFEST_SCHEMA_VERSION } from '../../src/constants.js'
 import type { PluginRecord } from '../../src/types.js'
 import type { PluginState as ModelPluginState } from '../../src/services/model.js'
@@ -127,12 +127,18 @@ describe('buildBackupFiles', () => {
         plugins: [record({ localPath: '/Users/dev/plugins/alpha' })],
       },
       knownDevices: [],
+      skills: {
+        schemaVersion: 1,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        skills: [{ name: 'demo', files: [{ path: 'SKILL.md', content: '# Demo\n', encoding: 'utf8' }] }],
+      },
     })
     expect(files.files['backup/manifest.json']).toBeDefined()
     expect(files.files['backup/metadata/schema.json']).toBeDefined()
     expect(files.files['backup/README.md']).toBeDefined()
     expect(files.files[profileStatePath('backup', 'desktop')]).toBeDefined()
     expect(files.files[configPath('backup', 'desktop', 'alpha')]).toBeDefined()
+    expect(files.files[skillsPath('backup', 'desktop')]).toBeDefined()
     const all = Object.values(files.files).join('\n')
     expect(all).not.toContain('/Users/')
     expect(all).not.toContain('sk-')

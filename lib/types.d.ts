@@ -154,6 +154,27 @@ export interface RemoteProfileState {
     updatedAt: string;
     plugins: Record<string, RemotePluginEntry>;
 }
+/** One file inside a backed-up DSH skill. */
+export interface SkillFileRecord {
+    /** Path relative to the skill directory, using `/`. */
+    path: string;
+    /** UTF-8 text, or base64 for binary files. */
+    content: string;
+    encoding: 'utf8' | 'base64';
+    /** Preserve the executable bit when restoring. */
+    executable?: boolean;
+}
+/** One backed-up DSH skill directory. */
+export interface SkillEntry {
+    name: string;
+    files: SkillFileRecord[];
+}
+/** `profiles/<profile>/skills.json` — a snapshot of the deployed DSH skills. */
+export interface SkillBackup {
+    schemaVersion: number;
+    updatedAt: string;
+    skills: SkillEntry[];
+}
 /** `profiles/<profile>/configs/<id>.json`. */
 export interface RemoteConfigEntry {
     pluginId: string;
@@ -566,6 +587,8 @@ export interface RepoStore {
     readProfileState(profile: string): Promise<RemoteProfileState | null>;
     /** Read one profile's config files. */
     readConfigs(profile: string): Promise<Record<string, Record<string, JsonValue>>>;
+    /** Read one profile's skill snapshot, or null when absent. */
+    readSkills(profile: string, commit?: string): Promise<SkillBackup | null>;
     /** Read every device snapshot in the repository. */
     readDeviceSnapshots(): Promise<Record<string, DeviceSnapshot>>;
     /** Read the repository at a specific commit (for history restore). */
@@ -573,6 +596,7 @@ export interface RepoStore {
         manifest: Manifest | null;
         state: RemoteProfileState | null;
         configs: Record<string, Record<string, JsonValue>>;
+        skills: SkillBackup | null;
         device: DeviceInfo | null;
     }>;
     /**

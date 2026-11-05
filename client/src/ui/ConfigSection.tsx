@@ -179,6 +179,13 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
             )}
           </FormRow>
 
+          <FormRow label={t('configScope')}>
+            <div className="dgs-inputWithBadge">
+              <Badge tone="idle">{t('configScopeValue')}</Badge>
+            </div>
+            <span className="dgs-formRowHint">{t('configScopeHint')}</span>
+          </FormRow>
+
           {transport === 'https' ? (
             <>
               <FormRow label={t('configAuthMode')}>

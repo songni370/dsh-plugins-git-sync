@@ -8,7 +8,7 @@
  * copied from a directory tree), so the backup stays diff-friendly.
  * @module services/repo-files
  */
-import type { DeviceSnapshot, JsonObject, Manifest, PluginRecord, RemoteConfigEntry, RemotePluginEntry, RemoteProfileState, SyncBaseline } from '../types.js';
+import type { DeviceSnapshot, JsonObject, Manifest, PluginRecord, RemoteConfigEntry, RemotePluginEntry, RemoteProfileState, SkillBackup, SyncBaseline } from '../types.js';
 import { type PluginState } from './model.js';
 /**
  * Make a row's module name safe to store.
@@ -25,6 +25,8 @@ export declare function sanitizePluginRecord(record: PluginRecord): PluginRecord
 export declare function joinRepoPath(...segments: readonly string[]): string;
 /** Path of one profile's shared plugin state. */
 export declare function profileStatePath(backupDir: string, profile: string): string;
+/** Path of one profile's skill snapshot. */
+export declare function skillsPath(backupDir: string, profile: string): string;
 /** Path of one plugin's config file. */
 export declare function configPath(backupDir: string, profile: string, pluginId: string): string;
 /** Path of one device snapshot. */
@@ -72,6 +74,8 @@ export interface BuildBackupFilesInput {
     removals: readonly string[];
     /** Config files to delete without tombstoning the plugin (config became empty). */
     configDeletions?: readonly string[];
+    /** Skill snapshot for this profile; undefined leaves the remote file untouched. */
+    skills?: SkillBackup | null;
     /** This device's snapshot for this profile. */
     deviceSnapshot: DeviceSnapshot;
     /** Device ids already known to the repository. */

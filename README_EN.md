@@ -2,7 +2,7 @@
 
 > Display name: 插件备份 / Plugin Backup · Package / repository: `dsh-plugins-git-sync` · [中文](README.md)
 
-Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists** across devices through your own **Git repository**.
+Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and deployed skills** across devices through your own **Git repository**.
 
 [![npm](https://img.shields.io/npm/v/dsh-plugins-git-sync.svg)](https://www.npmjs.com/package/dsh-plugins-git-sync)
 [![CI](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml)
@@ -12,20 +12,21 @@ Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists** across
 
 *Initial state: enter a Git repository URL to start; the device name is only an example.*
 
-Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory to a private repository and pull it down elsewhere. The backup is plain JSON, readable and diffable with ordinary Git tools.
+Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory and deployed skills to a private repository and pull them down elsewhere. The backup is plain JSON, readable and diffable with ordinary Git tools.
 
 ## What it does
 
 - **Backup / restore**: push user-installed plugins (version, enabled state) to Git; install them back on another device.
+- **Skill backup**: capture deployed files under `~/.dsh/skills` (following symlinks to their content); restore only missing skills and never overwrite an existing one.
 - **Two-way sync**: upload local changes, download repository changes; when both sides changed it stops and asks.
 - **Conflict handling**: overwrite repository with this device / overwrite this device with repository / leave for now; each button explains what it will do. When this device removed a plugin that the repository still backs up, choose Delete from repository or Keep repository.
 - **History rollback**: restore this device to any previous commit; local safety snapshots keep the latest 20 automatically.
 - **Automatic sync**: on client startup and plugin install/update/remove; **no interval timer**; repeated failures are shown on the settings page.
 - **Agent tools**: six tools for status, backup, restore, sync, diff and history.
 - **Preview before upload**: `Check differences` lists the plugins that will be uploaded, installed, upgraded or deleted, so you can confirm first.
-- **Safety**: no tokens, passwords, private keys or plugin configuration are read or uploaded; no force pushes; a snapshot precedes local changes.
+- **Safety**: no tokens, passwords or private keys are read or uploaded; **plugin configuration, Agent presets and UI settings are never backed up**; no force pushes; a snapshot precedes local changes.
 
-Only **user-installed third-party plugins** participate. DSH built-ins, loader internals (`cordis:*`) and this plugin itself are never backed up.
+Only **user-installed third-party plugins** and **deployed DSH skills** participate. DSH built-ins, loader internals (`cordis:*`) and this plugin itself are never backed up.
 
 ## UI
 
@@ -35,7 +36,7 @@ Settings → "**Plugin Backup**". The Plugins page can also show a "Backup" tab 
 
 *Sync status, count tiles and the automatic-sync switch on one page; nothing runs in the background until a repository is configured.*
 
-- **Repository card**: detects HTTPS / SSH / local paths and shows only the matching auth fields; collapsed once configured.
+- **Repository card**: detects HTTPS / SSH / local paths and shows only the matching auth fields; a fixed row states "Backup contents: Plugins + skills"; collapsed once configured.
 - **Operations**: `Sync`, `Check differences`, `Back up to Git` and `Restore from Git` are four direct buttons; nothing is hidden in a menu.
   - `Sync` runs directly when there are no conflicts or delete/overwrite steps; only those open a confirmation preview.
 - **Sync status**: badge, count tiles and metadata, in the same card as the operations.
@@ -147,7 +148,8 @@ Destructive operations use two-phase confirmation: preview first, then `confirm:
 ## Safety and limits
 
 - Never collects or uploads tokens, passwords, private keys or cookies; HTTPS stores only the env-var name.
-- No absolute machine paths in backups; plugin configuration is never read, written or backed up.
+- No absolute machine paths in backups; plugin configuration, Agent presets and UI settings are never read, written or backed up.
+- Skill files are uploaded verbatim and may contain private prompts or scripts; use a private repository. Restore only adds missing skills and never overwrites an existing one.
 - A plugin present here but missing in the repository is backed up again, never deleted; a plugin missing here but present in the repository needs an explicit delete-or-skip choice.
 - Syncs the active profile only; other profiles install and sync separately.
 - Local-dev plugins can be recorded but cannot be installed on another device.
@@ -171,7 +173,7 @@ npm pack
 
 Layout:
 
-- `src/` — host half (scanner, Git, sync engine, HTTP routes, agent tools)
+- `src/` — host half (scanner, skills, Git, sync engine, HTTP routes, agent tools)
 - `client/src/` — settings-page browser half
 - `tests/` — unit, two-device integration against real temporary Git repos, jsdom rendering
 - `docs/ARCHITECTURE.md` · `docs/SECURITY.md` · `docs/PUBLISHING.md`

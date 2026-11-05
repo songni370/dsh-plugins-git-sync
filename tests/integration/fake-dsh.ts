@@ -350,6 +350,7 @@ export async function createFakeDevice(options: {
     installer,
     pluginVersion: '0.1.0',
     dshVersion: '0.2.1-test',
+    dshHome: home,
     activeProfile,
     availableProfiles,
     platform: options.platform ?? process.platform,

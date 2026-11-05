@@ -28,6 +28,7 @@ import {
   REPO_DEVICES_DIR,
   REPO_MANIFEST_FILE,
   REPO_PLUGINS_FILE,
+  REPO_SKILLS_FILE,
   REPO_PROFILES_DIR,
   REPO_README_FILE,
   REPO_SCHEMA_FILE,
@@ -94,6 +95,12 @@ export function assertPluginId(pluginId: string): string {
 export function profileStatePath(backupDir: string, profile: string): string {
   assertProfileName(profile)
   return repoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_PLUGINS_FILE)
+}
+
+/** Repository-relative path of a profile's skill snapshot. */
+export function skillsPath(backupDir: string, profile: string): string {
+  assertProfileName(profile)
+  return repoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_SKILLS_FILE)
 }
 
 /** Repository-relative path of a profile's config directory. */

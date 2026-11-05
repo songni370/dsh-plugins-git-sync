@@ -51,6 +51,8 @@ export declare function assertDeviceId(deviceId: string): string;
 export declare function assertPluginId(pluginId: string): string;
 /** Repository-relative path of a profile's shared state. */
 export declare function profileStatePath(backupDir: string, profile: string): string;
+/** Repository-relative path of a profile's skill snapshot. */
+export declare function skillsPath(backupDir: string, profile: string): string;
 /** Repository-relative path of a profile's config directory. */
 export declare function configsDirPath(backupDir: string, profile: string): string;
 /** Repository-relative path of one plugin's config file. */

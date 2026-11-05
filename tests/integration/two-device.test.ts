@@ -9,7 +9,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SyncError } from '../../src/core/errors.js'
@@ -274,10 +274,36 @@ describe('two-device synchronization', () => {
     expect(status.localPluginCount).toBeGreaterThan(0)
     expect(['synced', 'ahead', 'behind', 'diverged', 'conflict', 'error', 'unknown', 'not-configured']).toContain(status.state)
   }, 120_000)
+  it('backs up deployed skills and restores only missing ones', async () => {
+    const macAlpha = join(ctx.mac.root, 'skills', 'alpha-skill')
+    await mkdir(macAlpha, { recursive: true })
+    await writeFile(join(macAlpha, 'SKILL.md'), '# Alpha from mac\n')
+    const macBeta = join(ctx.mac.root, 'skills', 'beta-skill')
+    await mkdir(macBeta, { recursive: true })
+    await writeFile(join(macBeta, 'SKILL.md'), '# Beta from mac\n')
+
+    const backup = await ctx.mac.engine.backup({ confirmDestructive: true })
+    expect(backup.ok).toBe(true)
+    const files = listRepoFiles(ctx.bareRepo)
+    expect(files).toContain('profiles/desktop/skills.json')
+    const snapshot = JSON.parse(readRepoFile(ctx.bareRepo, 'profiles/desktop/skills.json')) as { skills: { name: string }[] }
+    expect(snapshot.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'beta-skill'])
+
+    const winBeta = join(ctx.win.root, 'skills', 'beta-skill')
+    await mkdir(winBeta, { recursive: true })
+    await writeFile(join(winBeta, 'SKILL.md'), '# Beta kept on win\n')
+    const restore = await ctx.win.engine.restore({ confirmDestructive: true })
+    expect(restore.ok).toBe(true)
+    expect(await readFile(join(ctx.win.root, 'skills', 'alpha-skill', 'SKILL.md'), 'utf8')).toBe('# Alpha from mac\n')
+    expect(await readFile(join(winBeta, 'SKILL.md'), 'utf8')).toBe('# Beta kept on win\n')
+  }, 120_000)
+
   it('rejects a malformed manifest instead of guessing', async () => {
     await writeRepoFileDirect(ctx.bareRepo, 'manifest.json', '{ this is not json')
     const error = await expectRejection(ctx.win.engine.sync({ confirmDestructive: true }), 'invalid-manifest')
     expect(error.message.length).toBeGreaterThan(0)
   }, 120_000)
+
+
 
 })

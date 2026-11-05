@@ -42,6 +42,7 @@ export const REPO_SCHEMA_FILE = 'metadata/schema.json'
 export const REPO_README_FILE = 'README.md'
 export const REPO_PROFILES_DIR = 'profiles'
 export const REPO_PLUGINS_FILE = 'plugins.json'
+export const REPO_SKILLS_FILE = 'skills.json'
 export const REPO_CONFIGS_DIR = 'configs'
 export const REPO_DEVICES_DIR = 'devices'
 

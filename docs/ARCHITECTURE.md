@@ -65,7 +65,8 @@ This document is for maintainers: module boundaries, data flow, state files, the
 | 扫描 | `scanner/inventory.ts` | 从 plugin manager（主）或 profile `package.json`（降级）生成 `DeviceInventory`；分类来源、计算 `installSpec`；不读取配置。 | → config-gateway, profiles, core |
 | 配置网关 | `scanner/config-gateway.ts` | 历史模块；配置备份移除后扫描与备份路径不再调用。 | → core/redact |
 | 安装器 | `adapters/installer.ts` | `pluginManager.installBundle` / `setBundleEnabled` / `setPluginEnabled` / `removeBundle`；不允许跨 Profile 操作；返回 `pendingBuilds`。 | → dsh 结构类型 |
-| Git | `git/repo-store.ts` | 克隆/刷新工作区、读取 manifest/state/configs/devices、`readAtCommit`、`history`、`testConnection`、事务化写入 + 提交 + 推送 + 重试。 | → git-runner, repo-paths, manifest |
+| Git | `git/repo-store.ts` | 克隆/刷新工作区、读取 manifest/state/skills/configs/devices、`readAtCommit`、`history`、`testConnection`、事务化写入 + 提交 + 推送 + 重试。 | → git-runner, repo-paths, manifest |
+| 技能 | `skills/skills.ts` | 扫描 `~/.dsh/skills`、跟随符号链接读取已部署技能、合并本地/仓库快照、只恢复缺失技能。 | → core/paths, types |
 | Git 安全 | `git/git-runner.ts` | 参数数组 + `shell:false`、禁止危险选项、超时/截断、令牌经环境变量、输出脱敏、错误分类（auth/network/其它）。 | → core |
 | 布局与路径 | `git/repo-paths.ts` | 仓库布局常量、备份目录归一化、拒绝符号链接/`.git`/逃逸路径的读写。 | → core/paths, manifest |
 | 清单 | `manifest/manifest.ts` | schema 版本校验、所有仓库文档的解析与校验、确定性序列化、`metadata/schema.json` 生成；`buildManifest({ generatorVersion })` 与 `buildSchemaDocument(pluginVersion)` 记录**运行中的插件版本**（由 engine 传入 `deps.pluginVersion`），不写死常量。 | → core |
@@ -100,7 +101,7 @@ backup(options)
   3. store = createRepo(config)                    (workDir = sha256(repoUrl+"\n"+branch)[0..20])
   4. prepared = store.prepare()                    (clone/fetch/reset 工作区)
   5. local = scanLocal(force)                      (DeviceInventory)
-  6. read = readRemote(store, prepared.head)       (manifest/state/configs/devices)
+  6. read = readRemote(store, prepared.head)       (manifest/state/skills/configs/devices)
   7. plan = planBackup(planInput)                  (push-plugin / remove-remote)
   8. if plan.requiresConfirmation && !confirmDestructive → SyncError('confirmation-required', {plan})
   9. store.write({ files, deletions, rebuild, message, trailers })
@@ -211,6 +212,8 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 
 `PluginState` 是 `PluginRecord` / `RemotePluginEntry` / `BaselineEntry` 的公共投影（`services/model.ts`），只包含参与同步比较的字段：`id/name/displayName/version/enabled/configs/installSpec/origin/pathOnly/builtIn/syncable/source/rows`。
 
+技能不参与插件冲突规划：`skills/skills.ts` 维护独立的 `SkillBackup` 快照，保存在 `profiles/<profile>/skills.json`。备份时本地技能覆盖同名远端技能、远端独有技能保留；恢复时只安装本机缺失的技能，已存在的技能从不覆盖。
+
 ### 5.2 决策表（`planSync`）
 
 | local | remote | localChanged | remoteChanged | 结果 |
@@ -248,7 +251,7 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 local = { A: {version:1.0.0, enabled:true} }
 remote = {}   base = {}
 planBackup → push-plugin A          (无破坏性，无需确认)
-仓库提交 c1: profiles/desktop/plugins.json += A；devices/<mac>/desktop.json
+仓库提交 c1: profiles/desktop/plugins.json += A；profiles/desktop/skills.json（如有技能）；devices/<mac>/desktop.json
 Mac 基线 = { A: {1.0.0, true} }
 ```
 
