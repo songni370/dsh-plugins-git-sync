@@ -76,6 +76,8 @@ export interface BuildBackupFilesInput {
     configDeletions?: readonly string[];
     /** Skill snapshot for this profile; undefined leaves the remote file untouched. */
     skills?: SkillBackup | null;
+    /** Whether plugin inventory files are part of this backup (default true). */
+    plugins?: boolean;
     /** This device's snapshot for this profile. */
     deviceSnapshot: DeviceSnapshot;
     /** Device ids already known to the repository. */

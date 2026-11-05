@@ -35,6 +35,7 @@ function statusPayload(): StatusPayload {
         username: '',
         profiles: ['desktop'],
         includeConfigs: true,
+        backupScopes: { plugins: true, skills: true },
         includeLocalPlugins: false,
         excludedPlugins: [],
         excludedConfigPlugins: [],

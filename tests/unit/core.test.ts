@@ -199,6 +199,17 @@ describe('configuration validation', () => {
     expect(config.includeLocalPlugins).toBe(false)
   })
 
+  it('defaults both backup scopes on and lets each be turned off', () => {
+    expect(defaultConfig().backupScopes).toEqual({ plugins: true, skills: true })
+    const skillsOff = normalizeConfig({ backupScopes: { skills: false } }, active, profiles)
+    expect(skillsOff.backupScopes).toEqual({ plugins: true, skills: false })
+    const pluginsOff = normalizeConfig({ backupScopes: { plugins: false } }, active, profiles)
+    expect(pluginsOff.backupScopes).toEqual({ plugins: false, skills: true })
+    const legacy = normalizeConfig({ repoUrl: '' }, active, profiles)
+    expect(legacy.backupScopes).toEqual({ plugins: true, skills: true })
+    expect(() => normalizeConfig({ backupScopes: { plugins: false, skills: false } }, active, profiles)).toThrow(SyncError)
+  })
+
   it('rejects credentials inside the repository URL', () => {
     expect(() => validateRepoUrl('https://user:token@github.com/o/r.git')).toThrow(SyncError)
     expect(validateRepoUrl('https://github.com/o/r.git')).toContain('github.com')

@@ -116,6 +116,7 @@ export function defaultConfig(): SyncConfig {
     profiles: [],
     // Plugin configuration is intentionally never backed up; see the scope policy.
     includeConfigs: false,
+    backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
     excludedConfigPlugins: [],
@@ -239,6 +240,19 @@ export function normalizeConfig(input: unknown, activeProfile: string, available
   // surface shows the same order on every device.
   config.profiles = [activeProfile, ...config.profiles.filter(name => name !== activeProfile)]
 
+  // Scopes are independent, both default to on. Older config files have no
+  // scopes, so they inherit the defaults; a partial object only overrides the
+  // values it actually contains.
+  if (raw.backupScopes !== null && typeof raw.backupScopes === 'object' && !Array.isArray(raw.backupScopes)) {
+    const scopes = raw.backupScopes as Record<string, unknown>
+    config.backupScopes = {
+      plugins: typeof scopes.plugins === 'boolean' ? scopes.plugins : defaults.backupScopes.plugins,
+      skills: typeof scopes.skills === 'boolean' ? scopes.skills : defaults.backupScopes.skills,
+    }
+  }
+  if (!config.backupScopes.plugins && !config.backupScopes.skills) {
+    throw invalid('backupScopes', '至少要开启一项备份内容 / at least one backup scope must stay enabled')
+  }
   // Old config files may still say true; configuration backup is removed.
   config.includeConfigs = false
   if (typeof raw.includeLocalPlugins === 'boolean') config.includeLocalPlugins = raw.includeLocalPlugins

@@ -6,9 +6,9 @@
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ConfigSection, configFormFromView } from '../../client/src/ui/ConfigSection'
-import { AutoSyncSection } from '../../client/src/ui/AutoSyncSection'
+import { ConfigSection, configFormFromView, configPayloadFromForm } from '../../client/src/ui/ConfigSection'
 import type { ConfigForm } from '../../client/src/ui/ConfigSection'
+import { AutoSyncSection } from '../../client/src/ui/AutoSyncSection'
 import { createTranslate, zh } from '../../client/src/i18n'
 import type { GitAuthMode, SyncConfigView } from '../../src/types'
 
@@ -25,6 +25,7 @@ function viewFor(repoUrl: string, authMode: GitAuthMode): SyncConfigView {
     username: '',
     profiles: ['desktop'],
     includeConfigs: true,
+    backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
     excludedConfigPlugins: [],
@@ -126,6 +127,23 @@ describe('repository card transport fields', () => {
     expect(html).not.toContain('id="dgs-config-auth"')
     expect(html).not.toContain('id="dgs-config-token-env"')
     expect(html).not.toContain('id="dgs-config-username"')
+  })
+
+  it('maps the two switches into backupScopes and removes the form-only fields', () => {
+    const form = { ...configFormFromView(viewFor('', 'credential-helper')), backupPlugins: false, backupSkills: true }
+    const payload = configPayloadFromForm(form)
+    expect(payload.backupScopes).toEqual({ plugins: false, skills: true })
+    expect(payload).not.toHaveProperty('backupPlugins')
+    expect(payload).not.toHaveProperty('backupSkills')
+  })
+
+  it('shows independent plugin and skill backup switches, both on by default', () => {
+    const html = render('https://github.com/songni370/dsh-plugins-git-sync.git', 'credential-helper')
+    expect(html).toContain('aria-label="插件"')
+    expect(html).toContain('aria-label="技能"')
+    expect(html.split('aria-checked="true"').length).toBeGreaterThanOrEqual(2)
+    expect(html).toContain('关闭后不会上传或恢复对应内容')
+    expect(html).not.toContain('configScopeValue')
   })
 
   it('shows the current client instead of profile internals', () => {

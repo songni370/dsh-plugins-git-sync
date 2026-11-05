@@ -37,7 +37,7 @@ The plugin's own detail page also has a compact **Backup settings** card showing
 
 *Sync status, count tiles and the automatic-sync switch on one page; nothing runs in the background until a repository is configured.*
 
-- **Repository card**: detects HTTPS / SSH / local paths and shows only the matching auth fields; a fixed row states "Backup contents: Plugins + skills"; collapsed once configured.
+- **Repository card**: detects HTTPS / SSH / local paths and shows only the matching auth fields; "Backup contents" has independent plugin and skill switches, both on by default; collapsed once configured.
 - **Operations**: `Sync`, `Check differences`, `Back up to Git` and `Restore from Git` are four direct buttons; nothing is hidden in a menu.
   - `Sync` runs directly when there are no conflicts or delete/overwrite steps; only those open a confirmation preview.
 - **Sync status**: badge, count tiles and metadata, in the same card as the operations.

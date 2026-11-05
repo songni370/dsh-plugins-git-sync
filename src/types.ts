@@ -229,6 +229,14 @@ export interface RepoLayout {
 // ---------------------------------------------------------------------------
 
 /** Local, non-secret configuration of this plugin. */
+/** What the backup is allowed to include. Both default to true. */
+export interface BackupScopes {
+  /** Back up the installed plugin inventory (name, version, enabled state). */
+  plugins: boolean
+  /** Back up deployed DSH skills (their file contents). */
+  skills: boolean
+}
+
 export interface SyncConfig {
   /** Repository URL (https, ssh, scp-like, or `file://`). */
   repoUrl: string
@@ -245,6 +253,8 @@ export interface SyncConfig {
   profiles: string[]
   /** Extract and synchronize plugin configuration values. */
   includeConfigs: boolean
+  /** Which content types this profile backs up. */
+  backupScopes: BackupScopes
   /** Include local-development plugins by archiving their source (opt-in). */
   includeLocalPlugins: boolean
   /** Plugin ids never synchronized. */

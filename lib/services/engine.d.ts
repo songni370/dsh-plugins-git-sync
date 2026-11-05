@@ -188,6 +188,10 @@ export declare class SyncEngine {
     private tryRollback;
     /** Resolve a `backup-tarball:<repo-relative path>` install spec. */
     private resolveTarballSpec;
+    /** Drop plugin work when the user disabled plugin backup. */
+    private scopedPlan;
+    /** Scan skills only when their scope is enabled. */
+    private scanSkillsFor;
     /** Preview a backup (used by the diff view). */
     private previewBackup;
     /** Read configuration. */

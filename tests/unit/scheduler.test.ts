@@ -42,6 +42,7 @@ function config(overrides: Partial<SyncConfig['autoSync']> = {}): SyncConfig {
     username: '',
     profiles: ['desktop'],
     includeConfigs: true,
+    backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
     excludedConfigPlugins: [],

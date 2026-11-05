@@ -143,6 +143,13 @@ export const CSS = `
   gap: 12px 16px;
   align-items: start;
 }
+.dgs-scopeSwitches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0;
+}
+
 .dgs-formRows {
   display: flex;
   flex-direction: column;

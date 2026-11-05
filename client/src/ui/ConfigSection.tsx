@@ -14,14 +14,14 @@
 
 import { useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
-import type { GitAuthMode, SyncConfigView } from '../../../src/types'
+import type { GitAuthMode, SyncConfig, SyncConfigView } from '../../../src/types'
 import type { Translate } from '../i18n'
 import {
   authForTransport,
   detectRepoTransport,
   type RepoTransport,
 } from '../repo-transport'
-import { Badge, Button, Card, TextInput } from './controls'
+import { Badge, Button, Card, Switch, TextInput } from './controls'
 
 /** The editable subset of the Host configuration. */
 export interface ConfigForm {
@@ -32,6 +32,8 @@ export interface ConfigForm {
   tokenEnvVar: string
   username: string
   deviceName: string
+  backupPlugins: boolean
+  backupSkills: boolean
 }
 
 /** Build the form from the Host's effective configuration view. */
@@ -46,7 +48,15 @@ export function configFormFromView(view: SyncConfigView): ConfigForm {
     tokenEnvVar: view.tokenEnvVar,
     username: view.username,
     deviceName: view.deviceName,
+    backupPlugins: view.backupScopes?.plugins ?? true,
+    backupSkills: view.backupScopes?.skills ?? true,
   }
+}
+
+/** Translate the editable form shape into the Host configuration payload. */
+export function configPayloadFromForm(form: ConfigForm): Partial<SyncConfig> {
+  const { backupPlugins, backupSkills, ...rest } = form
+  return { ...rest, backupScopes: { plugins: backupPlugins, skills: backupSkills } }
 }
 
 /** Props for {@link ConfigSection}. */
@@ -180,8 +190,23 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
           </FormRow>
 
           <FormRow label={t('configScope')}>
-            <div className="dgs-inputWithBadge">
-              <Badge tone="idle">{t('configScopeValue')}</Badge>
+            <div className="dgs-scopeSwitches">
+              <Switch
+                label={t('configScopePlugins')}
+                checked={form.backupPlugins}
+                disabled={busy || (!form.backupSkills && form.backupPlugins)}
+                onChange={checked => {
+                  props.onChange({ backupPlugins: checked })
+                }}
+              />
+              <Switch
+                label={t('configScopeSkills')}
+                checked={form.backupSkills}
+                disabled={busy || (!form.backupPlugins && form.backupSkills)}
+                onChange={checked => {
+                  props.onChange({ backupSkills: checked })
+                }}
+              />
             </div>
             <span className="dgs-formRowHint">{t('configScopeHint')}</span>
           </FormRow>

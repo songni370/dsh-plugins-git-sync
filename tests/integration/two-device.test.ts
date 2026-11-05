@@ -298,6 +298,66 @@ describe('two-device synchronization', () => {
     expect(await readFile(join(winBeta, 'SKILL.md'), 'utf8')).toBe('# Beta kept on win\n')
   }, 120_000)
 
+  it('keeps each backup scope independent and leaves a disabled scope untouched', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-git-sync-scopes-'))
+    try {
+      const bareRepo = createBareRepo(root)
+      const mac = await createFakeDevice({ root, name: 'scope-mac', repoUrl: bareRepo, platform: 'darwin' })
+      const win = await createFakeDevice({ root, name: 'scope-win', repoUrl: bareRepo, platform: 'win32' })
+      mac.addPlugin({ name: 'alpha', version: '1.0.0', enabled: true, configs: {} })
+      const macSkill = join(mac.root, 'skills', 'alpha-skill')
+      await mkdir(macSkill, { recursive: true })
+      await writeFile(join(macSkill, 'SKILL.md'), '# Alpha from mac\n')
+
+      // Skills only: no plugin inventory files are written.
+      await mac.saveConfig({ backupScopes: { plugins: false, skills: true } })
+      const backup = await mac.engine.backup({ confirmDestructive: true })
+      expect(backup.ok).toBe(true)
+      const files = listRepoFiles(bareRepo)
+      expect(files).toContain('profiles/desktop/skills.json')
+      expect(files).not.toContain('profiles/desktop/plugins.json')
+      expect(files).not.toContain('manifest.json')
+      expect(files.some(file => file.startsWith('devices/'))).toBe(false)
+
+      // A skills-only sync still writes even when it has no plugin actions.
+      const macGamma = join(mac.root, 'skills', 'gamma-skill')
+      await mkdir(macGamma, { recursive: true })
+      await writeFile(join(macGamma, 'SKILL.md'), '# Gamma from mac\n')
+      const sync = await mac.engine.sync({ confirmDestructive: true })
+      expect(sync.ok).toBe(true)
+      const synced = JSON.parse(readRepoFile(bareRepo, 'profiles/desktop/skills.json')) as { skills: { name: string }[] }
+      expect(synced.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'gamma-skill'])
+
+      // Restoring with plugins off installs only the missing skill.
+      await win.saveConfig({ backupScopes: { plugins: false, skills: true } })
+      const restore = await win.engine.restore({ confirmDestructive: true })
+      expect(restore.ok).toBe(true)
+      expect(win.plugin('alpha')).toBeUndefined()
+      expect(await readFile(join(win.root, 'skills', 'alpha-skill', 'SKILL.md'), 'utf8')).toBe('# Alpha from mac\n')
+
+      // Turning plugins off later must keep the existing repository copy.
+      await mac.saveConfig({ backupScopes: { plugins: true, skills: true } })
+      await mac.engine.backup({ confirmDestructive: true })
+      const pluginsBefore = readRepoFile(bareRepo, 'profiles/desktop/plugins.json')
+      await mac.saveConfig({ backupScopes: { plugins: false, skills: true } })
+      const macDelta = join(mac.root, 'skills', 'delta-skill')
+      await mkdir(macDelta, { recursive: true })
+      await writeFile(join(macDelta, 'SKILL.md'), '# Delta from mac\n')
+      await mac.engine.backup({ confirmDestructive: true })
+      expect(readRepoFile(bareRepo, 'profiles/desktop/plugins.json')).toBe(pluginsBefore)
+
+      // Turning skills off later must not delete the existing remote snapshot.
+      const before = readRepoFile(bareRepo, 'profiles/desktop/skills.json')
+      await mac.saveConfig({ backupScopes: { plugins: true, skills: false } })
+      await writeFile(join(macSkill, 'SKILL.md'), '# Changed after skills were disabled\n')
+      await mac.engine.backup({ confirmDestructive: true })
+      expect(readRepoFile(bareRepo, 'profiles/desktop/skills.json')).toBe(before)
+      expect(listRepoFiles(bareRepo)).toContain('profiles/desktop/plugins.json')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }, 120_000)
+
   it('rejects a malformed manifest instead of guessing', async () => {
     await writeRepoFileDirect(ctx.bareRepo, 'manifest.json', '{ this is not json')
     const error = await expectRejection(ctx.win.engine.sync({ confirmDestructive: true }), 'invalid-manifest')

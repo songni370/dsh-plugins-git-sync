@@ -51,6 +51,7 @@ function makeConfig(overrides: Partial<SyncConfig> = {}): SyncConfig {
     username: '',
     profiles: ['default'],
     includeConfigs: true,
+    backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
     excludedConfigPlugins: [],

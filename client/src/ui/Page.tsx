@@ -52,7 +52,7 @@ import { AutoSyncSection, autoFormFromView } from './AutoSyncSection'
 import type { AutoForm } from './AutoSyncSection'
 import { Banner, Button, Card, LinkButton, Loading } from './controls'
 import type { Feedback } from './controls'
-import { ConfigSection, configFormFromView } from './ConfigSection'
+import { ConfigSection, configFormFromView, configPayloadFromForm } from './ConfigSection'
 import type { ConfigForm } from './ConfigSection'
 import { HistorySection } from './HistorySection'
 import { Modal } from './Modal'
@@ -372,7 +372,7 @@ export function Page({ t }: PageProps): ReactElement {
     clearMessages()
     setTesting(true)
     try {
-      const result = await api.testConnection(form === null ? {} : { config: form })
+      const result = await api.testConnection(form === null ? {} : { config: configPayloadFromForm(form) })
       showFeedback(
         'config',
         result.ok ? 'success' : 'error',
@@ -393,7 +393,7 @@ export function Page({ t }: PageProps): ReactElement {
     setSavingConfig(true)
     setBusy('config')
     try {
-      const response = await api.saveConfig({ config: form })
+      const response = await api.saveConfig({ config: configPayloadFromForm(form) })
       markConfigDirty(false)
       applyConfigView(response.config)
       // Saved successfully: a configured machine shows the collapsed summary.
