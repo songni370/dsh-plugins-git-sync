@@ -137,13 +137,11 @@ describe('repository card transport fields', () => {
     expect(payload).not.toHaveProperty('backupSkills')
   })
 
-  it('shows independent plugin and skill backup switches, both on by default', () => {
+  it('keeps backup scope switches out of the repository card', () => {
     const html = render('https://github.com/songni370/dsh-plugins-git-sync.git', 'credential-helper')
-    expect(html).toContain('aria-label="插件"')
-    expect(html).toContain('aria-label="技能"')
-    expect(html.split('aria-checked="true"').length).toBeGreaterThanOrEqual(2)
-    expect(html).toContain('关闭后不会上传或恢复对应内容')
-    expect(html).not.toContain('configScopeValue')
+    expect(html).not.toContain('aria-label="插件"')
+    expect(html).not.toContain('aria-label="技能"')
+    expect(html).not.toContain('备份内容')
   })
 
   it('shows the current client instead of profile internals', () => {

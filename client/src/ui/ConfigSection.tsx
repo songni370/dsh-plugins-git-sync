@@ -21,7 +21,7 @@ import {
   detectRepoTransport,
   type RepoTransport,
 } from '../repo-transport'
-import { Badge, Button, Card, Switch, TextInput } from './controls'
+import { Badge, Button, Card, TextInput } from './controls'
 
 /** The editable subset of the Host configuration. */
 export interface ConfigForm {
@@ -187,28 +187,6 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
               // keep one short hint under the address.
               <span className="dgs-formRowHint">{meta.hint}</span>
             )}
-          </FormRow>
-
-          <FormRow label={t('configScope')}>
-            <div className="dgs-scopeSwitches">
-              <Switch
-                label={t('configScopePlugins')}
-                checked={form.backupPlugins}
-                disabled={busy || (!form.backupSkills && form.backupPlugins)}
-                onChange={checked => {
-                  props.onChange({ backupPlugins: checked })
-                }}
-              />
-              <Switch
-                label={t('configScopeSkills')}
-                checked={form.backupSkills}
-                disabled={busy || (!form.backupPlugins && form.backupSkills)}
-                onChange={checked => {
-                  props.onChange({ backupSkills: checked })
-                }}
-              />
-            </div>
-            <span className="dgs-formRowHint">{t('configScopeHint')}</span>
           </FormRow>
 
           {transport === 'https' ? (

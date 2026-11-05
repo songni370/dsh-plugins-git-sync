@@ -58,6 +58,7 @@ import { HistorySection } from './HistorySection'
 import { Modal } from './Modal'
 import { PlanPreview } from './PlanPreview'
 import { PluginsSection } from './PluginsSection'
+import { ScopeSection } from './ScopeSection'
 import { StatusSection } from './StatusSection'
 import { ToastStack } from './ToastStack'
 
@@ -131,6 +132,7 @@ export function Page({ t }: PageProps): ReactElement {
   const [modalBusy, setModalBusy] = useState(false)
   const [testing, setTesting] = useState(false)
   const [savingConfig, setSavingConfig] = useState(false)
+  const [savingScopes, setSavingScopes] = useState(false)
   const [savingAuto, setSavingAuto] = useState(false)
   const [exclusionBusy, setExclusionBusy] = useState(false)
   const [feedback, setFeedback] = useState<Record<FeedbackArea, Feedback | null>>({
@@ -408,6 +410,41 @@ export function Page({ t }: PageProps): ReactElement {
     }
   }
 
+  async function saveScopes(next: { plugins: boolean; skills: boolean }): Promise<void> {
+    if (form === null || savingScopes) return
+    const previous = { plugins: form.backupPlugins, skills: form.backupSkills }
+    setForm(current =>
+      current === null
+        ? current
+        : { ...current, backupPlugins: next.plugins, backupSkills: next.skills },
+    )
+    setSavingScopes(true)
+    try {
+      const response = await api.saveConfig({ config: { backupScopes: next } })
+      // Keep an unsaved repository draft, but adopt the saved scopes.
+      setForm(current =>
+        current === null
+          ? current
+          : {
+              ...current,
+              backupPlugins: response.config.backupScopes?.plugins ?? next.plugins,
+              backupSkills: response.config.backupScopes?.skills ?? next.skills,
+            },
+      )
+      showFeedback('config', 'success', t('configScopeSaved'))
+      await refreshStatus()
+    } catch (error) {
+      setForm(current =>
+        current === null
+          ? current
+          : { ...current, backupPlugins: previous.plugins, backupSkills: previous.skills },
+      )
+      operationFailed(t('configScope'), error, 'config')
+    } finally {
+      setSavingScopes(false)
+    }
+  }
+
   async function saveAutoSync(): Promise<void> {
     if (autoForm === null) return
     clearMessages()
@@ -667,6 +704,15 @@ export function Page({ t }: PageProps): ReactElement {
         )
       ) : (
         <>
+          {form === null ? null : (
+            <ScopeSection
+              t={t}
+              scopes={{ plugins: form.backupPlugins, skills: form.backupSkills }}
+              saving={savingScopes}
+              onChange={scopes => void saveScopes(scopes)}
+            />
+          )}
+
           {form === null ? null : (
             <ConfigSection
               t={t}
