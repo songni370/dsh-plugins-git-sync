@@ -16,15 +16,15 @@
 
 在「插件」页打开「插件备份」详情，顶部的「备份设置」卡片可以控制是否在插件页显示「备份」标签页。关闭后只保留设置里的「插件备份」入口。
 
-![插件详情页的备份设置](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/plugin-detail.png?v=4)
+![插件详情页的备份设置](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/plugin-detail.png?v=5)
 
-### 设置页
+### 插件页的「备份」标签页
 
-「备份内容」单独成卡，位于仓库配置上方；插件和技能可分别开关，默认都开启。仓库配置里会显示备份文件在仓库中的位置。
+开启后，「插件」页会多出「备份」标签页。这里可以设置备份内容、仓库地址，查看同步状态并手动同步。
 
-![插件备份设置页](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-config.png?v=4)
+![插件页的「备份」标签页](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/plugin-backup.png)
 
-*示例仓库地址已脱敏。*
+*备份内容、仓库配置、同步操作与状态。*
 
 ## 备份什么
 

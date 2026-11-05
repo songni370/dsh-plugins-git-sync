@@ -8,9 +8,9 @@ Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and depl
 [![CI](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-![Plugin Backup initial configuration](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-config.png?v=4)
+![The Backup tab on the Plugins page](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/plugin-backup.png)
 
-*Backup contents and repository settings; the example repository address is masked.*
+*Backup contents, repository settings, operations and sync status on the Backup tab.*
 
 Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory and deployed skills to a private repository and pull them down elsewhere. The plugin inventory is plain JSON and skills are stored as real files, all readable and diffable with ordinary Git tools.
 
