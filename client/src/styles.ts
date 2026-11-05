@@ -532,39 +532,13 @@ export const CSS = `
   line-height: 18px;
   color: var(--dsw-alias-label-secondary, #5c6570);
 }
-.dgs-skillList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.dgs-skillItem {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--dsw-alias-divider);
-}
-
-.dgs-skillItem:first-child {
-  border-top: none;
+.dgs-skillTable {
+  table-layout: auto;
 }
 
 .dgs-skillName {
-  flex: 1;
   font-weight: 550;
-  word-break: break-all;
-}
-
-.dgs-skillTail {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  overflow-wrap: anywhere;
 }
 
 .dgs-skillMeta {

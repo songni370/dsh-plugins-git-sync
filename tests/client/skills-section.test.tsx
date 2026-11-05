@@ -38,6 +38,14 @@ describe('skill card', () => {
     expect(html).not.toContain('刷新')
   })
 
+  it('shows a column header row like the plugin list', () => {
+    const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={skills} />)
+    expect(html).toContain('>同步<')
+    expect(html).toContain('>技能<')
+    expect(html).toContain('>文件 / 大小<')
+    expect(html).toContain('>状态<')
+  })
+
   it('shows the backup status for every skill', () => {
     const mixed: SkillListResponse = {
       skills: [

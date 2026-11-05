@@ -110,31 +110,49 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
       {skills !== null && rows.length === 0 ? <p className="dgs-hint">{t('skillsEmpty')}</p> : null}
 
       <div id="dgs-skills-body" hidden={!open}>
-        <ul className="dgs-skillList">
-          {pageRows.map(skill => {
-            const excluded = props.exclusions.has(skill.name) || skill.syncStatus === 'excluded'
-            const meta = excluded ? SKILL_SYNC_META.excluded : SKILL_SYNC_META[skill.syncStatus] ?? SKILL_SYNC_META['local-only']
-            return (
-              <li className="dgs-skillItem" key={skill.name}>
-                <Checkbox
-                  checked={!excluded}
-                  disabled={props.busy}
-                  label={`${t('pluginsSyncable')}: ${skill.name}`}
-                  onChange={next => {
-                    props.onToggle(skill, next)
-                  }}
-                />
-                <span className="dgs-skillName">{skill.name}</span>
-                <span className="dgs-skillTail">
-                  <span className="dgs-skillMeta">
-                    {t('skillsMeta', { files: skill.files, size: formatBytes(skill.bytes) })}
-                  </span>
-                  <Badge tone={meta.tone}>{t(meta.key)}</Badge>
-                </span>
-              </li>
-            )
-          })}
-        </ul>
+        <div className="dgs-tableWrap">
+          <table className="dgs-table dgs-skillTable">
+            <thead>
+              <tr>
+                <th className="dgs-tableCellCheck">{t('pluginsSyncable')}</th>
+                <th>{t('skillsColumnName')}</th>
+                <th>{t('skillsColumnMeta')}</th>
+                <th>{t('pluginsStatus')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map(skill => {
+                const excluded = props.exclusions.has(skill.name) || skill.syncStatus === 'excluded'
+                const meta = excluded ? SKILL_SYNC_META.excluded : SKILL_SYNC_META[skill.syncStatus] ?? SKILL_SYNC_META['local-only']
+                return (
+                  <tr className="dgs-skillItem" key={skill.name}>
+                    <td className="dgs-tableCellCheck">
+                      <Checkbox
+                        checked={!excluded}
+                        disabled={props.busy}
+                        label={`${t('pluginsSyncable')}: ${skill.name}`}
+                        onChange={next => {
+                          props.onToggle(skill, next)
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <span className="dgs-skillName">{skill.name}</span>
+                    </td>
+                    <td className="dgs-nowrap">
+                      <span className="dgs-skillMeta">
+                        {t('skillsMeta', { files: skill.files, size: formatBytes(skill.bytes) })}
+                      </span>
+                    </td>
+                    <td className="dgs-nowrap">
+                      <Badge tone={meta.tone}>{t(meta.key)}</Badge>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {rows.length === 0 ? null : (
           <div className="dgs-pagination">
