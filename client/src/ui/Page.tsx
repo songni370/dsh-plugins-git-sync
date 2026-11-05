@@ -859,7 +859,6 @@ export function Page({ t }: PageProps): ReactElement {
         <Modal
           t={t}
           title={t('diffTitle')}
-          description={t('diffDesc')}
           confirmLabel={t('close')}
           confirmVariant="primary"
           hideCancel

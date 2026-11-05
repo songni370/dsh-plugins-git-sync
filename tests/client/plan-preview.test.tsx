@@ -96,6 +96,6 @@ describe('PlanPreview', () => {
         plan={{ ...plan, actions: [], warnings: [], requiresConfirmation: false }}
       />,
     )
-    expect(html).toContain('没有需要执行的步骤')
+    expect(html).toContain('当前没有需要同步的改动')
   })
 })
