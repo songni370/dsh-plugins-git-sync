@@ -108,7 +108,6 @@ export function statesEqual(a: PluginState | null | undefined, b: PluginState | 
   if (b === null || b === undefined) return false
   if (a.version !== b.version) return false
   if (a.enabled !== b.enabled) return false
-  if (stableStringify(a.configs) !== stableStringify(b.configs)) return false
   return true
 }
 
@@ -118,7 +117,6 @@ export function stateMatchesBaseline(state: PluginState | null | undefined, entr
   if (entry === undefined) return false
   return state.version === entry.version
     && state.enabled === entry.enabled
-    && stableStringify(state.configs) === stableStringify(entry.configs)
 }
 
 /** Convert a state into a baseline entry. */
@@ -133,10 +131,10 @@ export function toBaselineEntry(state: PluginState): BaselineEntry {
 
 /** Stable hash of the synchronization-relevant fields. */
 export function stateHash(state: PluginState): string {
+  // Configuration is deliberately excluded: this plugin never backs it up.
   return stableStringify({
     v: state.version,
     e: state.enabled,
-    c: state.configs,
   } as unknown as JsonObject)
 }
 
@@ -155,17 +153,6 @@ export function changedFields(
   if (baseState === null || next === null) return fields
   if (baseState.version !== next.version) fields.push('version')
   if (baseState.enabled !== next.enabled) fields.push('enabled')
-  const baseKeys = Object.keys(baseState.configs).sort()
-  const nextKeys = Object.keys(next.configs).sort()
-  if (baseKeys.join('\u0000') !== nextKeys.join('\u0000')) {
-    fields.push('config')
-  } else {
-    for (const key of baseKeys) {
-      if (stableStringify(baseState.configs[key] ?? null) !== stableStringify(next.configs[key] ?? null)) {
-        fields.push(`config.${key}`)
-      }
-    }
-  }
   return fields
 }
 

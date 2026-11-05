@@ -114,7 +114,8 @@ export function defaultConfig(): SyncConfig {
     tokenEnvVar: '',
     username: '',
     profiles: [],
-    includeConfigs: true,
+    // Plugin configuration is intentionally never backed up; see the scope policy.
+    includeConfigs: false,
     includeLocalPlugins: false,
     excludedPlugins: [],
     excludedConfigPlugins: [],
@@ -238,14 +239,15 @@ export function normalizeConfig(input: unknown, activeProfile: string, available
   // surface shows the same order on every device.
   config.profiles = [activeProfile, ...config.profiles.filter(name => name !== activeProfile)]
 
-  if (typeof raw.includeConfigs === 'boolean') config.includeConfigs = raw.includeConfigs
+  // Old config files may still say true; configuration backup is removed.
+  config.includeConfigs = false
   if (typeof raw.includeLocalPlugins === 'boolean') config.includeLocalPlugins = raw.includeLocalPlugins
   if (typeof raw.deviceName === 'string') {
     const name = sanitizeDeviceName(raw.deviceName)
     config.deviceName = name === '' ? defaultDeviceName() : name
   }
   config.excludedPlugins = stringList(raw.excludedPlugins)
-  config.excludedConfigPlugins = stringList(raw.excludedConfigPlugins)
+  config.excludedConfigPlugins = []
 
   if (raw.autoSync !== null && typeof raw.autoSync === 'object' && !Array.isArray(raw.autoSync)) {
     const auto = raw.autoSync as Record<string, unknown>

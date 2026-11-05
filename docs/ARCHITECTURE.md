@@ -14,7 +14,7 @@ This document is for maintainers: module boundaries, data flow, state files, the
 4. **永不 force push**：非快进推送 → 重新拉取 → 重算（`rebuild`）→ 重试；超过预算就失败，把冲突留给下一次运行。
 5. **破坏性操作必须显式确认**：删除本机插件、删除仓库记录、降级都标记 `destructive`，必须 `confirmDestructive`（设置页）/ `confirm: true`（Agent 工具）。
 6. **改动本机前先快照**：恢复、同步、历史回滚在执行本机动作之前写本机快照。
-7. **秘密不出本机**：配置在进入备份前由脱敏规则过滤；令牌只经环境变量传给 Git 子进程；日志统一脱敏。
+7. **秘密不出本机**：插件配置不读取、不备份、不恢复；令牌只经环境变量传给 Git 子进程；日志统一脱敏。
 8. **确定性**：序列化键排序、固定缩进、结尾换行，因此「内容相同」等价于「字节相同」，从而可靠地判断「无变化 = 不产生提交」。
 
 ## 2. 模块地图
@@ -58,12 +58,12 @@ This document is for maintainers: module boundaries, data flow, state files, the
 | 入口 | `index.ts` | 解析 DSH home/profile；解析 DSH 版本（优先运行中的应用包 `resources/app.asar/package.json`，回退 Profile 里安装的 `@deepseek-ai/dsh`，再不行记 `unknown`）；创建 logger、scanner、installer、config gateway、engine、scheduler；注册 HTTP 路由与 Agent 工具；监听 `plugin-manager/changed`；卸载时清理。 | → 所有下层 |
 | 编排 | `services/engine.ts` | 唯一业务入口：`status`、`saveConfig`、`testConnection`、`listPlugins`、`diff`、`backup`、`previewRestore`、`restore`、`rollback`、`previewSync`、`sync`、`history`、`setAutoSync`、`logs`、`listSnapshots`、`rollbackSnapshot`。持有互斥、快照、基线更新与状态持久化。 | → plan, executor, snapshot, repo-files, model, scanner, installer, gateway, state, git |
 | 规划 | `services/plan.ts` | 纯函数（无 I/O）：三方比较、生成动作与冲突、危险标记、警告。 | → model, core/version |
-| 执行 | `services/executor.ts` | 逐条执行本机动作（install/upgrade/downgrade/enable/disable/restore-config/remove-local），单条失败不影响其它。 | → types |
+| 执行 | `services/executor.ts` | 逐条执行本机动作（install/upgrade/downgrade/enable/disable/remove-local），单条失败不影响其它。 | → types |
 | 调度 | `services/scheduler.ts` | 定时/启动检查/变更触发；互斥、冷却、退避、暂停；定时器随生命周期清理。 | → engine |
-| 快照 | `services/snapshot.ts` | 快照创建/读取/列表；回滚配置与启用状态（不能重装插件）。 | → state/store, gateway, installer |
+| 快照 | `services/snapshot.ts` | 快照创建/读取/列表；回滚启用状态（不能重装插件）。 | → state/store, gateway, installer |
 | 仓库文件 | `services/repo-files.ts` | 把计划结果转成仓库文件集合与删除列表；序列化前清洗行内 `moduleName`/`entryId`（绝对/本地路径替换为包名）；构建基线。 | → manifest, core/paths |
-| 扫描 | `scanner/inventory.ts` | 从 plugin manager（主）或 profile `package.json`（降级）生成 `DeviceInventory`；分类来源、计算 `installSpec`、提取过滤后的配置。 | → config-gateway, profiles, core |
-| 配置网关 | `scanner/config-gateway.ts` | 通过 `configEditor`（优先）或 `settings`（回退）读写配置；写入前再次脱敏；保留未同步键。 | → core/redact |
+| 扫描 | `scanner/inventory.ts` | 从 plugin manager（主）或 profile `package.json`（降级）生成 `DeviceInventory`；分类来源、计算 `installSpec`；不读取配置。 | → config-gateway, profiles, core |
+| 配置网关 | `scanner/config-gateway.ts` | 历史模块；配置备份移除后扫描与备份路径不再调用。 | → core/redact |
 | 安装器 | `adapters/installer.ts` | `pluginManager.installBundle` / `setBundleEnabled` / `setPluginEnabled` / `removeBundle`；不允许跨 Profile 操作；返回 `pendingBuilds`。 | → dsh 结构类型 |
 | Git | `git/repo-store.ts` | 克隆/刷新工作区、读取 manifest/state/configs/devices、`readAtCommit`、`history`、`testConnection`、事务化写入 + 提交 + 推送 + 重试。 | → git-runner, repo-paths, manifest |
 | Git 安全 | `git/git-runner.ts` | 参数数组 + `shell:false`、禁止危险选项、超时/截断、令牌经环境变量、输出脱敏、错误分类（auth/network/其它）。 | → core |
@@ -101,7 +101,7 @@ backup(options)
   4. prepared = store.prepare()                    (clone/fetch/reset 工作区)
   5. local = scanLocal(force)                      (DeviceInventory)
   6. read = readRemote(store, prepared.head)       (manifest/state/configs/devices)
-  7. plan = planBackup(planInput)                  (push-plugin / push-config / remove-remote)
+  7. plan = planBackup(planInput)                  (push-plugin / remove-remote)
   8. if plan.requiresConfirmation && !confirmDestructive → SyncError('confirmation-required', {plan})
   9. store.write({ files, deletions, rebuild, message, trailers })
        - rebuild: 推送被并发设备抢先时，重新读取 → 重新 planBackup → 重算文件
@@ -216,40 +216,40 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 | local | remote | localChanged | remoteChanged | 结果 |
 | --- | --- | --- | --- | --- |
 | 有 | 有 | 否 | 否 | 无动作（可能记录 `identical` 差异） |
-| 有（改动） | 有 | 是 | 否 | `push-plugin`（+`push-config`）：把本机状态写进仓库 |
+| 有（改动） | 有 | 是 | 否 | `push-plugin`：把本机状态写进仓库 |
 | 有 | 无 | 任意 | 任意 | 不算冲突：`push-plugin` 把本机插件重新写入仓库；不可安装时追加「仅记录」警告 |
 | 无（本机删除） | 有 | 是 | 否 | 冲突 `local-deleted`；选择 `local` → `remove-remote`（破坏性）；选择 `remote` → 恢复本机；`skip` 保留冲突 |
-| 有/无 | 有（改动） | 否 | 是 | `install/upgrade/downgrade`（+`enable/disable`/`restore-config`）应用远端状态 |
-| 有 | 有 | 是 | 是 | 配置按字段三方合并；仍不同则冲突 `both-changed` |
+| 有/无 | 有（改动） | 否 | 是 | `install/upgrade/downgrade`（+`enable/disable`）应用远端状态 |
+| 有 | 有 | 是 | 是 | 状态仍不同则冲突 `both-changed` |
 | 无 | 无 | — | — | 无动作 |
 
 本机有、仓库没有时，即使基线显示仓库曾经删除过它，也不再产生 `remote-deleted` 冲突；同步会按本机状态重新备份。仓库条目的删除只在本机删除后的 `local-deleted` 冲突中发生，并且必须由用户显式选择。
 
-两边都改、但版本和启停状态一致时，`mergeConfigs(base.configs, local.configs, remote.configs)` 会按 key 合并：只有一侧改动的 key 取该侧，两侧改成相同值也算收敛；两侧改成不同值（含一侧删除、另一侧修改）的 key 记为冲突。合并成功时生成 `restore-config`（写回本机）和/或 `push-config`（写回仓库），不弹冲突。版本或启停状态也变了时不自动合并配置，仍由用户选择整侧状态。
+插件配置不参与比较：两边只在配置上不同、版本和启停一致时，视为没有变化；不会生成 `push-config` / `restore-config`，也不会因此产生冲突。
 
 冲突解决（`resolution.choice`）：
 
 | choice | 双方都改（均存在） | 本机删除 / 远端仍在 | 远端删除 / 本机仍在 |
 | --- | --- | --- | --- |
-| `local` | `push-plugin` + `push-config` | `remove-remote`（破坏性，从仓库删除） |
+| `local` | `push-plugin` | `remove-remote`（破坏性，从仓库删除） |
 | `remote` | 应用远端（install/upgrade/...） | 应用远端（恢复本机插件） |
 | `skip`（默认） | 不处理该插件，其余动作继续；冲突保留 | 不处理该插件，仓库保持不变，其余动作继续 |
-| `manual` | 用 `manualConfig` 写本机配置并推送合并状态（仅本机存在时） | 保留冲突（无本机状态可合并） |
+| `manual` | 保留冲突（需人工处理） | 保留冲突 |
 
-恢复（`planRestore`）方向的冲突只有一类：`config-conflict` —— 本机配置自基线后被改过，且与仓库配置不同。它不是「双方都改」意义上的冲突，而是「恢复会覆盖本机未同步的改动」，因此需要用户确认保留哪一侧。
+恢复（`planRestore`）不再产生配置冲突；它只安装/升级/启停插件，不读写插件配置。
 
 ### 5.3 工作示例：Mac 新增 A，Windows 新增 B
 
 初始状态：仓库为空；两台设备都没有插件；两台设备基线为空。
 
-**第 1 步：Mac 安装 A（1.0.0，配置 `{timeout: 30}`）并备份**
+**第 1 步：Mac 安装 A（1.0.0）并备份**
 
 ```text
-local = { A: {version:1.0.0, enabled:true, configs:{timeout:30}} }
+local = { A: {version:1.0.0, enabled:true} }
 remote = {}   base = {}
-planBackup → push-plugin A + push-config A          (无破坏性，无需确认)
-仓库提交 c1: profiles/desktop/plugins.json += A；configs/a.json = {timeout:30}；devices/<mac>/desktop.json
-Mac 基线 = { A: {1.0.0, true, {timeout:30}} }
+planBackup → push-plugin A          (无破坏性，无需确认)
+仓库提交 c1: profiles/desktop/plugins.json += A；devices/<mac>/desktop.json
+Mac 基线 = { A: {1.0.0, true} }
 ```
 
 **第 2 步：Windows 同步（本机还没有任何插件）**
@@ -260,12 +260,12 @@ localChanged(A): statesEqual(local=null, base=null) === true  → false
 remoteChanged(A): statesEqual(remote=A, base=null)   === false → true
 ```
 
-关键点：**新设备的空基线与空本机被视为「没有本地改动」**，所以 `remoteChanged = true` 走「远端改动 → 应用到本机」：`install A@1.0.0` + `restore-config` + `enable`。Windows 现在有 A。
+关键点：**新设备的空基线与空本机被视为「没有本地改动」**，所以 `remoteChanged = true` 走「远端改动 → 应用到本机」：`install A@1.0.0` + `enable`。Windows 现在有 A。
 
 （如果这里反过来把「远端有、本机无」当成「本地删除」，新设备首次同步就会把仓库清空——三方比较的意义正在于此。）
 
 ```text
-Windows 基线 = { A: {1.0.0, true, {timeout:30}} }
+Windows 基线 = { A: {1.0.0, true} }
 ```
 
 **第 3 步：Windows 安装 B（2.0.0，无配置）并同步**
@@ -301,15 +301,14 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 
 ## 6. 冲突矩阵（呈现给 UI 的字段）
 
-每个 `ConflictInfo` 包含：`pluginId`、`pluginName`、`reason`、`fields`（`version` / `enabled` / `config.<key>` / （不展示 `presence`））、`localVersion`、`remoteVersion`、`localEnabled`、`remoteEnabled`、`localConfig`/`remoteConfig`/`baseConfig`、`remoteDevice`（最后修改设备 ID）、`remoteUpdatedAt`。
+每个 `ConflictInfo` 包含：`pluginId`、`pluginName`、`reason`、`fields`（`version` / `enabled` / （不展示 `presence`））、`localVersion`、`remoteVersion`、`localEnabled`、`remoteEnabled`、`remoteDevice`（最后修改设备 ID）、`remoteUpdatedAt`。
 
 | reason | 含义 | 典型 `fields` |
 | --- | --- | --- |
-| `both-changed` | 双方都改了同一插件且仍不一致 | `version`、`enabled`、`config.timeout` |
-| `local-deleted` | 本机删了、远端还在/被改 | 通常为空或 `version`/`config.*` |
-| `config-conflict` | 恢复会覆盖本机未同步的配置改动 | `config.<key>` |
+| `both-changed` | 双方都改了同一插件且仍不一致 | `version`、`enabled` |
+| `local-deleted` | 本机删了、远端还在/被改 | 通常为空或 `version` |
 
-`plan.diffs` 另外给 UI 一个逐插件视图（`kind`: `missing-local` / `missing-remote` / `version-diff` / `config-diff` / `enabled-diff` / `deleted-remote` / `new-local` / `new-remote` / `identical`），`conflict?` 挂在对应 diff 上。
+`plan.diffs` 另外给 UI 一个逐插件视图（`kind`: `missing-local` / `missing-remote` / `version-diff` / `enabled-diff` / `deleted-remote` / `new-local` / `new-remote` / `identical`），`conflict?` 挂在对应 diff 上。
 
 ## 7. 安全不变量（实现层面的强制点）
 
@@ -321,14 +320,14 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | 输出不撑爆内存、不挂死 | 1 MiB 捕获上限；默认 120s 超时后 `SIGKILL`；`GIT_TERMINAL_PROMPT=0` |
 | 路径不逃逸、不写 `.git`、不穿符号链接 | `core/paths.ts` + `git/repo-paths.ts`（读与写都校验） |
 | 仓库文档结构可信 | `manifest/manifest.ts` 全套校验；schema 版本不匹配明确报错 |
-| 秘密不落仓库/日志 | `core/redact.ts`（键名 + 值形态 + URL userinfo）；日志与 Git 错误统一脱敏 |
+| 秘密不落仓库/日志 | 插件配置从不读取或写入仓库；`core/redact.ts` 仍用于日志与 Git 错误脱敏 |
 | 绝对路径不落仓库 | **序列化层强制**：`services/repo-files.ts` `sanitizePluginRecord()` 删除 `localPath`，`sanitizeRows()` / `sanitizeModuleName()` 把行里的 `moduleName` / `entryId`（绝对 `file:///…`、盘符、以 `/` 或反斜杠开头、含反斜杠、控制字符）替换为插件包名或丢弃；`toRemoteEntry()` 与 `toDeviceSnapshot()` 都经过它（真实插件会以 `file:///…` 引用模块，例如 cc-safety-net）；扫描器另外只保留相对 `source` |
 | 不产生空提交 | `repo-store.materialize()`：`git status --porcelain` 为空即返回 `changed:false` |
 | 不覆盖并发设备 | `repo-store.write()`：非快进 → refresh → `rebuild()` 重算 → 重试；超限报 `git-push-rejected` |
 | 破坏性操作需确认 | 引擎 `backup`/`restore`/`sync`/`runRestore` 在 `requiresConfirmation` 时抛 `confirmation-required` |
 | 改动前有快照 | `engine.sync` / `engine.runRestore`：执行本机动作前 `snapshots.create()` |
 | 串行执行 | `core/mutex.ts` + 引擎 `busy` 标志；调度器另有 `running`/冷却 |
-| 失败不留半截状态 | `state.lastError` 记录；同步/恢复失败时尽力回滚配置与启用状态；基线只在成功后更新 |
+| 失败不留半截状态 | `state.lastError` 记录；同步/恢复失败时尽力回滚启用状态；基线只在成功后更新 |
 
 > 信任边界：备份仓库的用户（或能写该仓库的人）可以决定本机安装哪些包（`installSpec` 会被传给 DSH 插件管理器）。这等价于「信任你同步的插件来源」。请使用私有仓库、审阅恢复/同步预览，并依赖 DSH 插件管理器自身的来源限制。
 
@@ -401,4 +400,4 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `tests/client/render.test.tsx` | 设置页 jsdom 渲染冒烟：挂载与初始 Host 调用、状态/仓库配置/插件列表分区渲染、`confirmation-required` 时打开确认对话框（**不是**真实 Harness 页面） |
 | `tests/integration/two-device.test.ts` | 两台模拟设备 + 真实本地 bare Git 仓库的端到端流程：备份/恢复、无变化不提交、并发新增、版本变更、配置冲突、删除确认、历史 trailer、非法 manifest、不可达仓库、本地插件排除、状态计数 |
 
-集成测试只模拟宿主服务（plugin manager、config editor），扫描器、配置网关、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**13 个测试文件 / 191 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。
+集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**13 个测试文件 / 191 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。

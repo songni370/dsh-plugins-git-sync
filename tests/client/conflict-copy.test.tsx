@@ -92,14 +92,6 @@ describe('conflict copy', () => {
     expect(html).not.toContain('本机和仓库都改过')
   })
 
-  it('separates restore configuration choices from plugin overwrite choices', () => {
-    const html = render('config-conflict', 'skip')
-    expect(html).toContain('本机配置和仓库配置不同')
-    expect(html).toContain('保留本机配置')
-    expect(html).toContain('用仓库配置')
-    expect(html).not.toContain('用本机覆盖仓库')
-  })
-
   it('shows the consequence of the selected choice', () => {
     const html = render('both-changed', 'local')
     expect(html).toMatch(/<p class="dgs-conflictEffect" aria-live="polite">用本机内容覆盖仓库[^<]*<\/p>/)

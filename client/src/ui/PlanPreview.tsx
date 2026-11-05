@@ -27,11 +27,10 @@ const DOWNLOAD_KINDS: ReadonlySet<PlanActionKind> = new Set([
   'downgrade',
   'enable',
   'disable',
-  'restore-config',
 ])
 
 /** Steps the device pushes to the repository. */
-const UPLOAD_KINDS: ReadonlySet<PlanActionKind> = new Set(['push-plugin', 'push-config'])
+const UPLOAD_KINDS: ReadonlySet<PlanActionKind> = new Set(['push-plugin'])
 
 /** Props for {@link PlanPreview}. */
 export interface PlanPreviewProps {
@@ -53,9 +52,6 @@ export interface PlanPreviewProps {
 /** One plan row: plugin name, kind pill and detail. */
 function ActionRow(props: { t: Translate; action: PlanAction; destructive: boolean }): ReactElement {
   const { t, action } = props
-  const configKeys = action.kind === 'push-config' && action.configs !== undefined
-    ? Object.keys(action.configs).sort()
-    : []
   return (
     <li className={props.destructive ? 'dgs-planItem dgs-planItemDestructive' : 'dgs-planItem'}>
       <div className="dgs-planItemHead">
@@ -64,9 +60,6 @@ function ActionRow(props: { t: Translate; action: PlanAction; destructive: boole
         {props.destructive ? <span className="dgs-badge dgs-badgeError">{t('planDestructive')}</span> : null}
       </div>
       {action.detail === '' ? null : <span className="dgs-planDetail">{action.detail}</span>}
-      {configKeys.length === 0 ? null : (
-        <span className="dgs-planConfigKeys">{t('planUploadKeys', { keys: configKeys.join(', ') })}</span>
-      )}
     </li>
   )
 }
@@ -76,8 +69,6 @@ function reasonLabel(t: Translate, reason: string): string {
   switch (reason) {
     case 'both-changed':
       return t('conflictReasonBothChanged')
-    case 'config-conflict':
-      return t('conflictReasonConfigConflict')
     case 'local-deleted':
       return t('conflictReasonLocalDeleted')
     default:
@@ -90,8 +81,6 @@ function fieldLabel(t: Translate, field: string): string {
   if (field === 'version') return t('conflictFieldVersion')
   if (field === 'enabled') return t('conflictFieldEnabled')
   if (field === 'presence') return t('conflictFieldPresence')
-  if (field === 'config') return t('conflictFieldConfig')
-  if (field.startsWith('config.')) return t('conflictFieldConfigNamed', { key: field.slice('config.'.length) })
   return field
 }
 
@@ -127,17 +116,6 @@ function conflictPresentation(t: Translate, conflict: SyncPlan['conflicts'][numb
       choices: [
         { value: 'skip', label: t('conflictChoiceKeepRemote'), effect: t('conflictEffectKeepRemote') },
         { value: 'local', label: t('conflictChoiceDeleteRemote'), effect: t('conflictEffectDeleteRemote'), danger: true },
-      ],
-    }
-  }
-  if (conflict.reason === 'config-conflict') {
-    return {
-      reason: t('conflictReasonConfigConflict'),
-      explain: t('conflictConfigConflictExplain'),
-      choices: [
-        { value: 'local', label: t('conflictChoiceKeepLocalConfig'), effect: t('conflictEffectKeepLocalConfig') },
-        { value: 'remote', label: t('conflictChoiceUseRemoteConfig'), effect: t('conflictEffectUseRemoteConfig') },
-        { value: 'skip', label: t('conflictChoiceSkip'), effect: t('conflictEffectSkip') },
       ],
     }
   }
@@ -242,7 +220,6 @@ export function PlanPreview(props: PlanPreviewProps): ReactElement {
   )
   const downloads = plan.actions.filter(action => !deletions.includes(action) && DOWNLOAD_KINDS.has(action.kind))
   const uploads = plan.actions.filter(action => !deletions.includes(action) && UPLOAD_KINDS.has(action.kind))
-  const sensitive = plan.diffs.filter(diff => (diff.local?.configSkipped.length ?? 0) > 0)
   const editable = props.onResolutionChange !== undefined
   const unresolved = plan.conflicts.filter(
     conflict => (props.resolutions?.[conflict.pluginId] ?? 'skip') === 'skip',
@@ -350,25 +327,6 @@ export function PlanPreview(props: PlanPreviewProps): ReactElement {
             </section>
           )}
         </>
-      )}
-
-      {sensitive.length === 0 ? null : (
-        <section className="dgs-planSection">
-          <h4 className="dgs-planHeading">{t('planSensitiveHeader', { count: sensitive.length })}</h4>
-          <p className="dgs-hint">{t('planSensitiveHint')}</p>
-          <ul className="dgs-plainList">
-            {sensitive.map(diff => (
-              <li key={`sensitive:${diff.id}`} className="dgs-sensitiveItem">
-                <span className="dgs-planName">{diff.local?.displayName ?? diff.name}</span>
-                <span className="dgs-configChips">
-                  {(diff.local?.configSkipped ?? []).map(key => (
-                    <code key={`${diff.id}:${key}`} className="dgs-configChip">{key}</code>
-                  ))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
 
       {warnings.length === 0 ? null : (

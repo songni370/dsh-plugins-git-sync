@@ -128,7 +128,7 @@ function stringArray(value: unknown): string[] {
 function readConfigFlags(config: unknown): ConfigFlags {
   const record = isRecordObject(config) ? config : {}
   return {
-    includeConfigs: record.includeConfigs !== false,
+    includeConfigs: false,
     includeLocalPlugins: record.includeLocalPlugins === true,
     excludedConfig: stringArray(record.excludedConfigPlugins),
     profiles: stringArray(record.profiles),
@@ -419,9 +419,7 @@ function bundleErrorText(bundle: Record<string, unknown>): string | undefined {
 
 /** Read and filter one record's configuration through the gateway. */
 async function attachConfigs(record: PluginRecord, entryIds: readonly string[], context: ScanContext): Promise<void> {
-  // Built-in/official plugins are never synchronized, so reading their configs
-  // is pure scan cost: on a full profile this was ~200 redundant
-  // configEditor.configuration() walks per scan.
+  // Configuration backup was removed for privacy: never read config values.
   if (record.builtIn) return
   if (!context.includeConfigs) return
   if (context.excludedConfig.includes(record.id) || context.excludedConfig.includes(record.name)) return

@@ -70,18 +70,12 @@ describe('backup plan', () => {
     expect(plan.diffs[0]?.kind).toBe('identical')
   })
 
-  it('pushes changed configuration separately from the plugin entry', () => {
+  it('never uploads plugin configuration', () => {
     const local = plugin('alpha', { configs: { timeout: 30 } })
     const remote = plugin('alpha', { configs: { timeout: 10 } })
     const plan = planBackup(input({ local: { alpha: local }, remote: { alpha: remote } }))
-    expect(actionsOf(plan, 'push-config', 'alpha')).toHaveLength(1)
-    expect(plan.actions.find(action => action.kind === 'push-config')?.configs).toEqual({ timeout: 30 })
-  })
-
-  it('keeps sensitive config keys in the preview diff', () => {
-    const local = plugin('alpha', { configs: { timeout: 30 }, configSkipped: ['apiKey'] })
-    const plan = planBackup(input({ local: { alpha: local } }))
-    expect(plan.diffs[0]?.local?.configSkipped).toEqual(['apiKey'])
+    expect(actionsOf(plan, 'push-config')).toHaveLength(0)
+    expect(plan.actions).toHaveLength(0)
   })
 
   it('requires confirmation before tombstoning a plugin removed locally', () => {
@@ -142,44 +136,23 @@ describe('restore plan', () => {
     expect(downgrade.requiresConfirmation).toBe(true)
   })
 
-  it('restores configuration after a version replacement even when its values are unchanged', () => {
+  it('does not restore configuration after a version replacement', () => {
     const plan = planRestore(input({
       local: { alpha: plugin('alpha', { version: '1.0.0', configs: { timeout: 10 } }) },
       remote: { alpha: plugin('alpha', { version: '2.0.0', configs: { timeout: 10 } }) },
     }))
     expect(actionsOf(plan, 'upgrade', 'alpha')).toHaveLength(1)
-    expect(actionsOf(plan, 'restore-config', 'alpha')).toHaveLength(1)
+    expect(actionsOf(plan, 'restore-config', 'alpha')).toHaveLength(0)
   })
 
-  it('restores configuration only when the local value was unchanged since the baseline', () => {
-    const safe = planRestore(input({
-      base: { alpha: plugin('alpha', { configs: { timeout: 10 } }) },
-      local: { alpha: plugin('alpha', { configs: { timeout: 10 } }) },
-      remote: { alpha: plugin('alpha', { configs: { timeout: 30 } }) },
-    }))
-    expect(actionsOf(safe, 'restore-config', 'alpha')).toHaveLength(1)
-    expect(safe.conflicts).toHaveLength(0)
-
-    const conflict = planRestore(input({
-      base: { alpha: plugin('alpha', { configs: { timeout: 10 } }) },
-      local: { alpha: plugin('alpha', { configs: { timeout: 20 } }) },
-      remote: { alpha: plugin('alpha', { configs: { timeout: 30 } }) },
-    }))
-    expect(actionsOf(conflict, 'restore-config', 'alpha')).toHaveLength(0)
-    expect(conflict.conflicts).toHaveLength(1)
-    expect(conflict.conflicts[0]?.fields).toContain('config.timeout')
-  })
-
-  it('honours a remote conflict resolution', () => {
-    const resolutions: ConflictResolution[] = [{ pluginId: 'alpha', choice: 'remote' }]
+  it('ignores configuration-only differences', () => {
     const plan = planRestore(input({
       base: { alpha: plugin('alpha', { configs: { timeout: 10 } }) },
       local: { alpha: plugin('alpha', { configs: { timeout: 20 } }) },
       remote: { alpha: plugin('alpha', { configs: { timeout: 30 } }) },
-      resolutions,
     }))
+    expect(actionsOf(plan, 'restore-config', 'alpha')).toHaveLength(0)
     expect(plan.conflicts).toHaveLength(0)
-    expect(actionsOf(plan, 'restore-config', 'alpha')).toHaveLength(1)
   })
 
   it('never removes local plugins that are absent from the backup', () => {
@@ -255,29 +228,15 @@ describe('two-way sync plan', () => {
     expect(skipped.conflicts).toHaveLength(1)
   })
 
-  it('merges configuration keys changed on different devices without a conflict', () => {
+  it('ignores configuration changes on both devices', () => {
     const plan = planSync(input({
       base: { alpha: plugin('alpha', { configs: { timeout: 10, retries: 2 } }) },
       local: { alpha: plugin('alpha', { configs: { timeout: 20, retries: 2 } }) },
       remote: { alpha: plugin('alpha', { configs: { timeout: 10, retries: 3 } }) },
     }))
     expect(plan.conflicts).toHaveLength(0)
-    expect(actionsOf(plan, 'restore-config', 'alpha')).toHaveLength(1)
-    expect(actionsOf(plan, 'push-config', 'alpha')).toHaveLength(1)
-    expect(actionsOf(plan, 'restore-config')[0]?.configs).toEqual({ timeout: 20, retries: 3 })
-    expect(actionsOf(plan, 'push-config')[0]?.configs).toEqual({ timeout: 20, retries: 3 })
-    expect(plan.requiresConfirmation).toBe(false)
-  })
-
-  it('still reports a conflict when both devices changed the same config key', () => {
-    const plan = planSync(input({
-      base: { alpha: plugin('alpha', { configs: { timeout: 10 } }) },
-      local: { alpha: plugin('alpha', { configs: { timeout: 20 } }) },
-      remote: { alpha: plugin('alpha', { configs: { timeout: 30 } }) },
-    }))
     expect(plan.actions).toHaveLength(0)
-    expect(plan.conflicts).toHaveLength(1)
-    expect(plan.conflicts[0]?.fields).toContain('config.timeout')
+    expect(plan.requiresConfirmation).toBe(false)
   })
 
   it('does not merge configs when the installed version also differs', () => {
@@ -388,7 +347,7 @@ describe('two-way sync plan', () => {
     expect(conflict?.remoteDevice).toBe('device-b')
     expect(conflict?.localVersion).toBe('1.1.0')
     expect(conflict?.remoteVersion).toBe('1.2.0')
-    expect(conflict?.localConfig).toEqual({ timeout: 20 })
-    expect(conflict?.remoteConfig).toEqual({ timeout: 30 })
+    expect(conflict?.localConfig).toBeUndefined()
+    expect(conflict?.remoteConfig).toBeUndefined()
   })
 })

@@ -1115,32 +1115,6 @@ export const CSS = `
   color: var(--dsw-alias-label-secondary, #5c6570);
   overflow-wrap: anywhere;
 }
-.dgs-planConfigKeys {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary, #7b8490);
-  overflow-wrap: anywhere;
-}
-.dgs-sensitiveItem {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-}
-.dgs-configChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.dgs-configChip {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--dsw-alias-bg-layer-2, #f7f8fa);
-  color: var(--dsw-alias-label-secondary, #5c6570);
-  font-family: var(--dsw-alias-font-mono, ui-monospace, monospace);
-  font-size: 11px;
-  line-height: 16px;
-}
 .dgs-plainList {
   display: flex;
   flex-direction: column;

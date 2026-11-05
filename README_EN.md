@@ -2,7 +2,7 @@
 
 > Display name: 插件备份 / Plugin Backup · Package / repository: `dsh-plugins-git-sync` · [中文](README.md)
 
-Back up, restore, and synchronize **DeepSeek Harness (DSH) plugins and configuration** across devices through your own **Git repository**.
+Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists** across devices through your own **Git repository**.
 
 [![npm](https://img.shields.io/npm/v/dsh-plugins-git-sync.svg)](https://www.npmjs.com/package/dsh-plugins-git-sync)
 [![CI](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml)
@@ -16,14 +16,14 @@ Reinstalling DSH or moving to another machine no longer means rebuilding a plugi
 
 ## What it does
 
-- **Backup / restore**: push user-installed plugins (version, enabled state, configuration) to Git; install them back on another device.
+- **Backup / restore**: push user-installed plugins (version, enabled state) to Git; install them back on another device.
 - **Two-way sync**: upload local changes, download repository changes; when both sides changed it stops and asks.
 - **Conflict handling**: overwrite repository with this device / overwrite this device with repository / leave for now; each button explains what it will do. When this device removed a plugin that the repository still backs up, choose Delete from repository or Keep repository.
 - **History rollback**: restore this device to any previous commit; local safety snapshots keep the latest 20 automatically.
 - **Automatic sync**: on client startup and plugin install/update/remove; **no interval timer**; repeated failures are shown on the settings page.
 - **Agent tools**: six tools for status, backup, restore, sync, diff and history.
-- **Preview before upload**: `Check differences` lists the plugins and config keys that will be uploaded; fields judged sensitive are listed separately and marked as not written to the repository.
-- **Safety**: no tokens, passwords or private keys are read or uploaded; configs are filtered; no force pushes; a snapshot precedes local changes.
+- **Preview before upload**: `Check differences` lists the plugins that will be uploaded, installed, upgraded or deleted, so you can confirm first.
+- **Safety**: no tokens, passwords, private keys or plugin configuration are read or uploaded; no force pushes; a snapshot precedes local changes.
 
 Only **user-installed third-party plugins** participate. DSH built-ins, loader internals (`cordis:*`) and this plugin itself are never backed up.
 
@@ -105,19 +105,18 @@ The device keeps a **baseline** of the last agreed state and compares `base / lo
 | Situation | Action |
 | --- | --- |
 | Only local changed | Push to repository |
-| Only remote changed | Apply locally (install/upgrade/downgrade/enable/disable/restore config) |
+| Only remote changed | Apply locally (install/upgrade/downgrade/enable/disable) |
 | Neither changed | Skip |
 | Both changed identically | Skip |
 | Present here, missing in the repository | Not a conflict; back it up into the repository |
 | Missing here, still in the repository | Conflict: delete from repository or keep repository |
-| Different config keys changed on each side | Merge field by field; keep both changes |
 | Both changed differently | Conflict; wait for your choice |
 
 - Configs are merged key by key: changes to different keys on two devices are kept automatically. You are only asked when the same key changed to different values, or when the version/enabled state also conflicts.
 - A repository entry is only deleted after you explicitly choose “Delete from repository”; “Keep repository” keeps it and lets the rest of the sync run.
 - When the repository is missing a plugin this device has, nothing is removed here; it is backed up again.
 - Deleting repository entries is destructive and only runs after confirmation.
-- A local snapshot is taken before changing this device; configuration/enabled state is rolled back on failure when possible.
+- A local snapshot is taken before changing this device; enabled state is rolled back on failure when possible.
 - A rejected push is re-fetched, re-planned and retried; **never force-pushed**.
 - No empty commits are created when nothing changed.
 
@@ -148,11 +147,11 @@ Destructive operations use two-phase confirmation: preview first, then `confirm:
 ## Safety and limits
 
 - Never collects or uploads tokens, passwords, private keys or cookies; HTTPS stores only the env-var name.
-- No absolute machine paths in backups; configs pass sensitive-key/value filtering (best-effort, not a strict whitelist).
+- No absolute machine paths in backups; plugin configuration is never read, written or backed up.
 - A plugin present here but missing in the repository is backed up again, never deleted; a plugin missing here but present in the repository needs an explicit delete-or-skip choice.
 - Syncs the active profile only; other profiles install and sync separately.
 - Local-dev plugins can be recorded but cannot be installed on another device.
-- It synchronizes versions/state/config; it does not check for newer versions or upgrade plugins for you.
+- It synchronizes plugin versions and enabled state; it does not check for newer versions or upgrade plugins for you.
 
 ## Data location
 

@@ -11,10 +11,10 @@ This document describes the threat model, secret-filtering rules, Git subprocess
 | 资产 | 位置 | 保护方式 |
 | --- | --- | --- |
 | HTTPS 访问令牌 / SSH 私钥 | DSH 进程环境、系统凭据管理器、ssh-agent | 本插件**不保存、不读取内容**；HTTPS 令牌只按环境变量名在子进程环境里取值；SSH 由系统 Git 处理 |
-| 插件配置中的潜在秘密 | 宿主配置 / settings | 进入备份前按「键名 + 值形态」双向过滤；写回前再次过滤 |
+| 插件配置 | 宿主配置 / settings | **不读取、不备份、不恢复**；旧版本可能留在本机快照/仓库里的配置目录不再写入或应用 |
 | 备份仓库（含插件清单） | 用户自己的 Git 仓库（建议私有） | 只写白名单字段；不写绝对路径；不写秘密；提交历史可审计 |
 | 本机数据目录 | `$DSH_HOME/dsh-plugins-git-sync/` | 目录 `0700`、文件 `0600`、原子写入（临时文件 + rename） |
-| 本机快照 | 同上 `snapshots/` | 只含过滤后的配置与插件清单；用于失败回滚 |
+| 本机快照 | 同上 `snapshots/` | 只含插件清单与启停状态；用于失败回滚 |
 | 日志 | `sync.log` + 宿主日志 | 写入前统一脱敏 |
 
 **信任边界**：
@@ -30,15 +30,15 @@ This document describes the threat model, secret-filtering rules, Git subprocess
 | --- | --- | --- | --- |
 | T1 | **恶意/损坏的仓库内容** | 仓库中的 `manifest.json`、`plugins.json`、配置文件被手工改坏或被注入恶意值（超长字符串、非法 ID、`..` 路径、符号链接、`.git` 目录） | `manifest.ts` 全套结构校验；schema 版本不匹配明确报错；`repo-paths.ts` 拒绝绝对路径/`..`/盘符/scheme/NUL/`.git`/`GIT~1`/符号链接；读取走 `lstat` 不跟随符号链接；文件数量与设备数有上限 |
 | T1b | **本机路径泄露到共享仓库** | 插件行（row）通过绝对 `file:///…` URL 引用模块（真实环境中的 cc-safety-net 就是这样），把这个设备相关路径写进仓库 | **序列化层强制清洗**：`services/repo-files.ts` 的 `sanitizeModuleName()` / `sanitizeRows()` / `sanitizePluginRecord()` 把绝对路径、盘符、以 `/` 或反斜杠开头、含反斜杠或控制字符的 `moduleName` / `entryId` 替换为插件包名或丢弃；`toRemoteEntry()`（共享状态）与 `toDeviceSnapshot()`（设备快照）都经过它，不只依赖扫描阶段 |
-| T2 | **秘密泄露到仓库** | 某个插件配置项是 API key / 密码 / 私钥，被同步进仓库 | 键名规则 + 值形态规则双向过滤；命中项只记录**键名**（`configSkipped`）；写回前二次过滤；settings 服务声明的 secret 路径额外剔除 |
-| T3 | **秘密泄露到日志/UI** | Git 错误输出里带 token（URL userinfo、credential helper 输出）、日志 details 里带配置 | 所有日志消息经 `redactText`、details 经 `redactJson`；Git 错误在分类前先脱敏；认证方式只显示方法名 |
+| T2 | **秘密泄露到仓库** | 插件配置里有 API key / 密码 / 私钥，被同步进仓库 | 配置备份已移除：扫描、规划、写入都不读取配置；旧仓库配置目录不再写入 |
+| T3 | **秘密泄露到日志/UI** | Git 错误输出里带 token（URL userinfo、credential helper 输出） | 所有日志消息经 `redactText`、details 经 `redactJson`；Git 错误在分类前先脱敏；认证方式只显示方法名 |
 | T4 | **命令注入 / 选项注入** | 仓库 URL、分支名、提交哈希或插件名被拼进 shell 命令或作为 Git 选项 | 永远用参数数组 + `shell:false`；拒绝 NUL、以 `-` 开头的子命令、`-c`、`--upload-pack` 等；提交哈希必须 `^[0-9a-fA-F]{4,64}$`；分支名与仓库 URL 单独校验 |
 | T5 | **覆盖其他设备的数据** | 两台设备同时推送；或实现里图省事 force push | 永不 force push；非快进 → 拉取 → `rebuild()` 重算 → 重试（默认 3 次）→ 明确失败 `git-push-rejected` |
 | T6 | **误删本机插件** | 恢复把备份里没有的插件删掉；或两侧删除被自动执行 | 恢复从不删除备份中没有的本机插件；删除类动作一律 `destructive` 且需要确认；同步中删除仓库条目必须显式选择「从仓库删除」，仓库缺失时不会删除本机插件，只会重新备份 |
 | T7 | **Agent 通过工具静默破坏** | 模型直接调用工具执行破坏性计划 | 工具两阶段：`confirm` 缺省返回预览；引擎仍校验 `confirmDestructive`；删除/降级必须显式确认 |
 | T8 | **跨 Profile 越权修改** | 恢复把插件装进别的 Profile | `installer.requireActiveProfile()` 只允许当前 Profile；引擎只扫描/写入 `activeProfile` |
 | T9 | **令牌泄露给第三方** | 令牌被写进仓库 URL、日志、或通过网络发到非目标服务 | 令牌只用于 Git 子进程环境；保存配置时拒绝含 userinfo 的 URL；仅在 `https-token` 模式下注入 |
-| T10 | **本机文件被窃取** | 同机其他用户读取配置/状态/日志 | 数据目录 `0700`、文件 `0600`；配置**不含**秘密；日志已脱敏 |
+| T10 | **本机文件被窃取** | 同机其他用户读取状态/日志 | 数据目录 `0700`、文件 `0600`；插件配置不写入；日志已脱敏 |
 | T11 | **供应链（仓库→安装包）** | 攻击者写仓库，让设备安装恶意 npm/git 包 | 属于设计上的信任边界：预览确认、私有仓库、插件管理器自身的 registry 限制；不做静默安装 |
 | T12 | **自动化被滥用** | 自动同步在后台反复执行破坏性操作 | 自动同步默认关闭；破坏性计划/冲突/未配置仓库都会暂停；互斥 + 冷却 + 退避 |
 | T13 | **路径穿越写入仓库外** | 备份路径逃逸工作区 | `safeJoin()` 解析后校验前缀；写入/删除前逐段 `lstat` |
@@ -51,57 +51,16 @@ This document describes the threat model, secret-filtering rules, Git subprocess
 - 备份仓库的静态加密（由 GitHub/你选择的托管方负责）；
 - 启发式脱敏的漏报（见第 3.4 节）。
 
-## 3. 秘密过滤规则
+## 3. 插件配置不参与备份
 
-实现位于 `src/core/redact.ts`，在三个位置调用：
+从 0.2.11 起，插件配置**不读取、不备份、不恢复、不参与冲突比较**：
 
-1. **扫描时**（`scanner/config-gateway.ts` 读取后）→ 决定哪些配置进入 `PluginRecord.configs`；
-2. **写回时**（`config-gateway.write()`）→ 二次过滤，秘密值不会被写回宿主；
-3. **日志/错误**（`core/logger.ts`、`git/git-runner.ts`）→ 文本与 JSON 脱敏。
+- 扫描器不调用 `configEditor.configuration()` / `settings` 读取配置；
+- 规划器不生成 `push-config` / `restore-config`，配置差异不会产生冲突；
+- 旧的 `configs/` 目录即使还在仓库中，也不会被读取或应用；
+- 本机快照不再保存配置，失败回滚只恢复插件启停状态。
 
-### 3.1 键名规则
-
-大小写不敏感；命中以下任一条即视为敏感：
-
-- 正则（分段匹配，`^`/`$` 或 `[._-]` 边界）：`api[_-]?key`、`apikey`、`token`、`secret`、`password`、`passwd`、`pwd`、`credential(s)`、`auth`、`cookie(s)`、`session[_-]?key`、`private[_-]?key`、`access[_-]?key`、`access[_-]?token`、`refresh[_-]?token`、`client[_-]?secret`、`bearer`、`signature`、`signed[_-]?url`、`webhook[_-]?url`；
-- 子串提示：`apikey`、`api_key`、`accesskey`、`access_key`、`secretkey`、`secret_key`、`privatekey`、`private_key`、`authorization`、`auth_token`、`authtoken`、`x-api-key`、`encryptionkey`、`encryption_key`、`ssh_key`、`sshkey`。
-
-匹配对象既包括**当前键名**，也包括**点分路径**（`nested.apiKey` 里的 `nested.apiKey` 与 `apiKey` 都会被检查）；数组元素用索引作为路径段。
-
-### 3.2 值形态规则
-
-无论键名是什么，长度 ≥ 8 的字符串命中以下任一模式即丢弃：
-
-| 模式名 | 正则（语义） |
-| --- | --- |
-| `private-key` | `-----BEGIN [A-Z ]*PRIVATE KEY-----` |
-| `openai-key` | `sk-[A-Za-z0-9_-]{20,}` |
-| `github-token` | `ghp_/gho_/ghu_/ghs_/ghr_` + 20 位以上 |
-| `github-pat` | `github_pat_` + 20 位以上 |
-| `gitlab-token` | `glpat-` + 16 位以上 |
-| `slack-token` | `xox[abposr]-` + 10 位以上 |
-| `aws-key` | `AKIA` + 16 位大写字母数字 |
-| `bearer-header` | `Bearer ` + 20 位以上 |
-| `jwt` | 三段式 `eyJ...` JWT |
-| `url-userinfo` | `scheme://user:pass@` |
-
-### 3.3 结构处理
-
-- **对象**：只遍历原型为 `Object.prototype` / `null` 的普通对象；类实例、函数、`undefined`、`NaN` 等非 JSON 值直接丢弃；
-- **数组**：逐项过滤，丢弃的项被跳过（数组可能变短）；
-- **顶层键被判定为敏感**：整个值丢弃，键名记入 `skippedKeys`（只记键名，不记值）；
-- **嵌套键被判定为敏感**：该子键丢弃，其父键保留其余内容；
-- **写回时**：`filterSensitiveConfig(values).values` 为空则直接返回，不触碰宿主服务；非 JSON 值抛 `invalid-config`。
-
-另有一条**不属于「秘密」但同属敏感**的清洗：插件行的 `moduleName` / `entryId` 若是绝对 `file:///…`、Windows 盘符、以 `/` 或反斜杠开头、含反斜杠或控制字符，序列化写入仓库前会被替换为插件包名（或丢弃）；这条规则在 `services/repo-files.ts` 的序列化边界执行，设备快照同样适用。
-
-### 3.4 已知漏报与代价
-
-规则是**启发式、有意的有损过滤**：宁可少同步一个配置项，也不上传一个秘密。
-
-- 一个既不像凭据键名、值也不匹配任何模式的秘密（例如一段随机字符串放在 `theme.options.custom` 里）**可能**被同步；
-- 反过来，键名/值形态「太像秘密」的正常配置（例如 `tokenizer: "..."`、以 `sk-` 开头的普通字符串）**可能**被误过滤；
-- 因此：**不要把秘密放进会被同步的插件配置**；同步前检查「检查差异」与仓库内容；对敏感插件使用 `excludedConfigPlugins` 排除其配置。
+`src/core/redact.ts` 仍用于日志与 Git 错误输出脱敏（URL userinfo、令牌形态等），但不再承担「过滤后上传配置」的职责。旧版本写入仓库的配置不会被自动清理；如需彻底移除，请在备份仓库中手动删除 `profiles/<profile>/configs/` 并提交。
 
 ## 4. Git 子进程加固
 
@@ -162,12 +121,13 @@ This document describes the threat model, secret-filtering rules, Git subprocess
 
 - Token、密码、私钥、Cookie、Session Key、API key 等任何命中脱敏规则的键/值；
 - 机器绝对路径（`localPath` 只在内存/本机使用，写入仓库前被剥离；`source` 只保留相对/可复现形式；插件行里的 `moduleName` / `entryId` 若是 `file:///…` 或其它本地路径，在序列化层被替换为包名或丢弃，共享状态与设备快照都一样）；
+- 插件配置（不读取、不写入、不备份）；
 - 仓库 URL 中的用户名/密码（保存时即拒绝带 userinfo 的 URL）；
 - 你的全局 Git 身份（提交作者由设备名 + 设备 ID 生成，不读 `user.name`/`user.email`）；
 - 宿主日志、环境变量的完整内容（插件只读自己需要的少数服务与两个约定变量名）；
-- 插件源码、node_modules、构建产物（备份只保存清单与配置）。
+- 插件源码、node_modules、构建产物（备份只保存插件清单与启停状态）。
 
-**会上传**：插件包名、版本、来源类型、`installSpec`、启用状态、bundle 行、过滤后的配置、设备名称/平台/架构/DSH 版本/插件版本、时间戳。请把备份仓库当作「你的插件清单」来保护，优先使用私有仓库。
+**会上传**：插件包名、版本、来源类型、`installSpec`、启用状态、bundle 行、设备名称/平台/架构/DSH 版本/插件版本、时间戳。请把备份仓库当作「你的插件清单」来保护，优先使用私有仓库。
 
 ## 8. 数据静态保护
 

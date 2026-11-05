@@ -78,14 +78,8 @@ describe('two-device synchronization', () => {
     expect(files).toContain('manifest.json')
     expect(files).toContain('metadata/schema.json')
     expect(files).toContain('profiles/desktop/plugins.json')
-    expect(files).toContain('profiles/desktop/configs/alpha.json')
+    expect(files.some(file => file.includes('/configs/'))).toBe(false)
     expect(files.some(file => file.startsWith('devices/'))).toBe(true)
-
-    const configText = readRepoFile(ctx.bareRepo, 'profiles/desktop/configs/alpha.json')
-    expect(configText).toContain('"timeout": 30')
-    expect(configText).not.toContain('apiKey')
-    expect(configText).not.toContain('sk-')
-    expect(configText).not.toContain('hunter2hunter2')
 
     const allText = files.map(file => readRepoFile(ctx.bareRepo, file)).join('\n')
     expect(allText).not.toContain('sk-abcdefghijklmnopqrstuvwxyz')
@@ -105,9 +99,9 @@ describe('two-device synchronization', () => {
     expect(restore.snapshot).toBeTruthy()
     const restored = ctx.win.plugin('alpha')
     expect(restored?.version).toBe('1.0.0')
-    expect(restored?.configs.timeout).toBe(30)
+    expect(restored?.configs.timeout).toBeUndefined()
     expect(restored?.configs.apiKey).toBeUndefined()
-    expect(restored?.configs.nested).toEqual({ mode: 'fast' })
+    expect(restored?.configs.nested).toBeUndefined()
   }, 120_000)
 
   it('returns the documented AutoSyncResponse shape', async () => {
@@ -158,32 +152,16 @@ describe('two-device synchronization', () => {
     expect(ctx.win.plugin('beta')?.version).toBe('2.0.0')
   }, 120_000)
 
-  it('detects a configuration conflict and resolves it with the remote side', async () => {
+  it('never synchronizes plugin configuration', async () => {
+    const winConfig = ctx.win.plugin('alpha')?.configs.timeout
     ctx.mac.addPlugin({ name: 'alpha', version: '1.1.0', enabled: true, configs: { timeout: 60, nested: { mode: 'fast' } } })
     const macBackup = await ctx.mac.engine.backup({ confirmDestructive: true })
     expect(macBackup.ok).toBe(true)
+    expect(listRepoFiles(ctx.bareRepo).some(file => file.includes('/configs/'))).toBe(false)
 
-    ctx.win.addPlugin({ name: 'alpha', version: '1.1.0', enabled: true, configs: { timeout: 90, nested: { mode: 'fast' } } })
-    const error = await expectRejection(ctx.win.engine.sync({ confirmDestructive: true }), 'conflict-present')
-    const details = error.details as { plan?: { conflicts: { pluginId: string; fields: string[]; localConfig?: Record<string, unknown>; remoteConfig?: Record<string, unknown> }[] } }
-    const conflict = details.plan?.conflicts.find(item => item.pluginId === 'alpha')
-    expect(conflict?.fields).toContain('config.timeout')
-    expect(conflict?.localConfig).toMatchObject({ timeout: 90 })
-    expect(conflict?.remoteConfig).toMatchObject({ timeout: 60 })
-
-    const skipped = await ctx.win.engine.sync({
-      confirmDestructive: true,
-      resolutions: [{ pluginId: 'alpha', choice: 'skip' }],
-    })
-    expect(skipped.ok).toBe(true)
-    expect(ctx.win.plugin('alpha')?.configs.timeout).toBe(90)
-
-    const resolved = await ctx.win.engine.sync({
-      confirmDestructive: true,
-      resolutions: [{ pluginId: 'alpha', choice: 'remote' }],
-    })
-    expect(resolved.ok).toBe(true)
-    expect(ctx.win.plugin('alpha')?.configs.timeout).toBe(60)
+    const sync = await ctx.win.engine.sync({ confirmDestructive: true })
+    expect(sync.ok).toBe(true)
+    expect(ctx.win.plugin('alpha')?.configs.timeout).toBe(winConfig)
   }, 120_000)
 
   it('requires confirmation before a backup deletes a repository entry', async () => {

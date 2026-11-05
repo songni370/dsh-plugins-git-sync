@@ -98,9 +98,6 @@ function makeConflict(
     localEnabled: local?.enabled ?? null,
     remoteEnabled: remote?.enabled ?? null,
   }
-  if (local !== null && local !== undefined) conflict.localConfig = local.configs
-  if (remote !== null && remote !== undefined) conflict.remoteConfig = remote.configs
-  if (base !== null && base !== undefined) conflict.baseConfig = base.configs
   if (meta !== undefined) {
     conflict.remoteDevice = meta.updatedBy
     conflict.remoteUpdatedAt = meta.updatedAt
@@ -268,7 +265,7 @@ function makeDiff(
   },
 ): PluginDiff {
   const { local, remote, base, conflict } = options
-  const includeConfigs = options.includeConfigs ?? true
+  const includeConfigs = false
   const name = displayNameOf(id, local, remote, base)
   let kind: PluginDiff['kind'] = options.kind ?? 'identical'
   const destructive = false
@@ -383,7 +380,7 @@ export function planBackup(input: PlanInput): SyncPlan {
   const actions: PlanAction[] = []
   const diffs: PluginDiff[] = []
   const warnings: string[] = [...(input.warnings ?? [])]
-  const includeConfigs = input.config.includeConfigs
+  const includeConfigs = false
   const destructiveIds = new Set<string>()
 
   const localIds = new Set(Object.keys(input.local))
@@ -458,7 +455,7 @@ export function planRestore(input: PlanInput): SyncPlan {
   const diffs: PluginDiff[] = []
   const conflicts: ConflictInfo[] = []
   const warnings: string[] = [...(input.warnings ?? [])]
-  const includeConfigs = input.config.includeConfigs
+  const includeConfigs = false
   const resolutions = input.resolutions
 
   for (const id of unionIds(input.remote, input.base, input.local)) {
@@ -569,7 +566,7 @@ export function planSync(input: PlanInput): SyncPlan {
   const diffs: PluginDiff[] = []
   const conflicts: ConflictInfo[] = []
   const warnings: string[] = [...(input.warnings ?? [])]
-  const includeConfigs = input.config.includeConfigs
+  const includeConfigs = false
   const resolutions = input.resolutions
   const destructive = new Set<string>()
   const ids = new Set<string>([...unionIds(input.local, input.remote, input.base), ...input.remoteTombstones])

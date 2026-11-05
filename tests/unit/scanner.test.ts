@@ -435,7 +435,7 @@ describe('createScanner inventory', () => {
     expect(record.error).toBeTruthy()
   })
 
-  it('extracts filtered configuration through the config editor', async () => {
+  it('never reads plugin configuration, even for third-party plugins', async () => {
     const root = await makeTempDir()
     const profilesRoot = join(root, 'profiles')
     const configEditor = {
@@ -468,11 +468,11 @@ describe('createScanner inventory', () => {
       profile: 'default',
     })
 
-    expect(inventory.plugins[0]!.configs).toEqual({ timeout: 30, retries: 2 })
-    expect(inventory.plugins[0]!.configSkipped).toEqual(['apiKey'])
+    expect(inventory.plugins[0]!.configs).toEqual({})
+    expect(inventory.plugins[0]!.configSkipped).toEqual([])
   })
 
-  it('skips config extraction when includeConfigs is false', async () => {
+  it('ignores an old includeConfigs setting and never reads configuration', async () => {
     const root = await makeTempDir()
     const profilesRoot = join(root, 'profiles')
     const services = {
@@ -638,7 +638,7 @@ describe('profile discovery', () => {
 
     // Only the third-party plugin may trigger a config walk; built-ins are
     // inventory-only and dominated a full-profile scan before this guard.
-    expect(configurationCalls).toBe(1)
+    expect(configurationCalls).toBe(0)
     const builtIn = inventory.plugins.find(record => record.name === '@deepseek-ai/web-app')
     expect(builtIn?.builtIn).toBe(true)
     expect(builtIn?.configs).toEqual({})

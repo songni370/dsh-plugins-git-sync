@@ -195,7 +195,7 @@ describe('configuration validation', () => {
     const config = defaultConfig()
     expect(config.autoSync.enabled).toBe(false)
     expect(config.repoUrl).toBe('')
-    expect(config.includeConfigs).toBe(true)
+    expect(config.includeConfigs).toBe(false)
     expect(config.includeLocalPlugins).toBe(false)
   })
 
