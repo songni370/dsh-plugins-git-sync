@@ -162,13 +162,23 @@ describe('automatic sync scheduler', () => {
       if (attempts === 1) throw new SyncError('git-network', 'network down', { retryable: true })
       return { ok: true }
     })
-    const scheduler = createScheduler({ ctx, engine, logger: silentLogger() })
+    const failures: string[] = []
+    let successes = 0
+    const scheduler = createScheduler({
+      ctx,
+      engine,
+      logger: silentLogger(),
+      onFailure: message => failures.push(message),
+      onSuccess: () => { successes += 1 },
+    })
     scheduler.applyConfig(config({ onPluginChange: true, debounceMs: 1_000 }))
     scheduler.notifyPluginChange()
     await vi.advanceTimersByTimeAsync(1_000)
     expect(calls).toHaveLength(1)
+    expect(failures).toEqual(['network down'])
     await vi.advanceTimersByTimeAsync(60_000)
     expect(calls.length).toBeGreaterThanOrEqual(2)
+    expect(successes).toBe(1)
     scheduler.dispose()
   })
 

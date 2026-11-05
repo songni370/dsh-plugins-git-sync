@@ -719,6 +719,11 @@ export function Page({ t }: PageProps): ReactElement {
                 {view.state === 'not-configured' ? (
                   <Banner tone="idle">{t('statusNotConfiguredHint')}</Banner>
                 ) : null}
+                {view.config.autoSync.enabled && (view.autoSyncFailures ?? 0) > 0 ? (
+                  <Banner tone="warn">
+                    {t('autoSyncFailureNotice', { count: view.autoSyncFailures ?? 0 })}
+                  </Banner>
+                ) : null}
               </>
             }
             autoPanel={

@@ -85,6 +85,7 @@ export const zh: Record<string, string> = {
   statusConnectionFail: '不可访问',
   statusConnectionAt: '检查于 {time}',
   statusNotConfiguredHint: '尚未配置 Git 仓库。填写下方的仓库地址并保存后，即可开始备份与同步。',
+  autoSyncFailureNotice: '自动同步已连续失败 {count} 次；请检查仓库连接，或手动同步。',
   statusLoadFailed: '加载同步状态失败：{message}',
   sectionCrash: '设置页面渲染失败，请重新打开设置；详细信息见控制台。',
 
@@ -389,6 +390,7 @@ export const en: Record<string, string> = {
   statusConnectionFail: 'Unreachable',
   statusConnectionAt: 'Checked {time}',
   statusNotConfiguredHint: 'No Git repository is configured yet. Enter a repository URL below and save it to start backing up and syncing.',
+  autoSyncFailureNotice: 'Automatic sync failed {count} time(s); check the repository connection or sync manually.',
   statusLoadFailed: 'Could not load sync status: {message}',
   sectionCrash: 'The settings page failed to render. Reopen settings; details are in the console.',
 

@@ -33,6 +33,10 @@ export interface SchedulerOptions {
   logger: SyncLogger
   /** Called when an automatic run cannot continue without the user. */
   onPaused?: (reason: string) => void
+  /** Called after an automatic run fails for a retryable reason. */
+  onFailure?: (message: string) => void
+  /** Called after an automatic run succeeds. */
+  onSuccess?: () => void
 }
 
 /** Automatic synchronization scheduler. */
@@ -136,6 +140,7 @@ export function createScheduler(options: SchedulerOptions): AutoSyncScheduler {
       failures = 0
       pausedReason = null
       logger.info('自动同步完成 / automatic sync finished')
+      options.onSuccess?.()
     } catch (error) {
       if (error instanceof SyncError && (error.code === 'conflict-present' || error.code === 'confirmation-required')) {
         pausedReason = error.code === 'conflict-present'
@@ -146,6 +151,7 @@ export function createScheduler(options: SchedulerOptions): AutoSyncScheduler {
         return
       }
       logger.warn(`自动同步失败 / automatic sync failed: ${errorMessage(error)}`)
+      options.onFailure?.(errorMessage(error))
       scheduleRetry()
     } finally {
       running = false

@@ -368,6 +368,8 @@ export interface StatusView {
     pendingDownloads: number;
     conflictCount: number;
     lastError: string | null;
+    /** Consecutive failures of automatic runs; the settings page surfaces it. */
+    autoSyncFailures?: number;
     /** Whether an operation currently runs. */
     busy: boolean;
     /** Repository reachability from the last check. */

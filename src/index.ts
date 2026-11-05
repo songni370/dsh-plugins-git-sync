@@ -264,6 +264,13 @@ export function apply(ctx: DshContext): void {
       engine,
       logger,
       onPaused: reason => logger.warn(`自动同步暂停 / automatic sync paused: ${reason}`),
+      onFailure: message => {
+        logger.warn(`自动同步失败 / automatic sync failed: ${message}`)
+        void engine.noteAutoSyncResult(false)
+      },
+      onSuccess: () => {
+        void engine.noteAutoSyncResult(true)
+      },
     })
     schedulerRef = scheduler
     scheduler.applyConfig(initialConfig)

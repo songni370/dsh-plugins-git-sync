@@ -392,6 +392,7 @@ export class SyncEngine {
       pendingDownloads: downloads,
       conflictCount,
       lastError: localError ?? state.lastError ?? this.lastError,
+      autoSyncFailures: state.autoSyncFailures,
       busy: this.isBusy(),
       connection: connection ?? null,
     }
@@ -869,6 +870,19 @@ export class SyncEngine {
     // does not fetch the remote on every request.
     const entries = await store.history({ limit: options.limit ?? 100, signal: options.signal })
     return { entries, lastOperation: state.lastOperation }
+  }
+
+  /** Record the outcome of an automatic run so the settings page can surface it. */
+  async noteAutoSyncResult(ok: boolean): Promise<void> {
+    const state = await this.readState()
+    if (ok) {
+      if (state.autoSyncFailures === 0) return
+      state.autoSyncFailures = 0
+      await this.deps.stateStore.write(state)
+      return
+    }
+    state.autoSyncFailures += 1
+    await this.deps.stateStore.write(state)
   }
 
   /** Update automatic synchronization settings. */

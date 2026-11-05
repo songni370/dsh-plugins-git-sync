@@ -151,6 +151,8 @@ export declare class SyncEngine {
         entries: HistoryEntry[];
         lastOperation: LocalState['lastOperation'];
     }>;
+    /** Record the outcome of an automatic run so the settings page can surface it. */
+    noteAutoSyncResult(ok: boolean): Promise<void>;
     /** Update automatic synchronization settings. */
     setAutoSync(patch: Partial<SyncConfig['autoSync']>): Promise<{
         status: import('../types.js').StatusView;

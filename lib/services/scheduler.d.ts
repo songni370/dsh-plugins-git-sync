@@ -21,6 +21,10 @@ export interface SchedulerOptions {
     logger: SyncLogger;
     /** Called when an automatic run cannot continue without the user. */
     onPaused?: (reason: string) => void;
+    /** Called after an automatic run fails for a retryable reason. */
+    onFailure?: (message: string) => void;
+    /** Called after an automatic run succeeds. */
+    onSuccess?: () => void;
 }
 /** Automatic synchronization scheduler. */
 export interface AutoSyncScheduler {
