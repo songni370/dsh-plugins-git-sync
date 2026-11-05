@@ -8,7 +8,7 @@ Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and depl
 [![CI](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-![Plugin Backup initial configuration](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-config.png?v=2)
+![Plugin Backup initial configuration](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-config.png?v=4)
 
 *Backup contents and repository settings; the example repository address is masked.*
 
@@ -33,7 +33,7 @@ Only **user-installed third-party plugins** and **deployed DSH skills** particip
 Settings → "**Plugin Backup**". The Plugins page can also show a "Backup" tab with the same content.
 The plugin's own detail page also has a compact **Backup settings** card showing the scope and controlling whether that Backup tab appears.
 
-![Sync status and automatic sync](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-status.png?v=2)
+![Sync status and automatic sync](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-status.png?v=4)
 
 *Sync status, count tiles and the automatic-sync switch on one page; nothing runs in the background until a repository is configured.*
 
