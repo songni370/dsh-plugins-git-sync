@@ -194,6 +194,8 @@ export declare class SyncEngine {
     private scopedPlan;
     /** Scan skills only when their scope is enabled. */
     private scanSkillsFor;
+    /** Drop skills the user excluded, leaving their repository copies untouched. */
+    private filterSkillBackup;
     /** Preview a backup (used by the diff view). */
     private previewBackup;
     /** Read configuration. */

@@ -54,6 +54,7 @@ function makeConfig(overrides: Partial<SyncConfig> = {}): SyncConfig {
     backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
+    excludedSkills: [],
     excludedConfigPlugins: [],
     autoSync: {
       enabled: false,

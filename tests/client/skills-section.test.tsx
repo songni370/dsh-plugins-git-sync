@@ -8,6 +8,16 @@ import type { SkillListResponse } from '../../src/http/api-types'
 
 const t = createTranslate(key => zh[key] ?? key)
 
+const baseProps = {
+  t,
+  loading: false,
+  error: null,
+  exclusions: new Set<string>(),
+  busy: false,
+  onToggle: () => undefined,
+  onRefresh: () => undefined,
+}
+
 const skills: SkillListResponse = {
   skills: Array.from({ length: 12 }, (_, index) => ({
     name: `skill-${index}`,
@@ -21,7 +31,7 @@ const skills: SkillListResponse = {
 describe('skill card', () => {
   it('starts collapsed', () => {
     const html = renderToStaticMarkup(
-      <SkillsSection t={t} skills={skills} loading={false} error={null} onRefresh={() => undefined} />,
+      <SkillsSection {...baseProps} skills={skills} />,
     )
     expect(html).toContain('id="dgs-skills-body" hidden=""')
     expect(html).toContain('共 12 个技能')
@@ -35,21 +45,33 @@ describe('skill card', () => {
         { name: 'local-skill', files: 1, bytes: 10, syncStatus: 'local-only' },
         { name: 'remote-skill', files: 1, bytes: 10, syncStatus: 'remote-only' },
         { name: 'modified-skill', files: 2, bytes: 20, syncStatus: 'modified' },
+        { name: 'excluded-skill', files: 1, bytes: 10, syncStatus: 'excluded' },
       ],
       warnings: [],
     }
     const html = renderToStaticMarkup(
-      <SkillsSection t={t} skills={mixed} loading={false} error={null} onRefresh={() => undefined} />,
+      <SkillsSection {...baseProps} skills={mixed} />,
     )
     expect(html).toContain('已备份')
     expect(html).toContain('仅本机')
     expect(html).toContain('仅仓库')
     expect(html).toContain('有修改')
+    expect(html).toContain('已排除')
+  })
+
+  it('renders the leftmost sync checkbox and honors exclusions', () => {
+    const html = renderToStaticMarkup(
+      <SkillsSection {...baseProps} skills={skills} exclusions={new Set(['skill-1'])} />,
+    )
+    expect(html.match(/type="checkbox"/g)).toHaveLength(10)
+    expect(html).toContain('aria-label="同步: skill-0"')
+    expect(html).toContain('aria-label="同步: skill-1"')
+    expect(html).not.toContain('aria-label="同步: skill-10"')
   })
 
   it('shows only the first ten skills on the default page', () => {
     const html = renderToStaticMarkup(
-      <SkillsSection t={t} skills={skills} loading={false} error={null} onRefresh={() => undefined} />,
+      <SkillsSection {...baseProps} skills={skills} />,
     )
     expect(html.match(/class="dgs-skillItem"/g)).toHaveLength(10)
     expect(html).toContain('skill-0')

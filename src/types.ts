@@ -190,7 +190,7 @@ export interface SkillBackup {
 }
 
 /** How one deployed skill compares with the repository copy. */
-export type SkillSyncStatus = 'synced' | 'local-only' | 'remote-only' | 'modified'
+export type SkillSyncStatus = 'synced' | 'local-only' | 'remote-only' | 'modified' | 'excluded'
 
 /** `profiles/<profile>/configs/<id>.json`. */
 export interface RemoteConfigEntry {
@@ -262,6 +262,8 @@ export interface SyncConfig {
   includeLocalPlugins: boolean
   /** Plugin ids never synchronized. */
   excludedPlugins: string[]
+  /** Skill names never synchronized. */
+  excludedSkills: string[]
   /** Plugin ids whose configs are never synchronized. */
   excludedConfigPlugins: string[]
   autoSync: AutoSyncConfig

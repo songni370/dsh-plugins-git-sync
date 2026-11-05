@@ -45,6 +45,7 @@ function config(overrides: Partial<SyncConfig['autoSync']> = {}): SyncConfig {
     backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
+    excludedSkills: [],
     excludedConfigPlugins: [],
     autoSync: { ...defaultAutoSync(), enabled: true, ...overrides },
     deviceName: 'mac',

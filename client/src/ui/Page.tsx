@@ -32,6 +32,7 @@ import type {
   PluginListResponse,
   PluginListRow,
   SkillListResponse,
+  SkillSummary,
   StatusPayload,
 } from '../../../src/http/api-types'
 import type {
@@ -124,6 +125,7 @@ export function Page({ t }: PageProps): ReactElement {
   const [autoDirty, setAutoDirty] = useState(false)
   const [filter, setFilter] = useState('')
   const [exclusions, setExclusions] = useState<ReadonlySet<string>>(() => new Set<string>())
+  const [skillExclusions, setSkillExclusions] = useState<ReadonlySet<string>>(() => new Set<string>())
 
   // Refs mirror the state that async callbacks and the poll loop must read
   // WITHOUT re-creating themselves: a stale closure here would silently drop
@@ -131,6 +133,7 @@ export function Page({ t }: PageProps): ReactElement {
   const configDirtyRef = useRef(false)
   const autoDirtyRef = useRef(false)
   const exclusionBusyRef = useRef(false)
+  const skillExclusionBusyRef = useRef(false)
 
   // --- Transient operation state ----------------------------------------
   const [busy, setBusy] = useState<ActionName | null>(null)
@@ -140,6 +143,7 @@ export function Page({ t }: PageProps): ReactElement {
   const [savingScopes, setSavingScopes] = useState(false)
   const [savingAuto, setSavingAuto] = useState(false)
   const [exclusionBusy, setExclusionBusy] = useState(false)
+  const [skillExclusionBusy, setSkillExclusionBusy] = useState(false)
   const [feedback, setFeedback] = useState<Record<FeedbackArea, Feedback | null>>({
     config: null,
     auto: null,
@@ -176,6 +180,7 @@ export function Page({ t }: PageProps): ReactElement {
     if (!configDirtyRef.current) setForm(configFormFromView(view))
     if (!autoDirtyRef.current) setAutoForm(autoFormFromView(view))
     if (!exclusionBusyRef.current) setExclusions(new Set(view.excludedPlugins))
+    if (!skillExclusionBusyRef.current) setSkillExclusions(new Set(view.excludedSkills))
     // A configured machine opens on the collapsed summary; a fresh install
     // starts expanded so the first setup is one glance away.
     setConfigOpen(current => current ?? view.repoUrl.trim() === '')
@@ -692,11 +697,38 @@ export function Page({ t }: PageProps): ReactElement {
     }
   }
 
+  // --- Skill exclusions --------------------------------------------------
+  async function toggleSkillExclusion(skill: SkillSummary, next: boolean): Promise<void> {
+    if (skillExclusionBusyRef.current) return
+    const previous = new Set(skillExclusions)
+    const updated = new Set(previous)
+    if (next) updated.delete(skill.name)
+    else updated.add(skill.name)
+
+    skillExclusionBusyRef.current = true
+    setSkillExclusionBusy(true)
+    setSkillExclusions(updated)
+    clearMessages()
+    try {
+      const response = await api.saveConfig({ config: { excludedSkills: [...updated] } })
+      setSkillExclusions(new Set(response.config.excludedSkills))
+      showFeedback('plugins', 'success', t('skillsExclusionSaved'))
+      await refreshSkills()
+      await refreshStatus()
+    } catch (error) {
+      setSkillExclusions(previous)
+      showFeedback('plugins', 'error', t('skillsExclusionFailed', { message: errorText(error) }))
+    } finally {
+      skillExclusionBusyRef.current = false
+      setSkillExclusionBusy(false)
+    }
+  }
+
   // --- Render ------------------------------------------------------------
   const view = status === null ? null : status.status
   const configured = view !== null && view.state !== 'not-configured' && view.config.repoUrl !== ''
   const hostBusy = view !== null && view.busy
-  const anyBusy = busy !== null || exclusionBusy
+  const anyBusy = busy !== null || exclusionBusy || skillExclusionBusy
 
   return (
     <div className="dgs-root">
@@ -809,6 +841,9 @@ export function Page({ t }: PageProps): ReactElement {
             skills={skills}
             loading={skillsLoading}
             error={skillsError}
+            exclusions={skillExclusions}
+            busy={anyBusy}
+            onToggle={(skill, next) => void toggleSkillExclusion(skill, next)}
             onRefresh={() => void refreshSkills()}
           />
 

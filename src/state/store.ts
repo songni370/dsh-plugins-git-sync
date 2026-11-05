@@ -119,6 +119,7 @@ export function defaultConfig(): SyncConfig {
     backupScopes: { plugins: true, skills: true },
     includeLocalPlugins: false,
     excludedPlugins: [],
+    excludedSkills: [],
     excludedConfigPlugins: [],
     autoSync: defaultAutoSync(),
     deviceName: defaultDeviceName(),
@@ -261,6 +262,7 @@ export function normalizeConfig(input: unknown, activeProfile: string, available
     config.deviceName = name === '' ? defaultDeviceName() : name
   }
   config.excludedPlugins = stringList(raw.excludedPlugins)
+  config.excludedSkills = stringList(raw.excludedSkills)
   config.excludedConfigPlugins = []
 
   if (raw.autoSync !== null && typeof raw.autoSync === 'object' && !Array.isArray(raw.autoSync)) {

@@ -13,7 +13,7 @@ import type { SkillListResponse, SkillSummary } from '../../../src/http/api-type
 import type { Translate } from '../i18n'
 import { formatBytes } from '../format'
 import type { Tone } from './controls'
-import { Badge, Banner, Button, Card, LinkButton, Loading, Select } from './controls'
+import { Badge, Banner, Button, Card, Checkbox, LinkButton, Loading, Select } from './controls'
 
 /** Rows-per-page choices for the skill list. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
@@ -26,6 +26,7 @@ const SKILL_SYNC_META: Record<SkillSummary['syncStatus'], { key: string; tone: T
   'local-only': { key: 'skillStatusLocalOnly', tone: 'idle' },
   'remote-only': { key: 'skillStatusRemoteOnly', tone: 'idle' },
   modified: { key: 'skillStatusModified', tone: 'warn' },
+  excluded: { key: 'statusExcluded', tone: 'idle' },
 }
 
 /** Remember the user's page size across visits. */
@@ -44,6 +45,9 @@ export interface SkillsSectionProps {
   skills: SkillListResponse | null
   loading: boolean
   error: string | null
+  exclusions: ReadonlySet<string>
+  busy: boolean
+  onToggle: (skill: SkillSummary, next: boolean) => void
   onRefresh: () => void
 }
 
@@ -108,9 +112,18 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
       <div id="dgs-skills-body" hidden={!open}>
         <ul className="dgs-skillList">
           {pageRows.map(skill => {
-            const meta = SKILL_SYNC_META[skill.syncStatus] ?? SKILL_SYNC_META['local-only']
+            const excluded = props.exclusions.has(skill.name) || skill.syncStatus === 'excluded'
+            const meta = excluded ? SKILL_SYNC_META.excluded : SKILL_SYNC_META[skill.syncStatus] ?? SKILL_SYNC_META['local-only']
             return (
               <li className="dgs-skillItem" key={skill.name}>
+                <Checkbox
+                  checked={!excluded}
+                  disabled={props.busy}
+                  label={`${t('pluginsSyncable')}: ${skill.name}`}
+                  onChange={next => {
+                    props.onToggle(skill, next)
+                  }}
+                />
                 <span className="dgs-skillName">{skill.name}</span>
                 <span className="dgs-skillTail">
                   <span className="dgs-skillMeta">

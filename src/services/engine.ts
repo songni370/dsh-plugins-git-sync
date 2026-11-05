@@ -461,6 +461,7 @@ export class SyncEngine {
     const localMap = new Map(scanned.backup.skills.map(skill => [skill.name, skill]))
     const remoteMap = new Map(remoteSkills.map(skill => [skill.name, skill]))
     const names = [...new Set([...localMap.keys(), ...remoteMap.keys()])].sort()
+    const excluded = new Set(config.excludedSkills)
     return {
       skills: names.map(name => {
         const local = localMap.get(name)
@@ -470,7 +471,7 @@ export class SyncEngine {
           name,
           files: present?.files.length ?? 0,
           bytes: present === undefined ? 0 : skillBytes(present),
-          syncStatus: skillSyncStatus(local, remote),
+          syncStatus: excluded.has(name) ? 'excluded' : skillSyncStatus(local, remote),
         }
       }),
       warnings: scanned.warnings,
@@ -596,9 +597,10 @@ export class SyncEngine {
           )
         }
         const scannedSkills = await this.scanSkillsFor(config)
-        const skillSnapshot = config.backupScopes.skills ? mergeSkills(scannedSkills.backup, read.skills) : null
+        const remoteSkills = this.filterSkillBackup(read.skills, config)
+        const skillSnapshot = config.backupScopes.skills ? mergeSkills(scannedSkills.backup, remoteSkills) : null
         const skillsChanged = skillSnapshot !== null
-          && JSON.stringify(read.skills?.skills ?? []) !== JSON.stringify(skillSnapshot.skills)
+          && JSON.stringify(remoteSkills?.skills ?? []) !== JSON.stringify(skillSnapshot.skills)
         const skillsForFiles = config.backupScopes.skills
           ? (skillSnapshot !== null && skillSnapshot.skills.length > 0 ? skillSnapshot : null)
           : undefined
@@ -612,7 +614,7 @@ export class SyncEngine {
             baselineRead: read,
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
-            previousSkills: currentRead.skills,
+            previousSkills: this.filterSkillBackup(currentRead.skills, config),
           })
         const firstFiles = build(read, local)
         const now = new Date().toISOString()
@@ -645,7 +647,7 @@ export class SyncEngine {
                   baselineRead: freshRead,
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
-                  previousSkills: freshRead.skills,
+                  previousSkills: this.filterSkillBackup(freshRead.skills, config),
                 })
               },
               message: this.commitMessage('backup', options.message),
@@ -785,15 +787,16 @@ export class SyncEngine {
           )
         }
         const scannedSkills = await this.scanSkillsFor(config)
-        const skillSnapshot = config.backupScopes.skills ? mergeSkills(scannedSkills.backup, read.skills) : null
+        const remoteSkills = this.filterSkillBackup(read.skills, config)
+        const skillSnapshot = config.backupScopes.skills ? mergeSkills(scannedSkills.backup, remoteSkills) : null
         const skillsChanged = skillSnapshot !== null
-          && JSON.stringify(read.skills?.skills ?? []) !== JSON.stringify(skillSnapshot.skills)
+          && JSON.stringify(remoteSkills?.skills ?? []) !== JSON.stringify(skillSnapshot.skills)
         const skillsForFiles = config.backupScopes.skills
           ? (skillSnapshot !== null && skillSnapshot.skills.length > 0 ? skillSnapshot : null)
           : undefined
         if (plan.actions.length === 0 && !skillsChanged) {
           const restoredSkills = config.backupScopes.skills
-            ? await this.tryRestoreSkills(read.skills)
+            ? await this.tryRestoreSkills(read.skills, config)
             : { warnings: [], restored: [] }
           const now = new Date().toISOString()
           state.lastSyncAt = now
@@ -870,7 +873,7 @@ export class SyncEngine {
             baselineRead: read,
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
-            previousSkills: currentRead.skills,
+            previousSkills: this.filterSkillBackup(currentRead.skills, config),
           })
         const firstFiles = build(read, local)
         const write = (plan.actions.some(action => !isLocalAction(action)) || skillsChanged)
@@ -890,7 +893,7 @@ export class SyncEngine {
                   baselineRead: freshRead,
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
-                  previousSkills: freshRead.skills,
+                  previousSkills: this.filterSkillBackup(freshRead.skills, config),
                 })
               },
               message: this.commitMessage('sync', undefined),
@@ -930,7 +933,7 @@ export class SyncEngine {
         await this.deps.stateStore.write(state)
         this.lastError = null
         const restoredSkills = config.backupScopes.skills
-          ? await this.tryRestoreSkills(read.skills)
+          ? await this.tryRestoreSkills(read.skills, config)
           : { warnings: [], restored: [] }
         return {
           ok: true,
@@ -954,10 +957,11 @@ export class SyncEngine {
   }
 
   /** Restore missing skills from a remote snapshot and turn problems into warnings. */
-  private async tryRestoreSkills(backup: SkillBackup | null): Promise<{ warnings: string[]; restored: string[] }> {
-    if (backup === null) return { warnings: [], restored: [] }
+  private async tryRestoreSkills(backup: SkillBackup | null, config: SyncConfig): Promise<{ warnings: string[]; restored: string[] }> {
+    const selected = this.filterSkillBackup(backup, config)
+    if (selected === null) return { warnings: [], restored: [] }
     try {
-      const result = await restoreMissingSkills(backup, this.dshHome)
+      const result = await restoreMissingSkills(selected, this.dshHome)
       const warnings = [...result.warnings]
       if (result.restored.length > 0) warnings.push(`已恢复技能 / restored skills: ${result.restored.join(', ')}`)
       return { warnings, restored: result.restored }
@@ -1172,7 +1176,7 @@ export class SyncEngine {
       previousState: input.read.state,
       plugins: input.plugins,
       skills: input.skills,
-      previousSkills: input.previousSkills ?? input.read.skills,
+      previousSkills: input.previousSkills ?? this.filterSkillBackup(input.read.skills, input.config),
       upserts: [...upserts.values()],
       removals: [...removals],
       configDeletions: [...configDeletions],
@@ -1279,7 +1283,7 @@ export class SyncEngine {
         }
         if (plan.actions.length === 0) {
           const skillRestore = options.operation === 'restore' && config.backupScopes.skills
-            ? await this.tryRestoreSkills(read.skills)
+            ? await this.tryRestoreSkills(read.skills, config)
             : { warnings: [], restored: [] }
           state.lastOperation = { operation: options.operation, at: new Date().toISOString(), ok: true, changedPlugins: 0 }
           await this.deps.stateStore.write(state)
@@ -1301,7 +1305,7 @@ export class SyncEngine {
           )
         }
         const skillRestore = options.operation === 'restore' && config.backupScopes.skills
-          ? await this.tryRestoreSkills(read.skills)
+          ? await this.tryRestoreSkills(read.skills, config)
           : { warnings: [], restored: [] }
         snapshotId = await this.snapshots.create({
           operation: options.operation,
@@ -1435,7 +1439,16 @@ export class SyncEngine {
     if (!config.backupScopes.skills) {
       return { backup: { schemaVersion: 1, updatedAt: new Date().toISOString(), skills: [] }, warnings: [] }
     }
-    return scanSkills(this.dshHome)
+    const scanned = await scanSkills(this.dshHome)
+    return { backup: this.filterSkillBackup(scanned.backup, config) ?? scanned.backup, warnings: scanned.warnings }
+  }
+
+  /** Drop skills the user excluded, leaving their repository copies untouched. */
+  private filterSkillBackup(backup: SkillBackup | null, config: SyncConfig): SkillBackup | null {
+    if (backup === null) return null
+    const excluded = new Set(config.excludedSkills)
+    if (excluded.size === 0) return backup
+    return { ...backup, skills: backup.skills.filter(skill => !excluded.has(skill.name)) }
   }
 
   /** Preview a backup (used by the diff view). */

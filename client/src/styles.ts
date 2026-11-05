@@ -542,7 +542,7 @@ export const CSS = `
 
 .dgs-skillItem {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
@@ -554,6 +554,7 @@ export const CSS = `
 }
 
 .dgs-skillName {
+  flex: 1;
   font-weight: 550;
   word-break: break-all;
 }

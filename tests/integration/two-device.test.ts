@@ -311,6 +311,43 @@ describe('two-device synchronization', () => {
     expect(afterRestore.skills.find(skill => skill.name === 'beta-skill')?.syncStatus).toBe('modified')
   }, 120_000)
 
+  it('never uploads, restores or deletes excluded skills', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-git-sync-skill-exclusions-'))
+    try {
+      const bareRepo = createBareRepo(root)
+      const mac = await createFakeDevice({ root, name: 'exclude-mac', repoUrl: bareRepo, platform: 'darwin' })
+      const win = await createFakeDevice({ root, name: 'exclude-win', repoUrl: bareRepo, platform: 'win32' })
+      const keep = join(mac.root, 'skills', 'keep-skill')
+      const skip = join(mac.root, 'skills', 'skip-skill')
+      await mkdir(keep, { recursive: true })
+      await mkdir(skip, { recursive: true })
+      await writeFile(join(keep, 'SKILL.md'), '# Keep v1\n')
+      await writeFile(join(skip, 'SKILL.md'), '# Skip\n')
+      expect((await mac.engine.backup({ confirmDestructive: true })).ok).toBe(true)
+      expect(listRepoFiles(bareRepo)).toContain('profiles/desktop/skills/skip-skill/SKILL.md')
+
+      await mac.saveConfig({ excludedSkills: ['skip-skill'] })
+      await writeFile(join(keep, 'SKILL.md'), '# Keep v2\n')
+      await rm(skip, { recursive: true, force: true })
+      expect((await mac.engine.backup({ confirmDestructive: true })).ok).toBe(true)
+      expect(await readRepoFile(bareRepo, 'profiles/desktop/skills/keep-skill/SKILL.md')).toBe('# Keep v2\n')
+      expect(listRepoFiles(bareRepo)).toContain('profiles/desktop/skills/skip-skill/SKILL.md')
+
+      await win.saveConfig({ excludedSkills: ['skip-skill'] })
+      await win.engine.previewSync()
+      expect((await win.engine.listSkills()).skills.find(skill => skill.name === 'skip-skill')?.syncStatus).toBe('excluded')
+      expect((await win.engine.restore({ confirmDestructive: true })).ok).toBe(true)
+      expect(await readFile(join(win.root, 'skills', 'keep-skill', 'SKILL.md'), 'utf8')).toBe('# Keep v2\n')
+      await expect(readFile(join(win.root, 'skills', 'skip-skill', 'SKILL.md'), 'utf8')).rejects.toThrow()
+
+      await win.saveConfig({ excludedSkills: [] })
+      expect((await win.engine.restore({ confirmDestructive: true })).ok).toBe(true)
+      expect(await readFile(join(win.root, 'skills', 'skip-skill', 'SKILL.md'), 'utf8')).toBe('# Skip\n')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }, 120_000)
+
   it('keeps each backup scope independent and leaves a disabled scope untouched', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-git-sync-scopes-'))
     try {

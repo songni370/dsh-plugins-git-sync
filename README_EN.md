@@ -43,7 +43,7 @@ The plugin's own detail page also has a compact **Backup settings** card showing
   - `Sync` runs directly when there are no conflicts or delete/overwrite steps; only those open a confirmation preview.
 - **Sync status**: badge, count tiles and metadata, in the same card as the operations.
 - **Automatic sync**: collapsed by default, shows on/off and trigger summary; expand to edit startup delay and triggers.
-- **Plugin list**: collapsed by default; filter, pagination (10 per page by default, 5/10/20/50/100) and per-plugin sync switch; deployed skills are listed below with file count, size and backup status (backed up / this device only / repository only / modified), collapsed and paginated like the plugin list.
+- **Plugin list**: collapsed by default; filter, pagination (10 per page by default, 5/10/20/50/100) and per-plugin sync switch; deployed skills are listed below with file count, size and backup status (backed up / this device only / repository only / modified / excluded), collapsed and paginated like the plugin list. Each skill has the same leftmost sync checkbox as plugins; unchecking excludes it from uploads and restores while keeping its repository backup.
 - **History**: collapsed by default and limited to the latest 10 commits; expand to restore a commit; long subjects are ellipsised.
 
 ## Install

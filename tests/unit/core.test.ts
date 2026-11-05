@@ -201,6 +201,7 @@ describe('configuration validation', () => {
 
   it('defaults both backup scopes on and lets each be turned off', () => {
     expect(defaultConfig().backupScopes).toEqual({ plugins: true, skills: true })
+    expect(defaultConfig().excludedSkills).toEqual([])
     const skillsOff = normalizeConfig({ backupScopes: { skills: false } }, active, profiles)
     expect(skillsOff.backupScopes).toEqual({ plugins: true, skills: false })
     const pluginsOff = normalizeConfig({ backupScopes: { plugins: false } }, active, profiles)
@@ -238,6 +239,7 @@ describe('configuration validation', () => {
         includeConfigs: false,
         includeLocalPlugins: true,
         excludedPlugins: ['x', 'x', ' y '],
+        excludedSkills: ['b', 'b', ' a '],
         autoSync: { enabled: true, mode: 'backup', intervalMinutes: 15, onStartup: true },
       },
       active,
@@ -247,6 +249,7 @@ describe('configuration validation', () => {
     expect(config.profiles).toEqual(['desktop', 'web'])
     expect(config.includeConfigs).toBe(false)
     expect(config.excludedPlugins).toEqual(['x', 'y'])
+    expect(config.excludedSkills).toEqual(['b', 'a'])
     expect(config.autoSync).toMatchObject({
       enabled: true,
       mode: 'backup',
