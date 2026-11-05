@@ -6,7 +6,9 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
-暂无 / Nothing yet.
+### Changed
+
+- 插件页图标更换为新的鲸鱼喷水插画。
 
 ## [0.2.10] - 2026-10-30
 
