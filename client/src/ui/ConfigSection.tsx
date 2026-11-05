@@ -100,9 +100,10 @@ function transportMeta(t: Translate, transport: RepoTransport): { label: string;
 function FormRow(props: {
   label: string
   children: ReactNode
+  className?: string
 }): ReactElement {
   return (
-    <div className="dgs-formRow">
+    <div className={['dgs-formRow', props.className].filter(Boolean).join(' ')}>
       <span className="dgs-formRowLabel">{props.label}</span>
       <div className="dgs-formRowControl">{props.children}</div>
     </div>
@@ -201,7 +202,7 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
           </FormRow>
 
           {form.repoUrl.trim() === '' ? null : (
-            <FormRow label={t('configLocation')}>
+            <FormRow label={t('configLocation')} className="dgs-repoLocationForm">
               <div className="dgs-repoLocation">
                 <div className="dgs-repoLocationRow">
                   <span>{t('configLocationPlugins')}</span>

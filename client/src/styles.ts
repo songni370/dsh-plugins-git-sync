@@ -196,6 +196,10 @@ export const CSS = `
   flex-wrap: wrap;
   min-width: 0;
 }
+.dgs-repoLocationForm {
+  margin-top: 8px;
+}
+
 .dgs-repoLocation {
   display: flex;
   flex-direction: column;
