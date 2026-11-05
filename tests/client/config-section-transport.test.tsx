@@ -112,6 +112,20 @@ describe('repository card transport fields', () => {
     expect(html).not.toContain('id="dgs-config-username"')
   })
 
+  it('shows where backup content lives when a repository is entered', () => {
+    const html = render('https://github.com/songni370/dsh-plugins-git-sync.git', 'credential-helper', {
+      backupDir: 'backup',
+    })
+    expect(html).toContain('仓库内位置')
+    expect(html).toContain('backup/profiles/desktop/plugins.json')
+    expect(html).toContain('backup/profiles/desktop/skills/&lt;name&gt;/')
+  })
+
+  it('hides the location hint before a repository is entered', () => {
+    const html = render('', 'ssh')
+    expect(html).not.toContain('仓库内位置')
+  })
+
   it('HTTPS + token: token env var and username are shown', () => {
     const html = render('https://github.com/songni370/dsh-plugins-git-sync.git', 'https-token')
     expect(html).toContain('HTTPS 令牌')

@@ -196,6 +196,28 @@ export const CSS = `
   flex-wrap: wrap;
   min-width: 0;
 }
+.dgs-repoLocation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dgs-repoLocationRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--dsw-alias-text-secondary, #6b7280);
+}
+
+.dgs-repoLocationRow code {
+  color: var(--dsw-alias-text-primary, #111827);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .dgs-formRowHint {
   font-size: 12px;
   line-height: 17px;

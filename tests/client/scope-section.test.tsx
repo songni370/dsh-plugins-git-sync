@@ -20,8 +20,8 @@ describe('backup contents card', () => {
     expect(html).toContain('aria-label="插件"')
     expect(html).toContain('aria-label="技能"')
     expect(html.match(/aria-checked="true"/g)).toHaveLength(2)
-    expect(html).toContain('API Key、Token、密码等内容不会上传')
-    expect(html).toContain('可能含私有提示词或脚本')
+    expect(html).toContain('不含插件配置')
+    expect(html).toContain('建议使用私有仓库')
   })
 
   it('disables the last enabled scope so at least one stays on', () => {

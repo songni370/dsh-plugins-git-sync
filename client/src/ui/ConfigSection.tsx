@@ -109,6 +109,16 @@ function FormRow(props: {
   )
 }
 
+/** Repository paths shown while the user configures a repository. */
+function repoLocation(backupDir: string, profile: string): { plugins: string; skills: string } {
+  const dir = backupDir.trim().replace(/^\/+|\/+$/g, '')
+  const prefix = dir === '' ? '' : `${dir}/`
+  return {
+    plugins: `${prefix}profiles/${profile}/plugins.json`,
+    skills: `${prefix}profiles/${profile}/skills/<name>/`,
+  }
+}
+
 /** Render the repository-configuration card. */
 export function ConfigSection(props: ConfigSectionProps): ReactElement {
   const { t, form, view, dirty } = props
@@ -131,6 +141,7 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
     )
 
   const configured = view.repoUrl.trim() !== ''
+  const location = repoLocation(form.backupDir, view.activeProfile)
 
   return (
     <Card
@@ -188,6 +199,22 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
               <span className="dgs-formRowHint">{meta.hint}</span>
             )}
           </FormRow>
+
+          {form.repoUrl.trim() === '' ? null : (
+            <FormRow label={t('configLocation')}>
+              <div className="dgs-repoLocation">
+                <div className="dgs-repoLocationRow">
+                  <span>{t('configLocationPlugins')}</span>
+                  <code>{location.plugins}</code>
+                </div>
+                <div className="dgs-repoLocationRow">
+                  <span>{t('configLocationSkills')}</span>
+                  <code>{location.skills}</code>
+                </div>
+                <span className="dgs-formRowHint">{t('configLocationHint')}</span>
+              </div>
+            </FormRow>
+          )}
 
           {transport === 'https' ? (
             <>
