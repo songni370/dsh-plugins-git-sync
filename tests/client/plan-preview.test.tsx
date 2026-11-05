@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { PlanPreview } from '../../client/src/ui/PlanPreview'
 import { createTranslate, zh } from '../../client/src/i18n'
-import type { PlanAction, SyncPlan } from '../../src/types'
+import type { PlanAction, PluginRecord, SyncPlan } from '../../src/types'
 
 const t = createTranslate(key => zh[key] ?? key)
 
@@ -87,6 +87,47 @@ describe('PlanPreview', () => {
     expect(html).toContain('先不处理')
     expect(html).not.toContain('both-changed')
     expect(html.indexOf('需要你决定')).toBeLessThan(html.indexOf('alpha'))
+  })
+
+  it('shows the uploaded config keys and sensitive fields left behind', () => {
+    const local: PluginRecord = {
+      id: 'beta',
+      name: 'beta',
+      version: '1.0.0',
+      origin: 'npm',
+      installSpec: 'beta@1.0.0',
+      enabled: true,
+      builtIn: false,
+      syncable: true,
+      pathOnly: false,
+      profile: 'desktop',
+      platform: 'darwin',
+      rows: [],
+      configs: { timeout: 30 },
+      configSkipped: ['apiKey'],
+    }
+    const html = renderToStaticMarkup(
+      <PlanPreview
+        t={t}
+        plan={{
+          ...plan,
+          actions: [{
+            kind: 'push-config',
+            pluginId: 'beta',
+            pluginName: 'beta',
+            detail: '上传插件配置 / push plugin config',
+            destructive: false,
+            configs: { timeout: 30 },
+          }],
+          diffs: [{ id: 'beta', name: 'beta', kind: 'config-diff', destructive: false, local }],
+          warnings: [],
+        }}
+      />,
+    )
+    expect(html).toContain('配置项：timeout')
+    expect(html).toContain('未上传的敏感配置（1）')
+    expect(html).toContain('apiKey')
+    expect(html).toContain('不会写入仓库')
   })
 
   it('shows the empty state when there is nothing to do', () => {

@@ -33,6 +33,8 @@ export interface PluginState {
   syncable: boolean
   source?: string
   rows: PluginRowRecord[]
+  /** Config keys omitted from the comparison because they may be secret. */
+  configSkipped?: string[]
 }
 
 /** Build the comparable state of a locally scanned plugin. */
@@ -51,6 +53,7 @@ export function localPluginState(record: PluginRecord): PluginState {
     syncable: record.syncable,
     source: record.source,
     rows: record.rows,
+    configSkipped: [...record.configSkipped],
   }
 }
 
@@ -71,6 +74,7 @@ export function remotePluginState(entry: RemotePluginEntry): PluginState | null 
     syncable: entry.syncable,
     source: entry.source,
     rows: entry.rows ?? [],
+    ...(entry.configSkipped === undefined ? {} : { configSkipped: [...entry.configSkipped] }),
   }
 }
 

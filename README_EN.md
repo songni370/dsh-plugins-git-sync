@@ -22,6 +22,7 @@ Reinstalling DSH or moving to another machine no longer means rebuilding a plugi
 - **History rollback**: restore this device to any previous commit.
 - **Automatic sync**: on client startup and plugin install/update/remove; **no interval timer**.
 - **Agent tools**: six tools for status, backup, restore, sync, diff and history.
+- **Preview before upload**: `Check differences` lists the plugins and config keys that will be uploaded; fields judged sensitive are listed separately and marked as not written to the repository.
 - **Safety**: no tokens, passwords or private keys are read or uploaded; configs are filtered; no force pushes; a snapshot precedes local changes.
 
 Only **user-installed third-party plugins** participate. DSH built-ins, loader internals (`cordis:*`) and this plugin itself are never backed up.

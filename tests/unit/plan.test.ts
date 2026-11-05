@@ -78,6 +78,12 @@ describe('backup plan', () => {
     expect(plan.actions.find(action => action.kind === 'push-config')?.configs).toEqual({ timeout: 30 })
   })
 
+  it('keeps sensitive config keys in the preview diff', () => {
+    const local = plugin('alpha', { configs: { timeout: 30 }, configSkipped: ['apiKey'] })
+    const plan = planBackup(input({ local: { alpha: local } }))
+    expect(plan.diffs[0]?.local?.configSkipped).toEqual(['apiKey'])
+  })
+
   it('requires confirmation before tombstoning a plugin removed locally', () => {
     const plan = planBackup(input({
       base: { alpha: plugin('alpha') },

@@ -23,6 +23,8 @@ export interface PluginState {
     syncable: boolean;
     source?: string;
     rows: PluginRowRecord[];
+    /** Config keys omitted from the comparison because they may be secret. */
+    configSkipped?: string[];
 }
 /** Build the comparable state of a locally scanned plugin. */
 export declare function localPluginState(record: PluginRecord): PluginState;

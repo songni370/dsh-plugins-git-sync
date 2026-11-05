@@ -53,6 +53,9 @@ export interface PlanPreviewProps {
 /** One plan row: plugin name, kind pill and detail. */
 function ActionRow(props: { t: Translate; action: PlanAction; destructive: boolean }): ReactElement {
   const { t, action } = props
+  const configKeys = action.kind === 'push-config' && action.configs !== undefined
+    ? Object.keys(action.configs).sort()
+    : []
   return (
     <li className={props.destructive ? 'dgs-planItem dgs-planItemDestructive' : 'dgs-planItem'}>
       <div className="dgs-planItemHead">
@@ -61,6 +64,9 @@ function ActionRow(props: { t: Translate; action: PlanAction; destructive: boole
         {props.destructive ? <span className="dgs-badge dgs-badgeError">{t('planDestructive')}</span> : null}
       </div>
       {action.detail === '' ? null : <span className="dgs-planDetail">{action.detail}</span>}
+      {configKeys.length === 0 ? null : (
+        <span className="dgs-planConfigKeys">{t('planUploadKeys', { keys: configKeys.join(', ') })}</span>
+      )}
     </li>
   )
 }
@@ -236,6 +242,7 @@ export function PlanPreview(props: PlanPreviewProps): ReactElement {
   )
   const downloads = plan.actions.filter(action => !deletions.includes(action) && DOWNLOAD_KINDS.has(action.kind))
   const uploads = plan.actions.filter(action => !deletions.includes(action) && UPLOAD_KINDS.has(action.kind))
+  const sensitive = plan.diffs.filter(diff => (diff.local?.configSkipped.length ?? 0) > 0)
   const editable = props.onResolutionChange !== undefined
   const unresolved = plan.conflicts.filter(
     conflict => (props.resolutions?.[conflict.pluginId] ?? 'skip') === 'skip',
@@ -343,6 +350,25 @@ export function PlanPreview(props: PlanPreviewProps): ReactElement {
             </section>
           )}
         </>
+      )}
+
+      {sensitive.length === 0 ? null : (
+        <section className="dgs-planSection">
+          <h4 className="dgs-planHeading">{t('planSensitiveHeader', { count: sensitive.length })}</h4>
+          <p className="dgs-hint">{t('planSensitiveHint')}</p>
+          <ul className="dgs-plainList">
+            {sensitive.map(diff => (
+              <li key={`sensitive:${diff.id}`} className="dgs-sensitiveItem">
+                <span className="dgs-planName">{diff.local?.displayName ?? diff.name}</span>
+                <span className="dgs-configChips">
+                  {(diff.local?.configSkipped ?? []).map(key => (
+                    <code key={`${diff.id}:${key}`} className="dgs-configChip">{key}</code>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {warnings.length === 0 ? null : (

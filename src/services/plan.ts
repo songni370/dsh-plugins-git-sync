@@ -327,7 +327,7 @@ function toPluginRecordShim(state: PluginState): PluginRecord {
     platform: '',
     rows: state.rows,
     configs: state.configs,
-    configSkipped: [],
+    configSkipped: state.configSkipped === undefined ? [] : [...state.configSkipped],
   }
 }
 
