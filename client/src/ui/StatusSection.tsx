@@ -163,8 +163,18 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
 
   const body = (
     <>
-      {showPlugins ? renderTiles(pluginTiles, 'dgs-statusTiles') : null}
-      {showSkills ? renderTiles(skillTiles, 'dgs-statusTiles dgs-statusTilesSkills') : null}
+      {showPlugins ? (
+        <div className="dgs-statusGroup">
+          <div className="dgs-statusGroupTitle">{t('statusPluginGroup')}</div>
+          {renderTiles(pluginTiles, 'dgs-statusTiles')}
+        </div>
+      ) : null}
+      {showSkills ? (
+        <div className={showPlugins ? 'dgs-statusGroup dgs-statusGroupDivided' : 'dgs-statusGroup'}>
+          <div className="dgs-statusGroupTitle">{t('statusSkillGroup')}</div>
+          {renderTiles(skillTiles, 'dgs-statusTiles dgs-statusTilesSkills')}
+        </div>
+      ) : null}
 
       <div className="dgs-statusMeta">
         <MetaCell label={t('statusDevice')} value={status.config.device.name} title={status.config.device.name} />

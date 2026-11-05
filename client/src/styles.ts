@@ -532,8 +532,21 @@ export const CSS = `
   line-height: 18px;
   color: var(--dsw-alias-label-secondary, #5c6570);
 }
-.dgs-statusTilesSkills {
-  margin-top: 8px;
+.dgs-statusGroup + .dgs-statusGroup {
+  margin-top: 12px;
+}
+
+.dgs-statusGroupDivided {
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
+}
+
+.dgs-statusGroupTitle {
+  margin-bottom: 8px;
+  color: var(--dsw-alias-label-secondary, #5c6570);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
 }
 
 .dgs-skillTable {
