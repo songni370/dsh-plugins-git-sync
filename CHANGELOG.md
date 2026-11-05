@@ -6,9 +6,11 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-11-05
+
 ### Changed
 
-- 重写 README，更新插件详情页与设置页截图，并隐藏示例仓库地址。
+- 重写 README，更新插件详情页与「备份」标签页截图。
 - 插件页图标更换为新的鲸鱼喷水插画。
 - 缩短「备份内容」中插件与技能的说明；仓库配置卡片新增「仓库内位置」，显示插件清单与技能目录在仓库中的路径。
 - 设置页「插件列表」下方新增已部署技能列表，显示技能名称、文件数、占用大小和备份状态（已备份/仅本机/仅仓库/有修改）；与插件列表一样默认折叠并支持分页（默认每页 10 个）。
@@ -160,7 +162,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 - 设置页基础界面、HTTP 路由与 6 个 Agent 工具。
 - 单元测试、双设备集成测试与 CI（macOS / Windows / Linux）。
 
-[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.10...HEAD
+[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.11...HEAD
+[0.2.11]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.7...v0.2.8
