@@ -536,10 +536,6 @@ export const CSS = `
   margin-top: 8px;
 }
 
-.dgs-statusGroupDivided {
-  padding-top: 8px;
-  border-top: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
-}
 
 .dgs-skillTable {
   table-layout: auto;

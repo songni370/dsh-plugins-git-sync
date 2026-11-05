@@ -75,20 +75,17 @@ describe('sync status tiles', () => {
     expect(html).toContain('本地插件')
     expect(html).toContain('本地技能')
     expect(html).toContain('仓库技能')
-    expect(html).toContain('dgs-statusGroupDivided')
   })
 
   it('hides plugin tiles when plugin backup is off', () => {
     const html = render({ plugins: false, skills: true })
     expect(html).not.toContain('本地插件')
     expect(html).toContain('本地技能')
-    expect(html).not.toContain('dgs-statusGroupDivided')
   })
 
   it('hides skill tiles when skill backup is off', () => {
     const html = render({ plugins: true, skills: false })
     expect(html).toContain('本地插件')
     expect(html).not.toContain('本地技能')
-    expect(html).not.toContain('dgs-statusGroupDivided')
   })
 })
