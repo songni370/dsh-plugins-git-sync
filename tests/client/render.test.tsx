@@ -238,6 +238,14 @@ describe('settings page render', () => {
     expect(container.textContent).toContain('同步状态')
   })
 
+  it('shows skill progress in the sync status area', async () => {
+    await settle()
+    expect(container.textContent).toContain('已备份 1')
+    expect(container.textContent).toContain('待上传 0')
+    expect(container.textContent).toContain('待下载 0')
+    expect(container.textContent).toContain('已排除 0')
+  })
+
   it('collapses an already configured repository card and expands it on demand', async () => {
     await settle()
     expect(container.textContent).toContain('已配置')

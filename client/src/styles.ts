@@ -532,6 +532,16 @@ export const CSS = `
   line-height: 18px;
   color: var(--dsw-alias-label-secondary, #5c6570);
 }
+.dgs-skillStatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary, #5c6570);
+}
+
 .dgs-skillTable {
   table-layout: auto;
 }

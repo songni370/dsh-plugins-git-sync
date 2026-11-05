@@ -10,6 +10,7 @@
  */
 
 import type { ReactElement, ReactNode } from 'react'
+import type { SkillListResponse } from '../../../src/http/api-types'
 import type { SyncState, StatusView } from '../../../src/types'
 import type { Translate } from '../i18n'
 import { formatDateTime, operationLabel, resultLabel, shortCommit } from '../format'
@@ -43,6 +44,8 @@ export interface StatusSectionProps {
   status: StatusView
   /** Render inside another card (operations) instead of as its own card. */
   embedded?: boolean
+  /** Deployed and repository skills, used for the compact skill progress line. */
+  skills?: SkillListResponse | null
 }
 
 /** One metadata cell (label above a single-line value). */
@@ -101,6 +104,16 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
     },
   ]
 
+  const skillRows = props.skills?.skills ?? []
+  const skillProgress = skillRows.length === 0
+    ? null
+    : {
+        synced: skillRows.filter(skill => skill.syncStatus === 'synced').length,
+        upload: skillRows.filter(skill => skill.syncStatus === 'local-only' || skill.syncStatus === 'modified').length,
+        download: skillRows.filter(skill => skill.syncStatus === 'remote-only').length,
+        excluded: skillRows.filter(skill => skill.syncStatus === 'excluded').length,
+      }
+
   const body = (
     <>
       <div className="dgs-statusTiles">
@@ -118,6 +131,16 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
           </div>
         ))}
       </div>
+
+      {skillProgress === null ? null : (
+        <div className="dgs-skillStatusRow">
+          <span className="dgs-statusMetaLabel">{t('statusSkills')}</span>
+          <span>{t('statusSkillSynced', { count: skillProgress.synced })}</span>
+          <span>{t('statusSkillPendingUp', { count: skillProgress.upload })}</span>
+          <span>{t('statusSkillPendingDown', { count: skillProgress.download })}</span>
+          <span>{t('statusSkillExcluded', { count: skillProgress.excluded })}</span>
+        </div>
+      )}
 
       <div className="dgs-statusMeta">
         <MetaCell label={t('statusDevice')} value={status.config.device.name} title={status.config.device.name} />

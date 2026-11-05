@@ -793,7 +793,7 @@ export function Page({ t }: PageProps): ReactElement {
             onClearDiff={() => {
               setDiff(null)
             }}
-            statusPanel={<StatusSection t={t} status={view} embedded />}
+            statusPanel={<StatusSection t={t} status={view} skills={skills} embedded />}
             notices={
               <>
                 {view.state === 'not-configured' ? (
