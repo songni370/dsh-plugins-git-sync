@@ -72,8 +72,6 @@ function render(scopes: { plugins: boolean; skills: boolean }): string {
 describe('sync status tiles', () => {
   it('shows plugin and skill tiles when both scopes are enabled', () => {
     const html = render({ plugins: true, skills: true })
-    expect(html).toContain('>插件<')
-    expect(html).toContain('>技能<')
     expect(html).toContain('本地插件')
     expect(html).toContain('本地技能')
     expect(html).toContain('仓库技能')

@@ -533,20 +533,12 @@ export const CSS = `
   color: var(--dsw-alias-label-secondary, #5c6570);
 }
 .dgs-statusGroup + .dgs-statusGroup {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .dgs-statusGroupDivided {
-  padding-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
-}
-
-.dgs-statusGroupTitle {
-  margin-bottom: 8px;
-  color: var(--dsw-alias-label-secondary, #5c6570);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
 }
 
 .dgs-skillTable {
@@ -849,10 +841,10 @@ export const CSS = `
 .dgs-syncStatusBlock {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   margin-top: 2px;
-  padding-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
 }
 .dgs-syncStatusHead {
@@ -965,14 +957,14 @@ export const CSS = `
   flex-direction: column;
   gap: 1px;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-2, #f7f8fa);
 }
 .dgs-statusTileValue {
-  font-size: 18px;
-  line-height: 24px;
+  font-size: 17px;
+  line-height: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--dsw-alias-label-primary, #1f2328);
@@ -996,7 +988,7 @@ export const CSS = `
 .dgs-statusMeta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 20px;
+  gap: 10px 20px;
   min-width: 0;
 }
 .dgs-statusMetaItem {

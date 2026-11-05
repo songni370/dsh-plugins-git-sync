@@ -165,13 +165,11 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
     <>
       {showPlugins ? (
         <div className="dgs-statusGroup">
-          <div className="dgs-statusGroupTitle">{t('statusPluginGroup')}</div>
           {renderTiles(pluginTiles, 'dgs-statusTiles')}
         </div>
       ) : null}
       {showSkills ? (
         <div className={showPlugins ? 'dgs-statusGroup dgs-statusGroupDivided' : 'dgs-statusGroup'}>
-          <div className="dgs-statusGroupTitle">{t('statusSkillGroup')}</div>
           {renderTiles(skillTiles, 'dgs-statusTiles dgs-statusTilesSkills')}
         </div>
       ) : null}
