@@ -99,6 +99,13 @@ export const CSS = `
   order: -1;
 }
 
+/* The native bundle row prints the module name and the package name on
+ * separate lines. This plugin's module name is its package name, so the
+ * detail page would otherwise show the same string twice. */
+[data-plugin-row='include:dsh-plugins-git-sync'] code + code {
+  display: none;
+}
+
 .dgs-card {
   display: flex;
   flex-direction: column;
