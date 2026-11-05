@@ -55,7 +55,7 @@ export interface SkillsSectionProps {
 export function SkillsSection(props: SkillsSectionProps): ReactElement {
   const { t, skills } = props
   const rows = skills === null ? [] : skills.skills
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(storedPageSize)
 
