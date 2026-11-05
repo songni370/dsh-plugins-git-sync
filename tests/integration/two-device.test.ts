@@ -285,9 +285,8 @@ describe('two-device synchronization', () => {
     const backup = await ctx.mac.engine.backup({ confirmDestructive: true })
     expect(backup.ok).toBe(true)
     const files = listRepoFiles(ctx.bareRepo)
-    expect(files).toContain('profiles/desktop/skills.json')
-    const snapshot = JSON.parse(readRepoFile(ctx.bareRepo, 'profiles/desktop/skills.json')) as { skills: { name: string }[] }
-    expect(snapshot.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'beta-skill'])
+    expect(files).toContain('profiles/desktop/skills/alpha-skill/SKILL.md')
+    expect(files).toContain('profiles/desktop/skills/beta-skill/SKILL.md')
 
     const listed = await ctx.mac.engine.listSkills()
     expect(listed.warnings).toEqual([])
@@ -319,7 +318,7 @@ describe('two-device synchronization', () => {
       const backup = await mac.engine.backup({ confirmDestructive: true })
       expect(backup.ok).toBe(true)
       const files = listRepoFiles(bareRepo)
-      expect(files).toContain('profiles/desktop/skills.json')
+      expect(files).toContain('profiles/desktop/skills/alpha-skill/SKILL.md')
       expect(files).not.toContain('profiles/desktop/plugins.json')
       expect(files).not.toContain('manifest.json')
       expect(files.some(file => file.startsWith('devices/'))).toBe(false)
@@ -330,8 +329,9 @@ describe('two-device synchronization', () => {
       await writeFile(join(macGamma, 'SKILL.md'), '# Gamma from mac\n')
       const sync = await mac.engine.sync({ confirmDestructive: true })
       expect(sync.ok).toBe(true)
-      const synced = JSON.parse(readRepoFile(bareRepo, 'profiles/desktop/skills.json')) as { skills: { name: string }[] }
-      expect(synced.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'gamma-skill'])
+      const syncedFiles = listRepoFiles(bareRepo)
+      expect(syncedFiles).toContain('profiles/desktop/skills/alpha-skill/SKILL.md')
+      expect(syncedFiles).toContain('profiles/desktop/skills/gamma-skill/SKILL.md')
 
       // Restoring with plugins off installs only the missing skill.
       await win.saveConfig({ backupScopes: { plugins: false, skills: true } })
@@ -352,11 +352,11 @@ describe('two-device synchronization', () => {
       expect(readRepoFile(bareRepo, 'profiles/desktop/plugins.json')).toBe(pluginsBefore)
 
       // Turning skills off later must not delete the existing remote snapshot.
-      const before = readRepoFile(bareRepo, 'profiles/desktop/skills.json')
+      const before = readRepoFile(bareRepo, 'profiles/desktop/skills/alpha-skill/SKILL.md')
       await mac.saveConfig({ backupScopes: { plugins: true, skills: false } })
       await writeFile(join(macSkill, 'SKILL.md'), '# Changed after skills were disabled\n')
       await mac.engine.backup({ confirmDestructive: true })
-      expect(readRepoFile(bareRepo, 'profiles/desktop/skills.json')).toBe(before)
+      expect(readRepoFile(bareRepo, 'profiles/desktop/skills/alpha-skill/SKILL.md')).toBe(before)
       expect(listRepoFiles(bareRepo)).toContain('profiles/desktop/plugins.json')
     } finally {
       await rm(root, { recursive: true, force: true })

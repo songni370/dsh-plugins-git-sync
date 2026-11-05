@@ -632,6 +632,49 @@ describeGit('RepoStore (real git)', () => {
     await expect(store.readAtCommit('--help', 'default')).rejects.toMatchObject({ code: 'invalid-path' })
   })
 
+  it('reads skill directory trees, keeps executable bits and supports the legacy snapshot', async () => {
+    const root = await tempDir()
+    const remote = await createBareRemote()
+    const store = makeStore(root, remote)
+    await store.prepare()
+    const skillFiles = {
+      'profiles/default/skills/demo/SKILL.md': '# Demo\n',
+      'profiles/default/skills/demo/run.sh': '#!/bin/sh\necho demo\n',
+    }
+    const first = await store.write({
+      files: { ...backupFileSet(NOW), ...skillFiles },
+      executables: ['profiles/default/skills/demo/run.sh'],
+      message: 'backup: skills',
+      trailers: TRAILERS,
+    })
+    const workSkills = await store.readSkills('default')
+    expect(workSkills?.skills).toHaveLength(1)
+    expect(workSkills?.skills[0]?.files.map(file => file.path).sort()).toEqual(['SKILL.md', 'run.sh'])
+    expect(workSkills?.skills[0]?.files.find(file => file.path === 'run.sh')?.executable).toBe(true)
+    const at = await store.readSkills('default', first.commit!)
+    expect(at?.skills[0]?.files.find(file => file.path === 'run.sh')?.executable).toBe(true)
+
+    const legacyRoot = await tempDir()
+    const legacyRemote = await createBareRemote()
+    const legacyStore = makeStore(legacyRoot, legacyRemote)
+    await legacyStore.prepare()
+    const legacy = {
+      schemaVersion: 1,
+      updatedAt: NOW,
+      skills: [{ name: 'legacy', files: [{ path: 'SKILL.md', content: '# Legacy\n', encoding: 'utf8' }] }],
+    }
+    await legacyStore.write({
+      files: {
+        ...backupFileSet(LATER),
+        'profiles/default/skills.json': `${JSON.stringify(legacy)}\n`,
+      },
+      message: 'backup: legacy skills',
+      trailers: TRAILERS,
+    })
+    const legacySkills = await legacyStore.readSkills('default')
+    expect(legacySkills?.skills.map(skill => skill.name)).toEqual(['legacy'])
+  })
+
   it('tests connectivity and reports the branch head', async () => {
     const root = await tempDir()
     const remote = await createBareRemote()

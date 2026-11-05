@@ -12,12 +12,12 @@ Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and depl
 
 *Initial state: enter a Git repository URL to start; the device name is only an example.*
 
-Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory and deployed skills to a private repository and pull them down elsewhere. The backup is plain JSON, readable and diffable with ordinary Git tools.
+Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory and deployed skills to a private repository and pull them down elsewhere. The plugin inventory is plain JSON and skills are stored as real files, all readable and diffable with ordinary Git tools.
 
 ## What it does
 
 - **Backup / restore**: push user-installed plugins (version, enabled state) to Git; install them back on another device.
-- **Skill backup**: capture deployed files under `~/.dsh/skills` (following symlinks to their content); restore only missing skills and never overwrite an existing one.
+- **Skill backup**: capture deployed files under `~/.dsh/skills` (following symlinks to their content) as a real file tree at `profiles/<profile>/skills/<name>/...`; restore only missing skills and never overwrite an existing one.
 - **Two-way sync**: upload local changes, download repository changes; when both sides changed it stops and asks.
 - **Conflict handling**: overwrite repository with this device / overwrite this device with repository / leave for now; each button explains what it will do. When this device removed a plugin that the repository still backs up, choose Delete from repository or Keep repository.
 - **History rollback**: restore this device to any previous commit; local safety snapshots keep the latest 20 automatically.

@@ -22,7 +22,7 @@
  * @module git/repo-store
  */
 
-import { lstat, mkdir, readdir, stat } from 'node:fs/promises'
+import { chmod, lstat, mkdir, readdir, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { HISTORY_LIMIT, MAX_BACKUP_FILES, REPO_README_FILE } from '../constants.js'
 import { SyncError, errorMessage } from '../core/errors.js'
@@ -51,6 +51,8 @@ import type {
   RemoteConfigEntry,
   RemoteProfileState,
   SkillBackup,
+  SkillEntry,
+  SkillFileRecord,
   RepoPrepareResult,
   RepoStore,
   RepoWriteOptions,
@@ -58,7 +60,7 @@ import type {
   SyncLogger,
 } from '../types.js'
 import { classifyGitFailure } from './git-runner.js'
-import { validateSkillBackup } from '../skills/skills.js'
+import { isSafeSkillName, validateSkillBackup } from '../skills/skills.js'
 import {
   assertProfileName,
   backupPaths,
@@ -69,11 +71,14 @@ import {
   manifestPath,
   normalizeBackupDirectory,
   profileStatePath,
-  skillsPath,
+  skillsDirPath,
+  legacySkillsPath,
+  skillFilePath,
   resolveTarget,
   workTreePath,
   writeWorkTreeFile,
   readRepoFile,
+  readRepoBytes,
   listRepoDirectory,
   assertDeviceId,
 } from './repo-paths.js'
@@ -89,7 +94,7 @@ This repository is maintained automatically by the DSH "DSH Plugin Git Sync" plu
 - \`manifest.json\` — 备份索引 / index of the backup
 - \`metadata/schema.json\` — 布局与 schema 版本说明 / layout and schema version
 - \`profiles/<profile>/plugins.json\` — 共享插件状态 / shared plugin state per profile
-- \`profiles/<profile>/configs/<plugin-id>.json\` — 非敏感配置 / non-secret configuration
+- \`profiles/<profile>/skills/<skill-name>/\` — 已部署技能的真实文件 / deployed skill files
 - \`devices/<deviceId>/<profile>.json\` — 设备快照 / device snapshot
 
 恢复与同步请使用插件设置页或 Agent 工具。/ Use the plugin settings page or agent tools to restore or synchronize.
@@ -254,6 +259,110 @@ function isMissingPathInTree(result: GitRunResult): boolean {
   )
 }
 
+/** Encode raw skill bytes exactly as the local scanner would. */
+function encodeSkillFile(data: Buffer): Pick<SkillFileRecord, 'content' | 'encoding'> {
+  if (!data.includes(0)) {
+    const text = data.toString('utf8')
+    if (Buffer.from(text, 'utf8').equals(data)) return { content: text, encoding: 'utf8' }
+  }
+  return { content: data.toString('base64'), encoding: 'base64' }
+}
+
+/** Turn a repository skill directory tree into the in-memory snapshot. */
+async function readSkillTreeFromWorktree(
+  workDir: string,
+  backupDir: string,
+  profile: string,
+): Promise<SkillBackup | null> {
+  const root = skillsDirPath(backupDir, profile)
+  const entries = await listRepoDirectory(workDir, root)
+  if (entries === null) return null
+  const skills: SkillEntry[] = []
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) {
+      throw new SyncError('invalid-manifest', '备份仓库包含符号链接技能目录 / backup repository contains a symlinked skill directory')
+    }
+    if (!entry.isDirectory() || !isSafeSkillName(entry.name)) continue
+    const files: SkillFileRecord[] = []
+    const walk = async (dir: string, relative: string): Promise<void> => {
+      const children = await listRepoDirectory(workDir, dir)
+      if (children === null) return
+      for (const child of children) {
+        if (child.isSymbolicLink()) {
+          throw new SyncError('invalid-manifest', '备份仓库包含符号链接技能文件 / backup repository contains a symlinked skill file')
+        }
+        const next = relative === '' ? child.name : `${relative}/${child.name}`
+        if (child.isDirectory()) {
+          await walk(`${dir}/${child.name}`, next)
+          continue
+        }
+        if (!child.isFile() || !isSafeRelativePath(next)) continue
+        const buffer = await readRepoBytes(workDir, skillFilePath(backupDir, profile, entry.name, next))
+        if (buffer === null) continue
+        const record: SkillFileRecord = { path: next, ...encodeSkillFile(buffer) }
+        const info = await lstat(join(workDir, skillFilePath(backupDir, profile, entry.name, next)))
+        if ((info.mode & 0o111) !== 0) record.executable = true
+        files.push(record)
+      }
+    }
+    await walk(root === '' ? entry.name : `${root}/${entry.name}`, '')
+    if (files.length > 0) skills.push({ name: entry.name, files })
+  }
+  return { schemaVersion: 1, updatedAt: new Date().toISOString(), skills }
+}
+
+/** Read a skills directory tree (or the legacy skills.json) at one commit. */
+async function readSkillTreeAtRevision(
+  run: GitRunner['run'],
+  workDir: string,
+  backupDir: string,
+  profile: string,
+  revision: string,
+): Promise<SkillBackup | null> {
+  const dir = skillsDirPath(backupDir, profile)
+  const listing = await run(['ls-tree', '-r', '-z', revision, '--', `${dir}/`], { cwd: workDir })
+  if (listing.code !== 0) {
+    if (isMissingPathInTree(listing)) return null
+    throw new SyncError('git-failed', '无法读取技能目录 / cannot read the skills directory')
+  }
+  const entries = listing.stdout.split('\x00').filter(entry => entry !== '')
+  if (entries.length === 0) return null
+  const skills = new Map<string, SkillEntry>()
+  for (const entry of entries) {
+    const match = /^(\d+) \w+ ([0-9a-f]+)\t(.+)$/.exec(entry)
+    if (match === null) continue
+    const mode = match[1] ?? ''
+    const path = match[3] ?? ''
+    const prefix = dir === '' ? '' : `${dir}/`
+    if (!path.startsWith(prefix)) continue
+    const relative = path.slice(prefix.length)
+    const slash = relative.indexOf('/')
+    if (slash <= 0) continue
+    const name = relative.slice(0, slash)
+    const filePath = relative.slice(slash + 1)
+    if (!isSafeSkillName(name) || !isSafeRelativePath(filePath)) continue
+    if (mode === '120000') {
+      throw new SyncError('invalid-manifest', `备份仓库包含符号链接技能文件 / backup repository contains a symlink: ${path}`)
+    }
+    const blob = await run(['show', `${revision}:${path}`], { cwd: workDir })
+    if (blob.code !== 0) {
+      if (isMissingPathInTree(blob)) continue
+      throw new SyncError('git-failed', `无法读取技能文件 / cannot read skill file: ${path}`)
+    }
+    const buffer = blob.stdoutBuffer === undefined ? Buffer.from(blob.stdout, 'utf8') : Buffer.from(blob.stdoutBuffer)
+    const skill = skills.get(name) ?? { name, files: [] }
+    const record: SkillFileRecord = { path: filePath, ...encodeSkillFile(buffer) }
+    if (mode === '100755') record.executable = true
+    skill.files.push(record)
+    skills.set(name, skill)
+  }
+  return {
+    schemaVersion: 1,
+    updatedAt: new Date().toISOString(),
+    skills: [...skills.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+  }
+}
+
 /** Whether a rejected push raced another device (and may be retried). */
 function isNonFastForwardPush(result: GitRunResult): boolean {
   const text = `${result.stderr}\n${result.stdout}`
@@ -300,7 +409,7 @@ function commitEnvironment(trailers: CommitTrailers): Record<string, string> {
 interface NormalizedFile {
   repo: string
   backup: string
-  content: string
+  content: string | Uint8Array
 }
 
 /** One validated deletion target. */
@@ -311,8 +420,9 @@ interface NormalizedDeletion {
 
 /** A rebuilt file set returned by {@link RepoWriteOptions.rebuild}. */
 interface RebuiltFileSet {
-  files: Record<string, string>
+  files: Record<string, string | Uint8Array>
   deletions?: readonly string[]
+  executables?: readonly string[]
 }
 
 /** Normalized rebuild hook (accepts both the map and the files/deletions form). */
@@ -539,7 +649,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
   }
 
   /** Normalize the caller's file map to safe, unique repository paths. */
-  const normalizeFiles = (backupDir: string, files: Record<string, string> | undefined): NormalizedFile[] => {
+  const normalizeFiles = (backupDir: string, files: Record<string, string | Uint8Array> | undefined): NormalizedFile[] => {
     if (files === null || typeof files !== 'object' || Array.isArray(files)) {
       throw new SyncError('invalid-path', '备份文件必须是对象 / backup files must be an object')
     }
@@ -553,10 +663,10 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     const out: NormalizedFile[] = []
     const seen = new Set<string>()
     for (const [path, content] of entries) {
-      if (typeof content !== 'string') {
+      if (typeof content !== 'string' && !(content instanceof Uint8Array)) {
         throw new SyncError(
           'invalid-path',
-          `备份文件内容必须是字符串 / backup file content must be a string: ${JSON.stringify(path)}`,
+          `备份文件内容必须是文本或字节 / backup file content must be text or bytes: ${JSON.stringify(path)}`,
         )
       }
       const target = resolveTarget(backupDir, path)
@@ -592,6 +702,26 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     return out
   }
 
+  /** Normalize the caller's executable-path list. */
+  const normalizeExecutables = (
+    backupDir: string,
+    executables: readonly string[] | undefined,
+  ): NormalizedDeletion[] => {
+    if (executables === undefined) return []
+    if (!Array.isArray(executables)) {
+      throw new SyncError('invalid-path', 'executables 必须是数组 / executables must be an array')
+    }
+    const out: NormalizedDeletion[] = []
+    const seen = new Set<string>()
+    for (const path of executables) {
+      const target = resolveTarget(backupDir, path)
+      if (seen.has(target.repo)) continue
+      seen.add(target.repo)
+      out.push({ repo: target.repo, backup: target.backup })
+    }
+    return out
+  }
+
   /** Accept both rebuild() return shapes (plain map, or files + deletions). */
   const normalizeRebuild = (rebuild: RepoWriteOptions['rebuild']): NormalizeRebuild | undefined => {
     if (rebuild === undefined) return undefined
@@ -609,9 +739,13 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
         const deletions = Array.isArray(rawDeletions)
           ? rawDeletions.filter((value): value is string => typeof value === 'string')
           : []
-        return { files: rawFiles as Record<string, string>, deletions }
+        const rawExecutables = (result as { executables?: unknown }).executables
+        const executables = Array.isArray(rawExecutables)
+          ? rawExecutables.filter((value): value is string => typeof value === 'string')
+          : []
+        return { files: rawFiles as Record<string, string | Uint8Array>, deletions, executables }
       }
-      return { files: result as Record<string, string> }
+      return { files: result as Record<string, string | Uint8Array> }
     }
   }
 
@@ -620,10 +754,12 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     backupDir: string,
     inputFiles: readonly NormalizedFile[],
     inputDeletions: readonly NormalizedDeletion[],
+    inputExecutables: readonly NormalizedDeletion[],
     writeOptions: { dryRun: boolean; subject: string; trailers: CommitTrailers; signal?: AbortSignal },
   ): Promise<{ changed: boolean; changedFiles: string[]; commit: string | null }> => {
     const files = [...inputFiles]
     const deletions = [...inputDeletions]
+    const executables = [...inputExecutables]
     const explicit = new Set(files.map(file => file.repo))
     const deleted = new Set(deletions.map(deletion => deletion.repo))
     // The warning README is created on the first write (and whenever it is
@@ -636,17 +772,33 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     if (writeOptions.dryRun) {
       const changed = new Set<string>()
       for (const file of files) {
-        const existing = await readRepoFile(workDir, file.repo)
-        if (existing !== file.content) changed.add(file.repo)
+        const existing = typeof file.content === 'string'
+          ? await readRepoFile(workDir, file.repo)
+          : await readRepoBytes(workDir, file.repo)
+        const same = typeof file.content === 'string'
+          ? existing === file.content
+          : existing !== null && Buffer.from(existing).equals(Buffer.from(file.content))
+        if (!same) changed.add(file.repo)
       }
       for (const deletion of deletions) {
         if (await pathExists(workTreePath(workDir, deletion.repo))) changed.add(deletion.repo)
+      }
+      for (const executable of executables) {
+        try {
+          const info = await lstat(workTreePath(workDir, executable.repo))
+          if ((info.mode & 0o111) === 0) changed.add(executable.repo)
+        } catch {
+          // Missing files are already covered by the file-content comparison.
+        }
       }
       const changedFiles = [...changed].sort()
       return { changed: changedFiles.length > 0, changedFiles, commit: await readHead() }
     }
     for (const deletion of deletions) await deleteWorkTreeFile(workDir, deletion.repo)
     for (const file of files) await writeWorkTreeFile(workDir, file.repo, file.content)
+    for (const executable of executables) {
+      await chmod(workTreePath(workDir, executable.repo), 0o755).catch(() => undefined)
+    }
     await runGit(['add', '-A'], { signal: writeOptions.signal })
     const status = await runGit(['status', '--porcelain', '-z'], { signal: writeOptions.signal })
     const changedFiles = parsePorcelainZ(status.stdout)
@@ -680,6 +832,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     const { backupDir, branch } = settings()
     let files = normalizeFiles(backupDir, writeOptions.files)
     let deletions = normalizeDeletions(backupDir, writeOptions.deletions)
+    let executables = normalizeExecutables(backupDir, writeOptions.executables)
     const rebuild = normalizeRebuild(writeOptions.rebuild)
     const dryRun = writeOptions.dryRun === true
     const subject = commitSubject(writeOptions.message)
@@ -692,13 +845,14 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
           const rebuilt = await rebuild(workDir)
           files = normalizeFiles(backupDir, rebuilt.files)
           deletions = normalizeDeletions(backupDir, rebuilt.deletions)
+          executables = normalizeExecutables(backupDir, rebuilt.executables)
         }
         logger.warn('retrying backup write after a concurrent update', {
           attempt,
           refreshed: refreshed.refreshed,
         })
       }
-      const outcome = await materialize(backupDir, files, deletions, {
+      const outcome = await materialize(backupDir, files, deletions, executables, {
         dryRun,
         subject,
         trailers: writeOptions.trailers,
@@ -895,10 +1049,15 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     await ensurePrepared()
     const { backupDir } = settings()
     assertProfileName(profile)
-    const repoRelative = skillsPath(backupDir, profile)
-    const text = commit === undefined
-      ? await readRepoFile(workDir, repoRelative)
-      : await showAtRevision(assertRevision(commit), repoRelative)
+    if (commit !== undefined) {
+      const tree = await readSkillTreeAtRevision(options.run.run, workDir, backupDir, profile, assertRevision(commit))
+      if (tree !== null) return tree
+      const legacy = await showAtRevision(assertRevision(commit), legacySkillsPath(backupDir, profile))
+      return legacy === null ? null : validateSkillBackup(parseRepoJson(legacy, 'skills.json'))
+    }
+    const tree = await readSkillTreeFromWorktree(workDir, backupDir, profile)
+    if (tree !== null) return tree
+    const text = await readRepoFile(workDir, legacySkillsPath(backupDir, profile))
     return text === null ? null : validateSkillBackup(parseRepoJson(text, 'skills.json'))
   }
 
@@ -918,7 +1077,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     const revision = assertRevision(commit)
     const manifestText = await showAtRevision(revision, manifestPath(backupDir))
     const stateText = await showAtRevision(revision, profileStatePath(backupDir, profile))
-    const skillsText = await showAtRevision(revision, skillsPath(backupDir, profile))
+    const skills = await readSkills(profile, revision)
     const configs: Record<string, Record<string, JsonValue>> = {}
     const configsDir = configsDirPath(backupDir, profile)
     const listing = await options.run.run(['ls-tree', '--name-only', '-z', revision, '--', `${configsDir}/`], {
@@ -944,7 +1103,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
       manifest: manifestText === null ? null : parseManifestJson(manifestText),
       state: stateText === null ? null : parseRemoteProfileStateJson(stateText),
       configs,
-      skills: skillsText === null ? null : validateSkillBackup(parseRepoJson(skillsText, 'skills.json')),
+      skills,
       device,
     }
   }

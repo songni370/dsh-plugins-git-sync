@@ -5,10 +5,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildBackupFiles, configPath, profileStatePath, sanitizeModuleName, sanitizePluginRecord, skillsPath, toRemoteEntry } from '../../src/services/repo-files.js'
+import { buildBackupFiles, configPath, profileStatePath, sanitizeModuleName, sanitizePluginRecord, skillFilePath, toRemoteEntry } from '../../src/services/repo-files.js'
 import { MANIFEST_SCHEMA_VERSION } from '../../src/constants.js'
 import type { PluginRecord } from '../../src/types.js'
 import type { PluginState as ModelPluginState } from '../../src/services/model.js'
+
+function text(content: string | Uint8Array | undefined): string {
+  if (content === undefined) return '{}'
+  return typeof content === 'string' ? content : Buffer.from(content).toString('utf8')
+}
 
 /** Build a plugin record. */
 function record(overrides: Partial<PluginRecord> = {}): PluginRecord {
@@ -138,15 +143,18 @@ describe('buildBackupFiles', () => {
     expect(files.files['backup/README.md']).toBeDefined()
     expect(files.files[profileStatePath('backup', 'desktop')]).toBeDefined()
     expect(files.files[configPath('backup', 'desktop', 'alpha')]).toBeDefined()
-    expect(files.files[skillsPath('backup', 'desktop')]).toBeDefined()
-    const all = Object.values(files.files).join('\n')
+    expect(files.files[skillFilePath('backup', 'desktop', 'demo', 'SKILL.md')]).toBe('# Demo\n')
+    expect(files.deletions).toContain('backup/profiles/desktop/skills.json')
+    const all = Object.values(files.files)
+      .map((content) => (typeof content === 'string' ? content : Buffer.from(content).toString('utf8')))
+      .join('\n')
     expect(all).not.toContain('/Users/')
     expect(all).not.toContain('sk-')
-    const plugins = JSON.parse(files.files[profileStatePath('backup', 'desktop')] ?? '{}') as {
+    const plugins = JSON.parse(text(files.files[profileStatePath('backup', 'desktop')])) as {
       plugins: Record<string, { rows: { moduleName: string }[] }>
     }
     expect(plugins.plugins.alpha?.rows[0]?.moduleName).toBe('alpha')
-    const manifest = JSON.parse(files.files['backup/manifest.json'] ?? '{}') as { schemaVersion: number; devices: string[] }
+    const manifest = JSON.parse(text(files.files['backup/manifest.json'])) as { schemaVersion: number; devices: string[] }
     expect(manifest.schemaVersion).toBe(MANIFEST_SCHEMA_VERSION)
     expect(manifest.devices).toContain('device-1')
   })
@@ -179,7 +187,7 @@ describe('buildBackupFiles', () => {
       },
       knownDevices: ['device-1'],
     })
-    const plugins = JSON.parse(files.files[profileStatePath('', 'desktop')] ?? '{}') as {
+    const plugins = JSON.parse(text(files.files[profileStatePath('', 'desktop')])) as {
       plugins: Record<string, { deleted?: boolean }>
     }
     expect(plugins.plugins.alpha?.deleted).toBe(true)

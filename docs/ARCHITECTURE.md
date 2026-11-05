@@ -212,7 +212,7 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 
 `PluginState` 是 `PluginRecord` / `RemotePluginEntry` / `BaselineEntry` 的公共投影（`services/model.ts`），只包含参与同步比较的字段：`id/name/displayName/version/enabled/configs/installSpec/origin/pathOnly/builtIn/syncable/source/rows`。
 
-技能不参与插件冲突规划：`skills/skills.ts` 维护独立的 `SkillBackup` 快照，保存在 `profiles/<profile>/skills.json`。备份时本地技能覆盖同名远端技能、远端独有技能保留；恢复时只安装本机缺失的技能，已存在的技能从不覆盖。
+技能不参与插件冲突规划：`skills/skills.ts` 维护独立的 `SkillBackup` 快照，保存为 `profiles/<profile>/skills/<skill-name>/` 下的真实文件树。备份时本地技能覆盖同名远端技能、远端独有技能保留；恢复时只安装本机缺失的技能，已存在的技能从不覆盖。旧版单文件 `skills.json` 只读兜底，下次写入时删除。
 
 ### 5.2 决策表（`planSync`）
 
@@ -251,7 +251,7 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 local = { A: {version:1.0.0, enabled:true} }
 remote = {}   base = {}
 planBackup → push-plugin A          (无破坏性，无需确认)
-仓库提交 c1: profiles/desktop/plugins.json += A；profiles/desktop/skills.json（如有技能）；devices/<mac>/desktop.json
+仓库提交 c1: profiles/desktop/plugins.json += A；profiles/desktop/skills/<skill>/...（如有技能）；devices/<mac>/desktop.json
 Mac 基线 = { A: {1.0.0, true} }
 ```
 

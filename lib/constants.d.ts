@@ -33,6 +33,8 @@ export declare const REPO_SCHEMA_FILE = "metadata/schema.json";
 export declare const REPO_README_FILE = "README.md";
 export declare const REPO_PROFILES_DIR = "profiles";
 export declare const REPO_PLUGINS_FILE = "plugins.json";
+export declare const REPO_SKILLS_DIR = "skills";
+/** Legacy single-file skills snapshot, read for migration and deleted on the next write. */
 export declare const REPO_SKILLS_FILE = "skills.json";
 export declare const REPO_CONFIGS_DIR = "configs";
 export declare const REPO_DEVICES_DIR = "devices";

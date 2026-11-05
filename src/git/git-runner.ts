@@ -365,6 +365,7 @@ export function createGitRunner(options: GitRunnerOptions): GitRunner {
           reject(new SyncError('cancelled', 'Git 操作已取消 / git operation cancelled'))
           return
         }
+        const stdoutBuffer = Buffer.concat(stdoutCapture.chunks)
         const stdout = redactText(captureText(stdoutCapture))
         const stderr = redactText(captureText(stderrCapture))
         const effectiveCode = timedOut ? GIT_TIMEOUT_EXIT_CODE : code === null ? 1 : code
@@ -374,7 +375,7 @@ export function createGitRunner(options: GitRunnerOptions): GitRunner {
           stdoutBytes: stdoutCapture.bytes,
           stderrBytes: stderrCapture.bytes,
         })
-        resolve({ code: effectiveCode, stdout, stderr, timedOut })
+        resolve({ code: effectiveCode, stdout, stdoutBuffer, stderr, timedOut })
       }
       const onAbort = (): void => {
         aborted = true

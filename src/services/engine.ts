@@ -582,7 +582,7 @@ export class SyncEngine {
         const skillsForFiles = config.backupScopes.skills
           ? (skillSnapshot !== null && skillSnapshot.skills.length > 0 ? skillSnapshot : null)
           : undefined
-        const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string>; deletions: string[] } =>
+        const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } =>
           this.buildRemoteFiles({
             config,
             plan,
@@ -592,6 +592,7 @@ export class SyncEngine {
             baselineRead: read,
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
+            previousSkills: currentRead.skills,
           })
         const firstFiles = build(read, local)
         const now = new Date().toISOString()
@@ -611,6 +612,7 @@ export class SyncEngine {
           : await store.write({
               files: firstFiles.files,
               deletions: firstFiles.deletions,
+              executables: firstFiles.executables,
               rebuild: async () => {
                 const freshRead = await this.readRemote(store, config, null)
                 const freshPlan = this.scopedPlan(config, planBackup(this.planInput(config, local, freshRead, await this.readState())))
@@ -623,6 +625,7 @@ export class SyncEngine {
                   baselineRead: freshRead,
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
+                  previousSkills: freshRead.skills,
                 })
               },
               message: this.commitMessage('backup', options.message),
@@ -837,7 +840,7 @@ export class SyncEngine {
             snapshot: snapshotId,
           }
         }
-        const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string>; deletions: string[] } =>
+        const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } =>
           this.buildRemoteFiles({
             config,
             plan,
@@ -847,12 +850,14 @@ export class SyncEngine {
             baselineRead: read,
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
+            previousSkills: currentRead.skills,
           })
         const firstFiles = build(read, local)
         const write = (plan.actions.some(action => !isLocalAction(action)) || skillsChanged)
           ? await store.write({
               files: firstFiles.files,
               deletions: firstFiles.deletions,
+              executables: firstFiles.executables,
               rebuild: async () => {
                 const freshRead = await this.readRemote(store, config, null)
                 const freshPlan = this.scopedPlan(config, planSync({ ...this.planInput(config, await this.scanLocal(config, true), freshRead, state), resolutions: options.resolutions }))
@@ -865,6 +870,7 @@ export class SyncEngine {
                   baselineRead: freshRead,
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
+                  previousSkills: freshRead.skills,
                 })
               },
               message: this.commitMessage('sync', undefined),
@@ -1089,7 +1095,8 @@ export class SyncEngine {
     baselineRead: RemoteRead
     plugins?: boolean
     skills?: SkillBackup | null
-  }): { files: Record<string, string>; deletions: string[] } {
+    previousSkills?: SkillBackup | null
+  }): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } {
     const localMap = localStates(input.local)
     const upserts = new Map<string, { entry: RemotePluginEntry; configs?: JsonObject }>()
     const removals = new Set<string>()
@@ -1145,6 +1152,7 @@ export class SyncEngine {
       previousState: input.read.state,
       plugins: input.plugins,
       skills: input.skills,
+      previousSkills: input.previousSkills ?? input.read.skills,
       upserts: [...upserts.values()],
       removals: [...removals],
       configDeletions: [...configDeletions],

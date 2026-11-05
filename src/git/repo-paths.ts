@@ -28,6 +28,7 @@ import {
   REPO_DEVICES_DIR,
   REPO_MANIFEST_FILE,
   REPO_PLUGINS_FILE,
+  REPO_SKILLS_DIR,
   REPO_SKILLS_FILE,
   REPO_PROFILES_DIR,
   REPO_README_FILE,
@@ -97,10 +98,27 @@ export function profileStatePath(backupDir: string, profile: string): string {
   return repoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_PLUGINS_FILE)
 }
 
-/** Repository-relative path of a profile's skill snapshot. */
-export function skillsPath(backupDir: string, profile: string): string {
+/** Repository-relative path of a profile's skills directory. */
+export function skillsDirPath(backupDir: string, profile: string): string {
+  assertProfileName(profile)
+  return repoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_SKILLS_DIR)
+}
+
+/** Legacy `profiles/<profile>/skills.json`; read once, then removed on write. */
+export function legacySkillsPath(backupDir: string, profile: string): string {
   assertProfileName(profile)
   return repoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_SKILLS_FILE)
+}
+
+/** Repository-relative path of one file under a skill directory. */
+export function skillFilePath(backupDir: string, profile: string, skill: string, relative: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(skill)) {
+    throw new SyncError('invalid-path', `非法的技能名称 / invalid skill name: ${JSON.stringify(skill)}`)
+  }
+  if (!isSafeRelativePath(relative)) {
+    throw new SyncError('invalid-path', `非法的技能文件路径 / invalid skill file path: ${JSON.stringify(relative)}`)
+  }
+  return repoPath(skillsDirPath(backupDir, profile), skill, relative)
 }
 
 /** Repository-relative path of a profile's config directory. */
@@ -246,14 +264,14 @@ export function workTreePath(workTree: string, repoRelative: string): string {
 }
 
 /** Write one UTF-8 file atomically inside the work tree. */
-export async function writeWorkTreeFile(workTree: string, repoRelative: string, content: string): Promise<void> {
+export async function writeWorkTreeFile(workTree: string, repoRelative: string, content: string | Uint8Array): Promise<void> {
   await assertNoSymlinkSegments(workTree, repoRelative)
   const target = workTreePath(workTree, repoRelative)
   await mkdir(dirname(target), { recursive: true, mode: 0o700 })
   const temporary = `${target}.${randomBytes(6).toString('hex')}.tmp`
   const handle = await open(temporary, 'w', 0o600)
   try {
-    await handle.writeFile(content, 'utf8')
+    await handle.writeFile(content)
     await handle.sync()
   } finally {
     await handle.close()
@@ -306,6 +324,35 @@ export async function readWorkTreeFile(path: string): Promise<string | null> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
   }
+}
+
+/** Read one file as bytes without following a symlink; null when it does not exist. */
+export async function readWorkTreeBytes(path: string): Promise<Buffer | null> {
+  let stats
+  try {
+    stats = await lstat(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+  if (stats.isSymbolicLink()) {
+    throw new SyncError('invalid-manifest', '备份仓库包含符号链接，已拒绝读取 / backup repository contains a symbolic link; refusing to read it')
+  }
+  if (!stats.isFile()) {
+    throw new SyncError('invalid-manifest', '备份路径不是普通文件 / backup path is not a regular file')
+  }
+  try {
+    return await readFile(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+/** Read one repository file as bytes, refusing symlink traversal. */
+export async function readRepoBytes(workTree: string, repoRelative: string): Promise<Buffer | null> {
+  await assertNoSymlinkSegments(workTree, repoRelative)
+  return await readWorkTreeBytes(workTreePath(workTree, repoRelative))
 }
 
 /** Delete one file inside the work tree; a missing file is a no-op. */

@@ -9,7 +9,7 @@
  * @module services/repo-files
  */
 
-import { MAX_BACKUP_FILES, MANIFEST_SCHEMA_VERSION, PACKAGE_NAME, REPO_DEVICES_DIR, REPO_MANIFEST_FILE, REPO_PROFILES_DIR, REPO_SCHEMA_FILE } from '../constants.js'
+import { MAX_BACKUP_FILES, MANIFEST_SCHEMA_VERSION, PACKAGE_NAME, REPO_DEVICES_DIR, REPO_MANIFEST_FILE, REPO_PROFILES_DIR, REPO_SCHEMA_FILE, REPO_SKILLS_DIR, REPO_SKILLS_FILE } from '../constants.js'
 import { SyncError } from '../core/errors.js'
 import { hasControlCharacters, safeFileName } from '../core/paths.js'
 import { buildManifest, buildSchemaDocument, serializeJson, serializeManifest } from '../manifest/manifest.js'
@@ -24,6 +24,7 @@ import type {
   RemoteProfileState,
   SkillBackup,
   SyncBaseline,
+  RepoFileContent,
 } from '../types.js'
 import { toBaselineEntry, type PluginState } from './model.js'
 
@@ -78,9 +79,19 @@ export function profileStatePath(backupDir: string, profile: string): string {
   return joinRepoPath(backupDir, REPO_PROFILES_DIR, profile, 'plugins.json')
 }
 
-/** Path of one profile's skill snapshot. */
-export function skillsPath(backupDir: string, profile: string): string {
-  return joinRepoPath(backupDir, REPO_PROFILES_DIR, profile, 'skills.json')
+/** Path of one profile's skills directory. */
+export function skillsDirPath(backupDir: string, profile: string): string {
+  return joinRepoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_SKILLS_DIR)
+}
+
+/** Legacy single-file skills snapshot. */
+export function legacySkillsPath(backupDir: string, profile: string): string {
+  return joinRepoPath(backupDir, REPO_PROFILES_DIR, profile, REPO_SKILLS_FILE)
+}
+
+/** Path of one file inside a skill directory. */
+export function skillFilePath(backupDir: string, profile: string, skill: string, relative: string): string {
+  return joinRepoPath(skillsDirPath(backupDir, profile), skill, relative)
 }
 
 /** Path of one plugin's config file. */
@@ -189,8 +200,10 @@ export interface BuildBackupFilesInput {
   removals: readonly string[]
   /** Config files to delete without tombstoning the plugin (config became empty). */
   configDeletions?: readonly string[]
-  /** Skill snapshot for this profile; undefined leaves the remote file untouched. */
+  /** Skill snapshot for this profile; undefined leaves the remote tree untouched. */
   skills?: SkillBackup | null
+  /** Previous remote skill snapshot, used to delete files removed by the merge. */
+  previousSkills?: SkillBackup | null
   /** Whether plugin inventory files are part of this backup (default true). */
   plugins?: boolean
   /** This device's snapshot for this profile. */
@@ -201,8 +214,10 @@ export interface BuildBackupFilesInput {
 
 /** The repository file set a backup produces. */
 export interface BackupFiles {
-  files: Record<string, string>
+  files: Record<string, RepoFileContent>
   deletions: string[]
+  /// Repository-relative paths that must keep their executable bit.
+  executables: string[]
 }
 
 /** Constant README explaining what the repository is and must not contain. */
@@ -214,7 +229,7 @@ This repository is written automatically by **DSH Plugin Git Sync** (\`${PACKAGE
 
 - 请勿手动修改这些文件；下次同步会按清单格式校验，非法内容会被拒绝。
   Do not edit these files by hand: the next sync validates them and rejects malformed input.
-- 这里只保存插件清单、版本、来源和经过过滤的配置；**不会**保存 Token、密码、私钥、Cookie 或机器绝对路径。
+- 这里只保存插件清单、版本、来源和已部署技能文件；**不会**保存插件配置、Token、密码、私钥、Cookie 或机器绝对路径。
   Only plugin inventory, versions, sources, enablement and the deployed DSH skills are stored here. Plugin configuration, Agent presets and UI settings are never written. Tokens, passwords, private keys, cookies and machine paths are never written.
 - 恢复前请在「DSH 插件 Git 同步」设置页查看预览；破坏性操作需要确认。
   Preview restores in the "DSH Plugin Git Sync" settings page; destructive operations require confirmation.
@@ -225,11 +240,25 @@ This repository is written automatically by **DSH Plugin Git Sync** (\`${PACKAGE
 manifest.json                          schema version, per-profile plugin counts, devices
 metadata/schema.json                   machine-readable description of this layout
 profiles/<profile>/plugins.json        shared desired plugin state (with tombstones)
-profiles/<profile>/skills.json         deployed DSH skills snapshot
+profiles/<profile>/skills/<name>/...    deployed DSH skills, as real files
 profiles/<profile>/configs/<id>.json   legacy filtered plugin configuration (no longer written)
 devices/<deviceId>/<profile>.json      last published inventory of one device
 \`\`\`
 `
+}
+
+/** Decode one in-memory skill file to repository content. */
+function skillFileContent(file: SkillBackup['skills'][number]['files'][number]): RepoFileContent {
+  return file.encoding === 'base64' ? Buffer.from(file.content, 'base64') : file.content
+}
+
+/** Every repository path of an in-memory skill snapshot. */
+function skillFilePaths(backupDir: string, profile: string, backup: SkillBackup | null | undefined): Set<string> {
+  const out = new Set<string>()
+  for (const skill of backup?.skills ?? []) {
+    for (const file of skill.files) out.add(skillFilePath(backupDir, profile, skill.name, file.path))
+  }
+  return out
 }
 
 /** Build every file a backup/sync writes, plus the paths to delete. */
@@ -269,13 +298,25 @@ export function buildBackupFiles(input: BuildBackupFilesInput): BackupFiles {
     now: input.now,
   })
 
-  const skillFile = skillsPath(input.backupDir, input.profile)
+  const legacySkillFile = legacySkillsPath(input.backupDir, input.profile)
+  const files: Record<string, RepoFileContent> = {}
+  const executables: string[] = []
+  const nextSkillPaths = new Set<string>()
   if (input.skills !== undefined) {
-    if (input.skills === null || input.skills.skills.length === 0) {
-      deletions.push(skillFile)
+    // Once a tree is written, the legacy single-file snapshot is obsolete.
+    deletions.push(legacySkillFile)
+    for (const skill of input.skills?.skills ?? []) {
+      for (const file of skill.files) {
+        const path = skillFilePath(input.backupDir, input.profile, skill.name, file.path)
+        nextSkillPaths.add(path)
+        files[path] = skillFileContent(file)
+        if (file.executable === true) executables.push(path)
+      }
+    }
+    for (const previous of skillFilePaths(input.backupDir, input.profile, input.previousSkills)) {
+      if (!nextSkillPaths.has(previous)) deletions.push(previous)
     }
   }
-  const files: Record<string, string> = {}
   if (includePlugins) {
     files[joinRepoPath(input.backupDir, REPO_MANIFEST_FILE)] = serializeManifest(manifest)
     files[joinRepoPath(input.backupDir, REPO_SCHEMA_FILE)] = buildSchemaDocument(input.generatorVersion)
@@ -289,13 +330,10 @@ export function buildBackupFiles(input: BuildBackupFilesInput): BackupFiles {
       files[configPath(input.backupDir, input.profile, pluginId)] = serializeJson(config)
     }
   }
-  if (input.skills !== undefined && input.skills !== null && input.skills.skills.length > 0) {
-    files[skillFile] = serializeJson(input.skills as unknown as JsonValue)
-  }
   if (Object.keys(files).length > MAX_BACKUP_FILES) {
     throw new SyncError('internal', `备份文件数量超过上限 ${MAX_BACKUP_FILES} / backup file count exceeds the limit`)
   }
-  return { files, deletions }
+  return { files, deletions, executables }
 }
 
 /** Build a baseline from converged local/remote state maps. */

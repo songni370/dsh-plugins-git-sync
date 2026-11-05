@@ -169,7 +169,7 @@ export interface SkillEntry {
     name: string;
     files: SkillFileRecord[];
 }
-/** `profiles/<profile>/skills.json` — a snapshot of the deployed DSH skills. */
+/** In-memory snapshot of the deployed DSH skills, stored as directories in the repository. */
 export interface SkillBackup {
     schemaVersion: number;
     updatedAt: string;
@@ -580,6 +580,8 @@ export interface GitRunResult {
     code: number;
     stdout: string;
     stderr: string;
+    /** Raw stdout bytes; used for binary files that cannot be represented as UTF-8. */
+    stdoutBuffer?: Uint8Array;
     timedOut: boolean;
 }
 /** Repository store: the only module that talks to Git and the work tree. */
@@ -596,7 +598,7 @@ export interface RepoStore {
     readProfileState(profile: string): Promise<RemoteProfileState | null>;
     /** Read one profile's config files. */
     readConfigs(profile: string): Promise<Record<string, Record<string, JsonValue>>>;
-    /** Read one profile's skill snapshot, or null when absent. */
+    /** Read one profile's skill snapshot (directory tree, with legacy skills.json fallback). */
     readSkills(profile: string, commit?: string): Promise<SkillBackup | null>;
     /** Read every device snapshot in the repository. */
     readDeviceSnapshots(): Promise<Record<string, DeviceSnapshot>>;
@@ -626,16 +628,20 @@ export interface RepoStore {
     }): Promise<ConnectionTestResult>;
 }
 /** Files (and deletions) a rebuild produces after a concurrent-device pull. */
-export type RepoRebuildResult = Record<string, string> | {
-    files: Record<string, string>;
+export type RepoFileContent = string | Uint8Array;
+export type RepoRebuildResult = Record<string, RepoFileContent> | {
+    files: Record<string, RepoFileContent>;
     deletions?: readonly string[];
+    executables?: readonly string[];
 };
 /** Options for one repository write. */
 export interface RepoWriteOptions {
-    /** Relative path -> UTF-8 content. */
-    files: Record<string, string>;
+    /** Relative path -> text or binary content. */
+    files: Record<string, RepoFileContent>;
     /** Relative paths to delete from the work tree (a missing file is a no-op). */
     deletions?: readonly string[];
+    /** Relative paths that must stay executable after writing (skill scripts). */
+    executables?: readonly string[];
     /**
      * Rebuild the file set after a concurrent-device push forced a fresh pull.
      * Called with the refreshed work tree root so the caller can re-merge its

@@ -51,8 +51,12 @@ export declare function assertDeviceId(deviceId: string): string;
 export declare function assertPluginId(pluginId: string): string;
 /** Repository-relative path of a profile's shared state. */
 export declare function profileStatePath(backupDir: string, profile: string): string;
-/** Repository-relative path of a profile's skill snapshot. */
-export declare function skillsPath(backupDir: string, profile: string): string;
+/** Repository-relative path of a profile's skills directory. */
+export declare function skillsDirPath(backupDir: string, profile: string): string;
+/** Legacy `profiles/<profile>/skills.json`; read once, then removed on write. */
+export declare function legacySkillsPath(backupDir: string, profile: string): string;
+/** Repository-relative path of one file under a skill directory. */
+export declare function skillFilePath(backupDir: string, profile: string, skill: string, relative: string): string;
 /** Repository-relative path of a profile's config directory. */
 export declare function configsDirPath(backupDir: string, profile: string): string;
 /** Repository-relative path of one plugin's config file. */
@@ -95,7 +99,7 @@ export declare function resolveTarget(backupDir: string, input: string): Resolve
 /** Resolve a repository-relative path inside the work tree with safety checks. */
 export declare function workTreePath(workTree: string, repoRelative: string): string;
 /** Write one UTF-8 file atomically inside the work tree. */
-export declare function writeWorkTreeFile(workTree: string, repoRelative: string, content: string): Promise<void>;
+export declare function writeWorkTreeFile(workTree: string, repoRelative: string, content: string | Uint8Array): Promise<void>;
 /**
  * Read one repository file, refusing to traverse any symbolic link on the way.
  *
@@ -107,6 +111,10 @@ export declare function readRepoFile(workTree: string, repoRelative: string): Pr
 export declare function listRepoDirectory(workTree: string, repoRelative: string): Promise<Dirent[] | null>;
 /** Read a UTF-8 file without following a symlink; null when it does not exist. */
 export declare function readWorkTreeFile(path: string): Promise<string | null>;
+/** Read one file as bytes without following a symlink; null when it does not exist. */
+export declare function readWorkTreeBytes(path: string): Promise<Buffer | null>;
+/** Read one repository file as bytes, refusing symlink traversal. */
+export declare function readRepoBytes(workTree: string, repoRelative: string): Promise<Buffer | null>;
 /** Delete one file inside the work tree; a missing file is a no-op. */
 export declare function deleteWorkTreeFile(workTree: string, repoRelative: string): Promise<boolean>;
 /** List a directory without following symlinks; null when it does not exist. */

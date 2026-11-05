@@ -204,7 +204,7 @@ describe('createGitRunner (injected spawn)', () => {
       cwd: '/tmp/work',
       env: { GIT_AUTHOR_NAME: 'Tester' },
     })
-    expect(result).toEqual({ code: 0, stdout: 'ok', stderr: '', timedOut: false })
+    expect(result).toMatchObject({ code: 0, stdout: 'ok', stderr: '', timedOut: false })
     const call = calls[0]
     expect(call).toBeDefined()
     expect(call?.command).toBe('git')

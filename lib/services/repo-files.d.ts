@@ -8,7 +8,7 @@
  * copied from a directory tree), so the backup stays diff-friendly.
  * @module services/repo-files
  */
-import type { DeviceSnapshot, JsonObject, Manifest, PluginRecord, RemoteConfigEntry, RemotePluginEntry, RemoteProfileState, SkillBackup, SyncBaseline } from '../types.js';
+import type { DeviceSnapshot, JsonObject, Manifest, PluginRecord, RemoteConfigEntry, RemotePluginEntry, RemoteProfileState, SkillBackup, SyncBaseline, RepoFileContent } from '../types.js';
 import { type PluginState } from './model.js';
 /**
  * Make a row's module name safe to store.
@@ -25,8 +25,12 @@ export declare function sanitizePluginRecord(record: PluginRecord): PluginRecord
 export declare function joinRepoPath(...segments: readonly string[]): string;
 /** Path of one profile's shared plugin state. */
 export declare function profileStatePath(backupDir: string, profile: string): string;
-/** Path of one profile's skill snapshot. */
-export declare function skillsPath(backupDir: string, profile: string): string;
+/** Path of one profile's skills directory. */
+export declare function skillsDirPath(backupDir: string, profile: string): string;
+/** Legacy single-file skills snapshot. */
+export declare function legacySkillsPath(backupDir: string, profile: string): string;
+/** Path of one file inside a skill directory. */
+export declare function skillFilePath(backupDir: string, profile: string, skill: string, relative: string): string;
 /** Path of one plugin's config file. */
 export declare function configPath(backupDir: string, profile: string, pluginId: string): string;
 /** Path of one device snapshot. */
@@ -74,8 +78,10 @@ export interface BuildBackupFilesInput {
     removals: readonly string[];
     /** Config files to delete without tombstoning the plugin (config became empty). */
     configDeletions?: readonly string[];
-    /** Skill snapshot for this profile; undefined leaves the remote file untouched. */
+    /** Skill snapshot for this profile; undefined leaves the remote tree untouched. */
     skills?: SkillBackup | null;
+    /** Previous remote skill snapshot, used to delete files removed by the merge. */
+    previousSkills?: SkillBackup | null;
     /** Whether plugin inventory files are part of this backup (default true). */
     plugins?: boolean;
     /** This device's snapshot for this profile. */
@@ -85,8 +91,9 @@ export interface BuildBackupFilesInput {
 }
 /** The repository file set a backup produces. */
 export interface BackupFiles {
-    files: Record<string, string>;
+    files: Record<string, RepoFileContent>;
     deletions: string[];
+    executables: string[];
 }
 /** Build every file a backup/sync writes, plus the paths to delete. */
 export declare function buildBackupFiles(input: BuildBackupFilesInput): BackupFiles;
