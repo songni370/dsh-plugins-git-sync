@@ -31,6 +31,7 @@
 ## 界面
 
 设置 →「**插件备份**」（英文界面为 Plugin Backup）。插件页（侧边栏「插件」）也可以显示一个「备份」标签，内容相同。
+在插件页打开「插件备份」的详情，还能看到一个简洁的「备份设置」卡片：显示备份范围，并控制是否在插件页显示「备份」标签。
 
 ![同步状态与自动同步](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-status.png)
 

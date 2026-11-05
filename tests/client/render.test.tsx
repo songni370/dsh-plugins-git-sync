@@ -217,7 +217,7 @@ describe('settings page render', () => {
     // Plugins-page tab and the settings-page shortcut label.
     expect(zh.tab).toBe('备份')
     expect(en.tab).toBe('Backup')
-    expect(zh.tabVisibilityTitle).toBe('配置页面展示')
+    expect(zh.detailTitle).toBe('备份设置')
     expect(zh.tabVisibilityLabel).toContain('备份')
   })
 
@@ -351,20 +351,9 @@ describe('settings page render', () => {
   it('renders live status counts and the plugin list', async () => {
     await settle()
     const text = container.textContent ?? ''
-    expect(text).toContain('通过 Git 仓库备份、恢复并跨设备同步 DSH 插件与配置。')
+    expect(text).toContain('通过 Git 仓库备份、恢复并跨设备同步 DSH 插件与技能。')
     expect(text).toContain('dsh-context')
     expect(text).toContain('有待上传变更')
-  })
-
-  it('shows the 配置页面展示 switch and persists switching the Plugins tab off', async () => {
-    await settle()
-    const switchButton = container.querySelector('[role="switch"][aria-label="在「插件」页面显示「备份」标签页"]')
-    expect(switchButton).not.toBeNull()
-    expect(container.textContent).toContain('配置页面展示')
-    await act(async () => {
-      switchButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    })
-    expect(localStorage.getItem('dsh-plugins-git-sync.plugins-tab')).toBe('0')
   })
 
   it('starts the plugin list collapsed and expands on demand', async () => {

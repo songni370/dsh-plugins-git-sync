@@ -27,6 +27,8 @@ import { installPluginPageIcon } from './plugin-page-icon'
 import { pluginsTabEnabled, subscribePluginsTab } from './plugins-tab-visibility'
 import type { Translate, Vars } from './i18n'
 import { Page } from './ui/Page'
+import { PluginDetailSection } from './ui/PluginDetailSection'
+import type { PluginsSubject } from './ui/PluginDetailSection'
 
 /** The subset of the client locale service this plugin touches. */
 interface LocaleService {
@@ -40,20 +42,25 @@ interface LocaleService {
   bind(namespace: string): (key: string, vars?: Vars) => string
 }
 
-/** Registration metadata the settings slot understands. */
-interface SectionRegistration {
-  name: 'settings.section' | 'plugins.tab'
+/** Registration metadata the slots this plugin touches understand. */
+interface SlotRegistration {
+  name: 'settings.section' | 'plugins.tab' | 'plugins.detail.section'
   id: string
-  order: number
-  label: () => string
+  order?: number
+  label?: () => string
   locale: string
   inject: () => { t: Translate }
+}
+
+/** Props every slot component receives from its owner plus our inject. */
+interface SlotComponentProps extends SectionProps {
+  subject?: PluginsSubject
 }
 
 /** The subset of the client slots service this plugin touches. */
 interface SlotsService {
   inject(slot: string, register: () => unknown): void
-  register(registration: SectionRegistration, component: (props: SectionProps) => ReactElement): unknown
+  register(registration: SlotRegistration, component: (props: SlotComponentProps) => ReactElement | null): unknown
 }
 
 /** The client cordis context shape this plugin relies on (structural typing
@@ -195,8 +202,8 @@ export function apply(ctx: ClientContext): void {
 
   try {
     // Plugins page tab: same page, one click from 已安装 (order 1 = after the
-    // host's own 发现 tab). It is optional: the settings page's
-    // 「配置页面展示 / Page display」 switch registers or removes it.
+    // host's own 发现 tab). It is optional: the switch on this plugin's own
+    // detail page registers or removes it.
     const Tab = (props: SectionProps): ReactElement => {
       const translate = props.t ?? t
       return (
@@ -256,5 +263,33 @@ export function apply(ctx: ClientContext): void {
       '[dsh-plugins-git-sync] settings section registration failed; the rest of Settings is unaffected:',
       error,
     )
+  }
+
+  try {
+    // One compact card under this plugin's native detail page. The Host
+    // renders it for every detail subject, so the component itself returns
+    // null unless the subject is our bundle.
+    const DetailSection = (props: SlotComponentProps): ReactElement | null => {
+      const translate = props.t ?? t
+      return (
+        <SectionBoundary t={translate}>
+          <PluginDetailSection t={translate} subject={props.subject} />
+        </SectionBoundary>
+      )
+    }
+    ctx.slots.inject('plugins.detail.section', () =>
+      ctx.slots.register(
+        {
+          name: 'plugins.detail.section',
+          id: 'git-sync-backup-detail',
+          order: 1,
+          locale: NS,
+          inject: () => ({ t }),
+        },
+        DetailSection,
+      ),
+    )
+  } catch (error) {
+    console.warn('[dsh-plugins-git-sync] plugin detail section registration failed:', error)
   }
 }

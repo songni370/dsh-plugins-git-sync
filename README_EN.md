@@ -31,6 +31,7 @@ Only **user-installed third-party plugins** and **deployed DSH skills** particip
 ## UI
 
 Settings → "**Plugin Backup**". The Plugins page can also show a "Backup" tab with the same content.
+The plugin's own detail page also has a compact **Backup settings** card showing the scope and controlling whether that Backup tab appears.
 
 ![Sync status and automatic sync](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-status.png)
 

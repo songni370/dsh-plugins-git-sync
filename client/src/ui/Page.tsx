@@ -43,11 +43,6 @@ import type {
 import * as api from '../api'
 import { errorText, planFromError } from '../api'
 import { shortCommit } from '../format'
-import {
-  pluginsTabEnabled,
-  setPluginsTabEnabled,
-  subscribePluginsTab,
-} from '../plugins-tab-visibility'
 import { authForTransport, detectRepoTransport } from '../repo-transport'
 import type { Translate } from '../i18n'
 import { CSS } from '../styles'
@@ -55,7 +50,7 @@ import { ActionsSection } from './ActionsSection'
 import type { ActionName } from './ActionsSection'
 import { AutoSyncSection, autoFormFromView } from './AutoSyncSection'
 import type { AutoForm } from './AutoSyncSection'
-import { Banner, Button, Card, LinkButton, Loading, Switch } from './controls'
+import { Banner, Button, Card, LinkButton, Loading } from './controls'
 import type { Feedback } from './controls'
 import { ConfigSection, configFormFromView } from './ConfigSection'
 import type { ConfigForm } from './ConfigSection'
@@ -115,7 +110,6 @@ export function Page({ t }: PageProps): ReactElement {
   const [historyError, setHistoryError] = useState<string | null>(null)
 
   // --- Editable state ----------------------------------------------------
-  const [pluginsTab, setPluginsTab] = useState<boolean>(pluginsTabEnabled)
   /** null until the first status arrives: configured -> collapsed, empty -> open. */
   const [configOpen, setConfigOpen] = useState<boolean | null>(null)
   const [form, setForm] = useState<ConfigForm | null>(null)
@@ -124,8 +118,6 @@ export function Page({ t }: PageProps): ReactElement {
   const [autoDirty, setAutoDirty] = useState(false)
   const [filter, setFilter] = useState('')
   const [exclusions, setExclusions] = useState<ReadonlySet<string>>(() => new Set<string>())
-
-  useEffect(() => subscribePluginsTab(() => setPluginsTab(pluginsTabEnabled())), [])
 
   // Refs mirror the state that async callbacks and the poll loop must read
   // WITHOUT re-creating themselves: a stale closure here would silently drop
@@ -675,15 +667,6 @@ export function Page({ t }: PageProps): ReactElement {
         )
       ) : (
         <>
-          <Card title={t('tabVisibilityTitle')}>
-            <Switch
-              label={t('tabVisibilityLabel')}
-              hint={t('tabVisibilityHint')}
-              checked={pluginsTab}
-              onChange={setPluginsTabEnabled}
-            />
-          </Card>
-
           {form === null ? null : (
             <ConfigSection
               t={t}
