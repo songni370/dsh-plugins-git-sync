@@ -97,7 +97,7 @@ async function post(route: CapturedRoute, body: string): Promise<Response> {
 describe('HTTP surface', () => {
   it('registers the documented routes as POST-only JSON endpoints', () => {
     const routes = routesOf(fakeEngine())
-    expect(routes.size).toBe(14)
+    expect(routes.size).toBe(15)
     for (const [name, route] of routes) {
       expect(route.path.startsWith('/api/dsh-plugins-git-sync/'), name).toBe(true)
       expect(route.methods).toEqual(['POST'])
@@ -107,6 +107,7 @@ describe('HTTP surface', () => {
     expect(routes.has('config/save')).toBe(true)
     expect(routes.has('restore/preview')).toBe(true)
     expect(routes.has('auto-sync')).toBe(true)
+    expect(routes.has('skills/list')).toBe(true)
   })
 
   it('answers success with { ok: true, value }', async () => {

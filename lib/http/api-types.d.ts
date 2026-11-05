@@ -76,6 +76,17 @@ export interface PluginListResponse {
     activeProfile: string;
     availableProfiles: string[];
 }
+/** One deployed skill, named and sized for the settings list. */
+export interface SkillSummary {
+    name: string;
+    files: number;
+    bytes: number;
+}
+/** Deployed-skill list response. */
+export interface SkillListResponse {
+    skills: SkillSummary[];
+    warnings: string[];
+}
 /** Diff/preview request. */
 export interface DiffRequest {
     /** Which operation to preview; defaults to a two-way sync. */
@@ -181,6 +192,6 @@ export interface OverviewResponse extends StatusPayload {
     pluginVersion: number | string;
 }
 /** Request handler map keyed by route name (no `/api` prefix). */
-export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
+export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'skills/list' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
 /** A sync state alias for the UI. */
 export type { SyncState };

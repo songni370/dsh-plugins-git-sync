@@ -289,6 +289,11 @@ describe('two-device synchronization', () => {
     const snapshot = JSON.parse(readRepoFile(ctx.bareRepo, 'profiles/desktop/skills.json')) as { skills: { name: string }[] }
     expect(snapshot.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'beta-skill'])
 
+    const listed = await ctx.mac.engine.listSkills()
+    expect(listed.warnings).toEqual([])
+    expect(listed.skills.map(skill => skill.name)).toEqual(['alpha-skill', 'beta-skill'])
+    expect(listed.skills.every(skill => skill.files === 1 && skill.bytes > 0)).toBe(true)
+
     const winBeta = join(ctx.win.root, 'skills', 'beta-skill')
     await mkdir(winBeta, { recursive: true })
     await writeFile(join(winBeta, 'SKILL.md'), '# Beta kept on win\n')

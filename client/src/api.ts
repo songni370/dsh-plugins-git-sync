@@ -31,6 +31,7 @@ import type {
   LogsResponse,
   OperationResponse,
   PluginListResponse,
+  SkillListResponse,
   RestorePreviewRequest,
   RestorePreviewResponse,
   RestoreRequest,
@@ -140,6 +141,11 @@ export function testConnection(body: TestConnectionRequest = {}): Promise<TestCo
 /** Local plugins joined with the repository's shared state. */
 export function getPlugins(): Promise<PluginListResponse> {
   return request<PluginListResponse>('plugins/list')
+}
+
+/** Deployed skills shown below the plugin list. */
+export function getSkills(): Promise<SkillListResponse> {
+  return request<SkillListResponse>('skills/list')
 }
 
 /** Direction a difference preview is computed for (`DiffRequest.direction`). */

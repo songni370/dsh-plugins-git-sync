@@ -31,7 +31,7 @@ This document is for maintainers: module boundaries, data flow, state files, the
         │                                │                                    │
 ┌───────▼────────┐              ┌────────▼─────────┐              ┌───────────▼──────────┐
 │ services/      │              │ http/routes.ts   │              │ tools/tools.ts       │
-│  engine.ts     │◄─────────────┤ 14 个 POST 路由  │              │ 6 个 Agent 工具      │
+│  engine.ts     │◄─────────────┤ 15 个 POST 路由  │              │ 6 个 Agent 工具      │
 │  (唯一编排)    │◄─────────────┤ api-types.ts     │              │                      │
 └───┬───┬───┬────┘              └──────────────────┘              └──────────────────────┘
     │   │   │
@@ -71,7 +71,7 @@ This document is for maintainers: module boundaries, data flow, state files, the
 | 布局与路径 | `git/repo-paths.ts` | 仓库布局常量、备份目录归一化、拒绝符号链接/`.git`/逃逸路径的读写。 | → core/paths, manifest |
 | 清单 | `manifest/manifest.ts` | schema 版本校验、所有仓库文档的解析与校验、确定性序列化、`metadata/schema.json` 生成；`buildManifest({ generatorVersion })` 与 `buildSchemaDocument(pluginVersion)` 记录**运行中的插件版本**（由 engine 传入 `deps.pluginVersion`），不写死常量。 | → core |
 | 本机状态 | `state/store.ts` | 配置/状态 JSON 的原子读写与归一化、设备身份、路径解析、字段校验（仓库 URL、分支名、间隔范围等）。 | → core |
-| Web | `http/routes.ts` + `http/api-types.ts` | 14 个 POST 路由与线上契约（`{ok:true,value}` / `{ok:false,error}`）。 | → engine |
+| Web | `http/routes.ts` + `http/api-types.ts` | 15 个 POST 路由与线上契约（`{ok:true,value}` / `{ok:false,error}`）。 | → engine |
 | 工具 | `tools/tools.ts` | 6 个工具定义；确认语义；错误归一化为工具结果。 | → engine |
 | 浏览器 | `client/src/**` | React 设置页，经 `scripts/build-client.mjs` 打成 `lib/client.js`（`window.__ModuleLoader__.load`），React 由宿主模块表提供。 | 只 `import type` Host 契约 |
 
@@ -79,7 +79,7 @@ This document is for maintainers: module boundaries, data flow, state files, the
 
 ## 3. 数据流
 
-### 3.1 状态查询（status / plugins/list / diff）
+### 3.1 状态查询（status / plugins/list / skills/list / diff）
 
 ```text
 status(refresh?)
@@ -348,6 +348,7 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `config/save` | `{config: Partial<SyncConfig>}` | `{ config: SyncConfigView }` |
 | `connection/test` | `{config?: Partial<SyncConfig>}` | `ConnectionTestResult` |
 | `plugins/list` | `{}` | `{ rows, activeProfile, availableProfiles }` |
+| `skills/list` | `{}` | `{ skills: { name, files, bytes }[], warnings }` |
 | `diff` | `{direction?: 'push'\|'pull'\|'two-way', commit?: string}` | `{ direction, plan: SyncPlan }` |
 | `backup` | `{message?: string, confirmDestructive?: boolean}` | `OperationResult` |
 | `restore/preview` | `{commit?: string}` | `{ plan, snapshotPlanned, source }` |

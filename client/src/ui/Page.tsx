@@ -31,6 +31,7 @@ import type {
   OperationResponse,
   PluginListResponse,
   PluginListRow,
+  SkillListResponse,
   StatusPayload,
 } from '../../../src/http/api-types'
 import type {
@@ -58,6 +59,7 @@ import { HistorySection } from './HistorySection'
 import { Modal } from './Modal'
 import { PlanPreview } from './PlanPreview'
 import { PluginsSection } from './PluginsSection'
+import { SkillsSection } from './SkillsSection'
 import { ScopeSection } from './ScopeSection'
 import { StatusSection } from './StatusSection'
 import { ToastStack } from './ToastStack'
@@ -66,7 +68,7 @@ import { ToastStack } from './ToastStack'
 const STATUS_POLL_MS = 5000
 
 /** How many history entries the page requests. */
-const HISTORY_LIMIT = 20
+const HISTORY_LIMIT = 10
 
 /** Props handed to the section by the slot registration. */
 export interface PageProps {
@@ -106,6 +108,9 @@ export function Page({ t }: PageProps): ReactElement {
   const [plugins, setPlugins] = useState<PluginListResponse | null>(null)
   const [pluginsLoading, setPluginsLoading] = useState(true)
   const [pluginsError, setPluginsError] = useState<string | null>(null)
+  const [skills, setSkills] = useState<SkillListResponse | null>(null)
+  const [skillsLoading, setSkillsLoading] = useState(true)
+  const [skillsError, setSkillsError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryResponse | null>(null)
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyError, setHistoryError] = useState<string | null>(null)
@@ -213,16 +218,30 @@ export function Page({ t }: PageProps): ReactElement {
     }
   }, [])
 
+  const refreshSkills = useCallback(async () => {
+    setSkillsLoading(true)
+    try {
+      const response = await api.getSkills()
+      setSkills(response)
+      setSkillsError(null)
+    } catch (error) {
+      setSkillsError(errorText(error))
+    } finally {
+      setSkillsLoading(false)
+    }
+  }, [])
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshStatus(), refreshPlugins(), refreshHistory()])
-  }, [refreshStatus, refreshPlugins, refreshHistory])
+    await Promise.all([refreshStatus(), refreshPlugins(), refreshSkills(), refreshHistory()])
+  }, [refreshStatus, refreshPlugins, refreshSkills, refreshHistory])
 
   // Initial load.
   useEffect(() => {
     void refreshStatus()
     void refreshPlugins()
+    void refreshSkills()
     void refreshHistory()
-  }, [refreshStatus, refreshPlugins, refreshHistory])
+  }, [refreshStatus, refreshPlugins, refreshSkills, refreshHistory])
 
   // Poll the status while mounted and visible.
   useEffect(() => {
@@ -783,6 +802,14 @@ export function Page({ t }: PageProps): ReactElement {
             onFilterChange={setFilter}
             onToggle={(row, next) => void toggleExclusion(row, next)}
             onRefresh={() => void refreshPlugins()}
+          />
+
+          <SkillsSection
+            t={t}
+            skills={skills}
+            loading={skillsLoading}
+            error={skillsError}
+            onRefresh={() => void refreshSkills()}
           />
 
           <HistorySection

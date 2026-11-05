@@ -85,6 +85,7 @@ export function registerHttpRoutes(options: { ctx: DshContext; engine: SyncEngin
       'config/save': async body => options.engine.saveConfig(asObject(body.config) as never),
       'connection/test': async body => options.engine.testConnection(asObject(body.config) as never),
       'plugins/list': async () => options.engine.listPlugins(),
+      'skills/list': async () => options.engine.listSkills(),
       diff: async body => options.engine.diff({
         direction: body.direction === 'push' || body.direction === 'pull' || body.direction === 'two-way' ? body.direction : 'two-way',
         commit: typeof body.commit === 'string' ? body.commit : undefined,

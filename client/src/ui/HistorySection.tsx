@@ -14,6 +14,7 @@
  * @module ui/HistorySection
  */
 
+import { useState } from 'react'
 import type { ReactElement } from 'react'
 import type { HistoryResponse } from '../../../src/http/api-types'
 import type { Translate } from '../i18n'
@@ -36,16 +37,41 @@ export interface HistorySectionProps {
 /** Render the history card. */
 export function HistorySection(props: HistorySectionProps): ReactElement {
   const { t } = props
-  const entries = props.history === null ? [] : props.history.entries
+  const [open, setOpen] = useState(false)
+  const entries = props.history === null ? [] : props.history.entries.slice(0, 10)
 
   return (
     <Card
       title={t('historyTitle')}
-      description={t('historyDesc')}
+      description={open ? t('historyDesc') : undefined}
       trailing={
-        <Button small onClick={props.onRefresh} disabled={props.loading}>
-          {t('refresh')}
-        </Button>
+        <div className="dgs-btnRow">
+          <span className="dgs-hint">{t('historyCount', { count: entries.length })}</span>
+          <Button small onClick={props.onRefresh} disabled={props.loading}>
+            {t('refresh')}
+          </Button>
+          <button
+            type="button"
+            className="dgs-disclosure"
+            aria-expanded={open}
+            aria-controls="dgs-history-body"
+            onClick={() => {
+              setOpen(current => !current)
+            }}
+          >
+            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+              <path
+                d="M4 6.5 8 10.5 12 6.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>{open ? t('pluginsCollapse') : t('pluginsExpand')}</span>
+          </button>
+        </div>
       }
     >
       {props.error === null ? null : (
@@ -58,14 +84,9 @@ export function HistorySection(props: HistorySectionProps): ReactElement {
 
       {props.history !== null && entries.length === 0 ? <p className="dgs-hint">{t('historyEmpty')}</p> : null}
 
-      {props.history !== null ? (
-        <div className="dgs-historySummary">
-          <span className="dgs-historySummaryItem">{t('historyCount', { count: entries.length })}</span>
-        </div>
-      ) : null}
-
-      {entries.length === 0 ? null : (
-        <ul className="dgs-historyList">
+      <div id="dgs-history-body" hidden={!open}>
+        {entries.length === 0 ? null : (
+          <ul className="dgs-historyList">
           {entries.map(entry => {
             const good = isGoodResult(entry.result)
             const hasResult = entry.result !== undefined && entry.result !== null && entry.result !== ''
@@ -109,9 +130,9 @@ export function HistorySection(props: HistorySectionProps): ReactElement {
               </li>
             )
           })}
-        </ul>
-      )}
-
+          </ul>
+        )}
+      </div>
     </Card>
   )
 }

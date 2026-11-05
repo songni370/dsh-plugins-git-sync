@@ -14,7 +14,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { Page } from '../../client/src/ui/Page'
 import { resetPluginsTabVisibility } from '../../client/src/plugins-tab-visibility'
 import { createTranslate, en, zh } from '../../client/src/i18n'
-import type { HistoryResponse, PluginListResponse, StatusPayload } from '../../src/http/api-types'
+import type { HistoryResponse, PluginListResponse, SkillListResponse, StatusPayload } from '../../src/http/api-types'
 
 const t = createTranslate(key => zh[key] ?? key)
 
@@ -85,6 +85,14 @@ function pluginsPayload(): PluginListResponse {
   }
 }
 
+/** Build the deployed-skill payload. */
+function skillsPayload(): SkillListResponse {
+  return {
+    skills: [{ name: 'ponytail', files: 1, bytes: 1234 }],
+    warnings: [],
+  }
+}
+
 /** Build the history payload. */
 function historyPayload(): HistoryResponse {
   return {
@@ -112,6 +120,7 @@ function installFetchMock(): void {
     let payload: unknown
     if (target.endsWith('/status')) payload = envelope(statusPayload())
     else if (target.endsWith('/plugins/list')) payload = envelope(pluginsPayload())
+    else if (target.endsWith('/skills/list')) payload = envelope(skillsPayload())
     else if (target.endsWith('/history')) payload = envelope(historyPayload())
     else if (target.endsWith('/backup')) {
       payload = failure('confirmation-required', '需要确认 / confirmation required', {
@@ -325,14 +334,32 @@ describe('settings page render', () => {
     expect(panel?.querySelector('#dgs-auto-body')?.hasAttribute('hidden')).toBe(false)
   })
 
-  it('renders history as a compact activity list', async () => {
+  it('starts history collapsed and expands it on demand', async () => {
     await settle()
+    const body = container.querySelector('#dgs-history-body')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    const toggle = container.querySelector('button[aria-controls="dgs-history-body"]') as HTMLButtonElement | null
+    expect(toggle).not.toBeNull()
+    await act(async () => {
+      toggle?.click()
+    })
+    expect(body?.hasAttribute('hidden')).toBe(false)
     const items = container.querySelectorAll('.dgs-historyItem')
     expect(items).toHaveLength(1)
     expect(items[0]?.textContent).toContain('abcdef1')
     expect(items[0]?.textContent).toContain('备份')
     expect(items[0]?.querySelector('.dgs-historyDotOk')).not.toBeNull()
     expect(container.querySelector('.dgs-historyList')).not.toBeNull()
+  })
+
+  it('lists deployed skills below the plugin list', async () => {
+    await settle()
+    const text = container.textContent ?? ''
+    expect(text).toContain('技能')
+    expect(text).toContain('共 1 个技能')
+    const item = container.querySelector('.dgs-skillItem')
+    expect(item?.textContent).toContain('ponytail')
+    expect(item?.textContent).toContain('1 个文件')
   })
 
   it('renders the status tile row and metadata grid', async () => {

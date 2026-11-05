@@ -105,6 +105,19 @@ export interface PluginListResponse {
   availableProfiles: string[]
 }
 
+/** One deployed skill, named and sized for the settings list. */
+export interface SkillSummary {
+  name: string
+  files: number
+  bytes: number
+}
+
+/** Deployed-skill list response. */
+export interface SkillListResponse {
+  skills: SkillSummary[]
+  warnings: string[]
+}
+
 /** Diff/preview request. */
 export interface DiffRequest {
   /** Which operation to preview; defaults to a two-way sync. */
@@ -230,6 +243,7 @@ export type ApiRouteName =
   | 'config/save'
   | 'connection/test'
   | 'plugins/list'
+  | 'skills/list'
   | 'diff'
   | 'backup'
   | 'restore/preview'

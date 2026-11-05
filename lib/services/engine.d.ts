@@ -11,7 +11,7 @@
 import type { FileSyncLogger } from '../core/logger.js';
 import type { ConfigStore, StateStore } from '../state/store.js';
 import type { ConnectionTestResult, ConflictResolution, ConfigGateway, HistoryEntry, InventoryScanner, LocalState, OperationResult, PluginInstaller, RepoStore, SyncConfig, SyncConfigView, SyncPlan } from '../types.js';
-import type { PluginListResponse } from '../http/api-types.js';
+import type { PluginListResponse, SkillListResponse } from '../http/api-types.js';
 /** Everything the engine needs, injected by the plugin entry. */
 export interface EngineDeps {
     logger: FileSyncLogger;
@@ -113,6 +113,8 @@ export declare class SyncEngine {
     }>;
     /** Test repository connectivity, optionally with unsaved values. */
     testConnection(patch?: Partial<SyncConfig>): Promise<ConnectionTestResult>;
+    /** List deployed skills without sending their file contents to the page. */
+    listSkills(): Promise<SkillListResponse>;
     /** List plugins with their sync status for the settings page. */
     listPlugins(): Promise<PluginListResponse>;
     /** Compute the plan for a direction without executing anything. */

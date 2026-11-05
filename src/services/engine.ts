@@ -44,7 +44,7 @@ import type {
   SyncLogger,
   SyncPlan,
 } from '../types.js'
-import type { PluginListResponse, PluginListRow } from '../http/api-types.js'
+import type { PluginListResponse, PluginListRow, SkillListResponse } from '../http/api-types.js'
 import {
   baselinePluginState,
   changedConfigKeys,
@@ -438,6 +438,23 @@ export class SyncEngine {
     state.connection = result
     await this.deps.stateStore.write(state)
     return result
+  }
+
+  /** List deployed skills without sending their file contents to the page. */
+  async listSkills(): Promise<SkillListResponse> {
+    const scanned = await scanSkills(this.dshHome)
+    return {
+      skills: scanned.backup.skills.map(skill => ({
+        name: skill.name,
+        files: skill.files.length,
+        bytes: skill.files.reduce(
+          (total, file) =>
+            total + (file.encoding === 'base64' ? Buffer.from(file.content, 'base64').length : Buffer.byteLength(file.content, 'utf8')),
+          0,
+        ),
+      })),
+      warnings: scanned.warnings,
+    }
   }
 
   /** List plugins with their sync status for the settings page. */
