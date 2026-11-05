@@ -29,7 +29,7 @@ export interface ScopeSectionProps {
 export function ScopeSection(props: ScopeSectionProps): ReactElement {
   const { t, scopes, saving } = props
   return (
-    <Card title={t('configScope')} description={t('configScopeHint')}>
+    <Card title={t('configScope')}>
       <div className="dgs-scopeSwitches">
         <Switch
           label={t('configScopePlugins')}

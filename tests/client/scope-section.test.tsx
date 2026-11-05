@@ -14,13 +14,12 @@ function render(scopes: { plugins: boolean; skills: boolean }, saving = false): 
 }
 
 describe('backup contents card', () => {
-  it('shows both scopes on by default with the behavior hint', () => {
+  it('shows both scopes on by default with per-scope hints', () => {
     const html = render({ plugins: true, skills: true })
     expect(html).toContain('备份内容')
     expect(html).toContain('aria-label="插件"')
     expect(html).toContain('aria-label="技能"')
     expect(html.match(/aria-checked="true"/g)).toHaveLength(2)
-    expect(html).toContain('关闭后不会上传或恢复对应内容')
     expect(html).toContain('API Key、Token、密码等内容不会上传')
     expect(html).toContain('可能含私有提示词或脚本')
   })
