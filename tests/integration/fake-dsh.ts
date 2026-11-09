@@ -240,6 +240,8 @@ export async function createFakeDevice(options: {
   repoUrl: string
   branch?: string
   platform?: string
+  /** Called by the engine after every successful repository operation. */
+  onOperationSuccess?: () => void
 }): Promise<FakeDevice> {
   const profile = 'desktop'
   const home = join(options.root, options.name)
@@ -356,6 +358,7 @@ export async function createFakeDevice(options: {
     platform: options.platform ?? process.platform,
     env: process.env,
     createRepo,
+    onOperationSuccess: options.onOperationSuccess,
   })
 
   // Persist the device identity so both devices have stable, distinct ids.

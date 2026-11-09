@@ -6,6 +6,10 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+### Fixed
+
+- 修复「自动同步已连续失败 N 次；请检查仓库连接，或手动同步。」提示在手动同步成功后仍不消失的问题：成功完成任意一次备份、同步或恢复都会清除失败计数，并解除自动同步的暂停状态，无需重启 DSH。
+
 ## [0.2.11] - 2026-11-05
 
 ### Changed

@@ -560,7 +560,10 @@ export interface LocalState {
   baselines: Record<string, SyncBaseline>
   conflicts: PendingConflict[]
   connection: ConnectionTestResult | null
-  /** Consecutive failed automatic synchronizations, for backoff. */
+  /**
+   * Consecutive failed automatic synchronizations, for backoff and the
+   * settings-page notice. Any successful repository operation resets it.
+   */
   autoSyncFailures: number
 }
 

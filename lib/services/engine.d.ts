@@ -42,6 +42,14 @@ export interface EngineDeps {
     };
     /** Called after the configuration changed (auto-sync reconciliation). */
     onConfigChanged?: (config: SyncConfig) => void;
+    /**
+     * Called after one repository operation finished successfully.
+     *
+     * A manual backup/sync/restore proves the repository works again, so the
+     * scheduler must drop a pause and the failure budget it kept from earlier
+     * automatic failures instead of waiting for the next automatic run.
+     */
+    onOperationSuccess?: () => void;
 }
 /** Options for read-only views. */
 export interface StatusOptions {
@@ -225,6 +233,15 @@ export declare class SyncEngine {
     private authMethod;
     /** Throw when the repository is not configured. */
     private ensureConfigured;
+    /**
+     * Persist the state of a successful repository operation.
+     *
+     * Success is the proof that the repository is reachable again, so the
+     * consecutive auto-sync failure counter is cleared here. Without that, a
+     * manual sync/backup/restore left the failure notice visible forever: only an
+     * automatic run used to clear it, and after a pause there is no automatic run.
+     */
+    private recordSuccess;
     /** Record a failed operation in state and logs. */
     private recordFailure;
     /** Compose a commit message. */

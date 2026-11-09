@@ -91,6 +91,14 @@ export interface EngineDeps {
   createRepo: (config: SyncConfig) => { store: RepoStore; workDir: string }
   /** Called after the configuration changed (auto-sync reconciliation). */
   onConfigChanged?: (config: SyncConfig) => void
+  /**
+   * Called after one repository operation finished successfully.
+   *
+   * A manual backup/sync/restore proves the repository works again, so the
+   * scheduler must drop a pause and the failure budget it kept from earlier
+   * automatic failures instead of waiting for the next automatic run.
+   */
+  onOperationSuccess?: () => void
 }
 
 /** Options for read-only views. */
@@ -682,7 +690,7 @@ export class SyncEngine {
           commit: write.commit,
           changedPlugins: plan.actions.length,
         }
-        await this.deps.stateStore.write(state)
+        await this.recordSuccess(state)
         this.lastError = null
         const result: OperationResult = {
           ok: true,
@@ -701,7 +709,7 @@ export class SyncEngine {
         })
         return result
       } catch (error) {
-        this.recordFailure('backup', error)
+        await this.recordFailure('backup', error)
         throw error
       } finally {
         this.busy = false
@@ -804,7 +812,8 @@ export class SyncEngine {
           state.lastCommit = prepared.head
           state.lastError = null
           state.conflicts = []
-          await this.deps.stateStore.write(state)
+          await this.recordSuccess(state)
+          this.lastError = null
           return {
             ok: true,
             operation: 'sync',
@@ -931,7 +940,7 @@ export class SyncEngine {
           commit: write.commit,
           changedPlugins: plan.actions.length,
         }
-        await this.deps.stateStore.write(state)
+        await this.recordSuccess(state)
         this.lastError = null
         const restoredSkills = config.backupScopes.skills
           ? await this.tryRestoreSkills(read.skills, config)
@@ -949,7 +958,7 @@ export class SyncEngine {
           snapshot: snapshotId,
         }
       } catch (error) {
-        this.recordFailure('sync', error)
+        await this.recordFailure('sync', error)
         throw error
       } finally {
         this.busy = false
@@ -1287,7 +1296,8 @@ export class SyncEngine {
             ? await this.tryRestoreSkills(read.skills, config)
             : { warnings: [], restored: [] }
           state.lastOperation = { operation: options.operation, at: new Date().toISOString(), ok: true, changedPlugins: 0 }
-          await this.deps.stateStore.write(state)
+          await this.recordSuccess(state)
+          this.lastError = null
           return {
             ok: true,
             operation: options.operation,
@@ -1367,7 +1377,7 @@ export class SyncEngine {
             snapshot: snapshotId,
           }
         }
-        await this.deps.stateStore.write(state)
+        await this.recordSuccess(state)
         this.lastError = null
         return {
           ok: true,
@@ -1381,7 +1391,7 @@ export class SyncEngine {
           snapshot: snapshotId,
         }
       } catch (error) {
-        this.recordFailure(options.operation, error)
+        await this.recordFailure(options.operation, error)
         throw error
       } finally {
         this.busy = false
@@ -1559,8 +1569,22 @@ export class SyncEngine {
     }
   }
 
+  /**
+   * Persist the state of a successful repository operation.
+   *
+   * Success is the proof that the repository is reachable again, so the
+   * consecutive auto-sync failure counter is cleared here. Without that, a
+   * manual sync/backup/restore left the failure notice visible forever: only an
+   * automatic run used to clear it, and after a pause there is no automatic run.
+   */
+  private async recordSuccess(state: LocalState): Promise<void> {
+    state.autoSyncFailures = 0
+    await this.deps.stateStore.write(state)
+    this.deps.onOperationSuccess?.()
+  }
+
   /** Record a failed operation in state and logs. */
-  private recordFailure(operation: OperationResult['operation'], error: unknown): void {
+  private async recordFailure(operation: OperationResult['operation'], error: unknown): Promise<void> {
     const syncError = toSyncError(error)
     // A confirmation requirement is not a failure: the user simply has not
     // decided yet, and the status panel must not show an error.
@@ -1570,14 +1594,14 @@ export class SyncEngine {
     }
     this.lastError = syncError.message
     this.deps.logger.error(`操作失败 / operation failed: ${operation}: ${syncError.message}`)
-    void this.deps.stateStore
-      .read()
-      .then(state => {
-        state.lastError = syncError.message
-        state.lastOperation = { operation, at: new Date().toISOString(), ok: false, error: syncError.message }
-        return this.deps.stateStore.write(state)
-      })
-      .catch(() => undefined)
+    try {
+      const state = await this.deps.stateStore.read()
+      state.lastError = syncError.message
+      state.lastOperation = { operation, at: new Date().toISOString(), ok: false, error: syncError.message }
+      await this.deps.stateStore.write(state)
+    } catch {
+      // Logging the failure is best effort; the caller still throws.
+    }
   }
 
   /** Compose a commit message. */

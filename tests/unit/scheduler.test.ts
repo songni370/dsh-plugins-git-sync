@@ -184,6 +184,76 @@ describe('automatic sync scheduler', () => {
     scheduler.dispose()
   })
 
+  it('cancels the scheduled retry after a successful operation is reported', async () => {
+    let failed = true
+    const { engine, calls } = fakeEngine(async () => {
+      if (failed) throw new SyncError('git-network', 'network down', { retryable: true })
+      return { ok: true }
+    })
+    const scheduler = createScheduler({ ctx, engine, logger: silentLogger() })
+    scheduler.applyConfig(config({ onPluginChange: true, debounceMs: 1_000 }))
+    scheduler.notifyPluginChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(calls).toHaveLength(1)
+    expect(scheduler.state().failures).toBe(1)
+
+    // The user repaired the repository and a manual sync succeeded meanwhile.
+    failed = false
+    scheduler.noteSuccess()
+    expect(scheduler.state().failures).toBe(0)
+    await vi.advanceTimersByTimeAsync(15 * 60_000)
+    expect(calls).toHaveLength(1)
+    scheduler.dispose()
+  })
+
+  it('resumes automatically after a conflict pause once an operation succeeds', async () => {
+    let conflicted = true
+    const { engine, calls } = fakeEngine(async () => {
+      if (conflicted) throw new SyncError('conflict-present', 'conflicts need a decision')
+      return { ok: true }
+    })
+    const scheduler = createScheduler({ ctx, engine, logger: silentLogger() })
+    scheduler.applyConfig(config({ onPluginChange: true, debounceMs: 1_000 }))
+    scheduler.notifyPluginChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(calls).toHaveLength(1)
+    expect(scheduler.state().pausedReason).toContain('conflict')
+
+    // The user resolved the conflict manually, then a successful sync is reported.
+    conflicted = false
+    scheduler.noteSuccess()
+    expect(scheduler.state().pausedReason).toBeNull()
+    await vi.advanceTimersByTimeAsync(61_000)
+    scheduler.notifyPluginChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(calls).toHaveLength(2)
+    scheduler.dispose()
+  })
+
+  it('drops a pause when the configuration is applied again', async () => {
+    let conflicted = true
+    const { engine, calls } = fakeEngine(async () => {
+      if (conflicted) throw new SyncError('conflict-present', 'conflicts need a decision')
+      return { ok: true }
+    })
+    const scheduler = createScheduler({ ctx, engine, logger: silentLogger() })
+    scheduler.applyConfig(config({ onPluginChange: true, debounceMs: 1_000 }))
+    scheduler.notifyPluginChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(calls).toHaveLength(1)
+    expect(scheduler.state().pausedReason).toContain('conflict')
+
+    // Saving the settings (e.g. after fixing the repository) is a fresh start.
+    conflicted = false
+    await vi.advanceTimersByTimeAsync(61_000)
+    scheduler.applyConfig(config({ onPluginChange: true, debounceMs: 1_000 }))
+    expect(scheduler.state().pausedReason).toBeNull()
+    scheduler.notifyPluginChange()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(calls).toHaveLength(2)
+    scheduler.dispose()
+  })
+
   it('debounces plugin-change notifications', async () => {
     const { engine, calls } = fakeEngine()
     const scheduler = createScheduler({ ctx, engine, logger: silentLogger() })

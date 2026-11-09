@@ -45,6 +45,14 @@ export interface AutoSyncScheduler {
   applyConfig(config: SyncConfig): void
   /** Notify a possible plugin change; only acts when change-triggered sync is on. */
   notifyPluginChange(): void
+  /**
+   * Clear the failure budget and any pause after a successful operation.
+   *
+   * Called for automatic and manual runs alike: once the user (or a retry)
+   * repaired the repository, automatic synchronization must be allowed to run
+   * again without a restart.
+   */
+  noteSuccess(): void
   /** Current scheduler state for diagnostics. */
   state(): { enabled: boolean; pausedReason: string | null; failures: number; lastRunAt: string | null }
   dispose(): void
@@ -110,6 +118,13 @@ export function createScheduler(options: SchedulerOptions): AutoSyncScheduler {
     logger.info(`自动同步将在 ${Math.round(delay / 1000)} 秒后重试 / automatic sync retry scheduled`, { attempt: failures })
   }
 
+  /** Forget past failures; a successful operation reset the backoff and pause. */
+  const noteSuccess = (): void => {
+    retryDisposer = clear(retryDisposer)
+    failures = 0
+    pausedReason = null
+  }
+
   const run = async (reason: string): Promise<void> => {
     const current = config
     if (disposed || current === null || !current.autoSync.enabled) return
@@ -137,8 +152,7 @@ export function createScheduler(options: SchedulerOptions): AutoSyncScheduler {
       } else {
         await engine.sync({ confirmDestructive: false })
       }
-      failures = 0
-      pausedReason = null
+      noteSuccess()
       logger.info('自动同步完成 / automatic sync finished')
       options.onSuccess?.()
     } catch (error) {
@@ -173,6 +187,12 @@ export function createScheduler(options: SchedulerOptions): AutoSyncScheduler {
       pausedReason = 'no repository configured'
       return
     }
+    // A saved configuration is a fresh decision point: drop a pause left by
+    // the previous settings (unresolved conflicts, repeated failures).
+    // Otherwise fixing the repository in the settings page would leave
+    // automatic synchronization silently disabled until a restart.
+    failures = 0
+    pausedReason = null
     if (auto.onStartup) {
       // Opening the client is a trigger, not just a read-only check. The user
       // controls the delay so a very short one can race DSH's own plugin
@@ -204,6 +224,7 @@ export function createScheduler(options: SchedulerOptions): AutoSyncScheduler {
   return {
     applyConfig,
     notifyPluginChange,
+    noteSuccess,
     state: () => ({
       enabled: config?.autoSync.enabled ?? false,
       pausedReason,

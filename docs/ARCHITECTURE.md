@@ -156,6 +156,7 @@ sync(options)
 scheduler.applyConfig(config)   (启动时 + 每次保存配置)
   if !autoSync.enabled → 清除所有定时器，重置 paused/failures
   if repoUrl === '' → pausedReason='no repository configured'
+  否则 → 重置 paused/failures（保存配置视为重新开始）
   onStartup → 15s 后 status({refresh:true}) 只读检查（写日志）
   intervalMinutes > 0 → 至少 60s 的定时器，每次运行后重新排期
 
@@ -167,7 +168,11 @@ run(reason)
   mode=backup → engine.backup({confirmDestructive:false})
   mode=restore → engine.restore({confirmDestructive:false})
   mode=two-way → engine.sync({confirmDestructive:false})
+  成功 → noteSuccess()（清空 paused/failures 与待执行的重试）
   失败: conflict-present / confirmation-required → 暂停；其它 → 退避重试(60s/5m/15m, 最多 3 次)
+
+engine 任意一次 sync/backup/restore 成功 → 持久化 autoSyncFailures=0，并回调
+scheduler.noteSuccess()：手动操作修复仓库后自动同步恢复，无需重启。
 ```
 
 ## 4. 本机状态文件

@@ -258,6 +258,11 @@ export function apply(ctx: DshContext): void {
       onConfigChanged: config => {
         schedulerRef?.applyConfig(config)
       },
+      // A successful manual operation repairs what paused/retried the scheduler;
+      // let automatic synchronization resume without restarting DSH.
+      onOperationSuccess: () => {
+        schedulerRef?.noteSuccess()
+      },
     })
 
     const scheduler = createScheduler({

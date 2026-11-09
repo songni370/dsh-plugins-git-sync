@@ -32,6 +32,14 @@ export interface AutoSyncScheduler {
     applyConfig(config: SyncConfig): void;
     /** Notify a possible plugin change; only acts when change-triggered sync is on. */
     notifyPluginChange(): void;
+    /**
+     * Clear the failure budget and any pause after a successful operation.
+     *
+     * Called for automatic and manual runs alike: once the user (or a retry)
+     * repaired the repository, automatic synchronization must be allowed to run
+     * again without a restart.
+     */
+    noteSuccess(): void;
     /** Current scheduler state for diagnostics. */
     state(): {
         enabled: boolean;
