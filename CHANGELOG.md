@@ -6,6 +6,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-11-09
+
 ### Fixed
 
 - 修复「自动同步已连续失败 N 次；请检查仓库连接，或手动同步。」提示在手动同步成功后仍不消失的问题：成功完成任意一次备份、同步或恢复都会清除失败计数，并解除自动同步的暂停状态，无需重启 DSH。
@@ -166,7 +168,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 - 设置页基础界面、HTTP 路由与 6 个 Agent 工具。
 - 单元测试、双设备集成测试与 CI（macOS / Windows / Linux）。
 
-[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.11...HEAD
+[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.12...HEAD
+[0.2.12]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.8...v0.2.9
