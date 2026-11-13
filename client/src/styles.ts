@@ -102,6 +102,9 @@ export const CSS = `
   gap: 12px;
 }
 .dgs-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
   height: 24px;
   padding: 0 10px;
@@ -114,6 +117,9 @@ export const CSS = `
   line-height: 1;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.dgs-feedback svg {
+  flex: none;
 }
 .dgs-feedback:hover {
   background: var(--dsw-alias-bg-layer-2, #f1f3f5);

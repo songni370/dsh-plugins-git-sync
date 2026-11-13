@@ -387,6 +387,17 @@ describe('settings page render', () => {
     expect(item?.textContent).toContain('1 个文件')
   })
 
+  it('starts the skill list collapsed', async () => {
+    await settle()
+    const body = container.querySelector('#dgs-skills-body')
+    expect(body).not.toBeNull()
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    // The count stays visible in the card header while the rows are folded.
+    expect(container.textContent).toContain('共 1 个技能')
+    const toggle = container.querySelector('button[aria-controls="dgs-skills-body"]') as HTMLButtonElement | null
+    expect(toggle?.textContent).toContain('展开列表')
+  })
+
   it('renders the status tile row and metadata grid', async () => {
     await settle()
     const text = container.textContent ?? ''
@@ -448,6 +459,7 @@ describe('settings page render', () => {
       candidate => (candidate.textContent ?? '').trim() === '问题反馈',
     )
     expect(button).toBeDefined()
+    expect(button?.querySelector('svg')).not.toBeNull()
     await act(async () => {
       button?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     })

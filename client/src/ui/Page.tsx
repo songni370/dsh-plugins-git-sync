@@ -824,6 +824,22 @@ export function Page({ t }: PageProps): ReactElement {
       <div className="dgs-introRow">
         <p className="dgs-intro">{t('intro')}</p>
         <button type="button" className="dgs-feedback" onClick={openFeedback}>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M13.6 7.9c0 2.8-2.5 5-5.6 5-.7 0-1.4-.1-2-.3l-3 1.2 1-2.6c-.9-.9-1.4-2-1.4-3.3 0-2.8 2.5-5 5.4-5s5.6 2.2 5.6 5Z" />
+            <path d="M8 5.4v2.8" />
+            <path d="M8 10.3h.01" />
+          </svg>
           {t('feedback')}
         </button>
       </div>
