@@ -21,6 +21,12 @@ const t = createTranslate(key => zh[key] ?? key)
 /** Per-test repository URL override (null = the configured default mock). */
 let repoUrlOverride: string | null = null
 
+/** Per-test "fresh process" flag: the remote side is not prepared yet. */
+let remoteUnknown = false
+
+/** The stubbed Host fetch; asserted by the freshness and feedback tests. */
+let fetchMock: ReturnType<typeof vi.fn>
+
 /** Build the status payload the Host returns. */
 function statusPayload(): StatusPayload {
   return {
@@ -53,7 +59,7 @@ function statusPayload(): StatusPayload {
       lastCommit: null,
       lastOperation: null,
       localPluginCount: 5,
-      remotePluginCount: 5,
+      remotePluginCount: remoteUnknown ? null : 5,
       pendingUploads: 1,
       pendingDownloads: 0,
       conflictCount: 0,
@@ -114,7 +120,7 @@ function historyPayload(): HistoryResponse {
 
 /** Fake the four initial Host calls; `/backup` refuses and demands confirmation. */
 function installFetchMock(): void {
-  const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+  fetchMock = vi.fn(async (url: RequestInfo | URL, _init?: RequestInit) => {
     const target = String(url)
     const envelope = (value: unknown): unknown => ({ ok: true, value })
     const failure = (code: string, message: string, details?: unknown): unknown => ({ ok: false, error: { code, message, details } })
@@ -192,6 +198,7 @@ let root: Root
 beforeEach(async () => {
   resetPluginsTabVisibility()
   repoUrlOverride = null
+  remoteUnknown = false
   installFetchMock()
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -207,6 +214,7 @@ afterEach(async () => {
   })
   container.remove()
   repoUrlOverride = null
+  remoteUnknown = false
   vi.unstubAllGlobals()
 })
 
@@ -218,6 +226,13 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise(resolve => setTimeout(resolve, 0))
   })
+}
+
+/** POST bodies sent to `/status`, in call order. */
+function statusBodies(): string[] {
+  return fetchMock.mock.calls
+    .filter(([url]) => String(url).endsWith('/status'))
+    .map(([, init]) => String((init as RequestInit | undefined)?.body ?? ''))
 }
 
 describe('settings page render', () => {
@@ -392,6 +407,58 @@ describe('settings page render', () => {
     expect(text).toContain('通过 Git 仓库备份、恢复并跨设备同步 DSH 插件与技能。')
     expect(text).toContain('dsh-context')
     expect(text).toContain('有待上传变更')
+  })
+
+  it('primes the repository before loading the lists when the remote side is unknown', async () => {
+    remoteUnknown = true
+    const firstCall = fetchMock.mock.calls.length
+    await act(async () => {
+      root.unmount()
+    })
+    container.remove()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root.render(<Page t={t} />)
+    })
+    await settle()
+    const calls = fetchMock.mock.calls.slice(firstCall)
+    const refreshIndex = calls.findIndex(
+      ([url, init]) => String(url).endsWith('/status')
+        && String((init as RequestInit | undefined)?.body ?? '').includes('"refresh":true'),
+    )
+    const listIndex = calls.findIndex(([url]) => String(url).endsWith('/plugins/list'))
+    expect(refreshIndex).toBeGreaterThanOrEqual(0)
+    // The lists must be loaded after the prime, not before it: otherwise they
+    // would still compare against the unknown repository.
+    expect(listIndex).toBeGreaterThan(refreshIndex)
+  })
+
+  it('does not refetch the repository when the remote side is already known', async () => {
+    await settle()
+    expect(statusBodies().every(body => !body.includes('"refresh":true'))).toBe(true)
+  })
+
+  it('opens a prefilled GitHub issue from the intro row', async () => {
+    await settle()
+    expect(container.querySelector('.dgs-introRow .dgs-intro')).not.toBeNull()
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    const button = Array.from(container.querySelectorAll('button')).find(
+      candidate => (candidate.textContent ?? '').trim() === '问题反馈',
+    )
+    expect(button).toBeDefined()
+    await act(async () => {
+      button?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
+    expect(open).toHaveBeenCalledTimes(1)
+    const url = String(open.mock.calls[0]?.[0] ?? '')
+    expect(url.startsWith('https://github.com/songni370/dsh-plugins-git-sync/issues/new?')).toBe(true)
+    const decoded = decodeURIComponent(url)
+    expect(decoded).toContain('插件版本: 0.1.0')
+    expect(decoded).toContain('DSH 版本: 0.2.1-rc.3')
+    expect(decoded).toContain('系统: darwin arm64')
+    open.mockRestore()
   })
 
   it('starts the plugin list collapsed and expands on demand', async () => {

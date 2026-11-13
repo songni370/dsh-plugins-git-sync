@@ -43,6 +43,7 @@ export const zh: Record<string, string> = {
   detailDesc: '插件清单与已部署技能会备份到 Git；插件配置、Agent 预设和界面设置不会上传。',
 
   intro: '通过 Git 仓库备份、恢复并跨设备同步 DSH 插件与技能。',
+  feedback: '问题反馈',
   loading: '加载中…',
   retry: '重试',
   refresh: '刷新',
@@ -367,6 +368,7 @@ export const en: Record<string, string> = {
   detailDesc: 'Plugin inventory and deployed skills are backed up to Git; plugin configuration, Agent presets and UI settings are never uploaded.',
 
   intro: 'Back up, restore, and synchronize DSH plugins and skills across devices through a Git repository.',
+  feedback: 'Feedback',
   loading: 'Loading…',
   retry: 'Retry',
   refresh: 'Refresh',

@@ -124,8 +124,8 @@ async function request<T>(route: string, body: unknown = {}): Promise<T> {
 }
 
 /** Current status, recent logs, and the effective configuration. */
-export function getStatus(): Promise<StatusPayload> {
-  return request<StatusPayload>('status')
+export function getStatus(options: { refresh?: boolean } = {}): Promise<StatusPayload> {
+  return request<StatusPayload>('status', options.refresh === true ? { refresh: true } : {})
 }
 
 /** Persist a partial configuration; the Host answers with the effective view. */

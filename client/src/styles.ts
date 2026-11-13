@@ -95,6 +95,34 @@ export const CSS = `
   line-height: 18px;
   color: var(--dsw-alias-label-secondary, #5c6570);
 }
+.dgs-introRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dgs-feedback {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l1, #e1e5ee);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #5c6570);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.dgs-feedback:hover {
+  background: var(--dsw-alias-bg-layer-2, #f1f3f5);
+  border-color: var(--dsw-alias-border-l2, #cfd3d6);
+  color: var(--dsw-alias-label-primary, #0f1115);
+}
+.dgs-feedback:active {
+  transform: translateY(1px);
+}
 .dgs-detailSection {
   order: -1;
 }

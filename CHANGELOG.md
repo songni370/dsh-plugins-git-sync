@@ -6,6 +6,15 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+### Added
+
+- 设置页简介行右侧新增「问题反馈」按钮：点击打开本项目的 GitHub 新建 issue 页面，并预填插件版本、DSH 版本、系统与 Profile 信息，可直接粘贴截图。
+
+### Changed
+
+- 打开「插件备份」页时，若本次 DSH 启动后仓库尚未拉取，会先静默拉取一次再加载插件与技能列表，列表直接显示与 Git 的真实对比，不再短暂显示为「全部仅本机」；后台自动同步完成或页面重新可见时也会自动刷新列表。
+- 设置页左侧导航改用 DSH 0.2.2 的 `settings.section.icon` 槽位注册同步图标，不再出现「齿轮 + 自绘图标」两个图标。
+
 ## [0.2.12] - 2026-11-09
 
 ### Fixed

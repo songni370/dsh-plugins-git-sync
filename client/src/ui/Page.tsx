@@ -3,9 +3,13 @@
  * dialog that guards every destructive operation.
  *
  * Data flow (kept in one place so the sections stay presentational):
- *  - on mount, POST `/status`, `/plugins/list`, `/history`;
+ *  - on mount, POST `/status`; when this process has no prepared work tree
+ *    (a fresh DSH start), prime it once with `status {refresh:true}` so the
+ *    lists compare against the real repository, then load `/plugins/list`,
+ *    `/skills/list`, `/history`;
  *  - `/status` is polled every 5 s while the section is mounted AND the
  *    document is visible, and once more immediately when it becomes visible;
+ *    a lastSyncAt change refreshes the lists a background sync made stale;
  *  - every operation refreshes status, plugins, and history afterwards;
  *  - errors from the Host are shown verbatim (`ApiRequestError.message`).
  *
@@ -71,6 +75,9 @@ const STATUS_POLL_MS = 5000
 /** How many history entries the page requests. */
 const HISTORY_LIMIT = 10
 
+/** New-issue form for this project; `openFeedback` prefills the body. */
+const FEEDBACK_ISSUE_URL = 'https://github.com/songni370/dsh-plugins-git-sync/issues/new'
+
 /** Props handed to the section by the slot registration. */
 export interface PageProps {
   t: Translate
@@ -134,6 +141,9 @@ export function Page({ t }: PageProps): ReactElement {
   const autoDirtyRef = useRef(false)
   const exclusionBusyRef = useRef(false)
   const skillExclusionBusyRef = useRef(false)
+  // Last successful sync the page has seen; a change means a background run
+  // moved the repository, so the plugin/skill lists need a refresh too.
+  const lastSyncMarkerRef = useRef<string | null>(null)
 
   // --- Transient operation state ----------------------------------------
   const [busy, setBusy] = useState<ActionName | null>(null)
@@ -186,14 +196,16 @@ export function Page({ t }: PageProps): ReactElement {
     setConfigOpen(current => current ?? view.repoUrl.trim() === '')
   }, [])
 
-  const refreshStatus = useCallback(async () => {
+  const refreshStatus = useCallback(async (): Promise<StatusPayload | null> => {
     try {
-        const payload = await api.getStatus()
-        setStatus(payload)
-        setStatusError(null)
-        applyConfigView(payload.status.config)
-      } catch (error) {
-        setStatusError(errorText(error))
+      const payload = await api.getStatus()
+      setStatus(payload)
+      setStatusError(null)
+      applyConfigView(payload.status.config)
+      return payload
+    } catch (error) {
+      setStatusError(errorText(error))
+      return null
     }
   }, [applyConfigView])
 
@@ -237,32 +249,76 @@ export function Page({ t }: PageProps): ReactElement {
   }, [])
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshStatus(), refreshPlugins(), refreshSkills(), refreshHistory()])
+    const payload = await refreshStatus()
+    if (payload !== null) lastSyncMarkerRef.current = payload.status.lastSyncAt
+    await Promise.all([refreshPlugins(), refreshSkills(), refreshHistory()])
   }, [refreshStatus, refreshPlugins, refreshSkills, refreshHistory])
+
+  /**
+   * Initial load.
+   *
+   * A fresh DSH process has no prepared work tree, so `/plugins/list` and
+   * `/skills/list` would compare the local inventory against an unknown
+   * repository and read as "local only". Prime it once per page load — one
+   * fetch, no sync — then load the lists against the real remote state. Later
+   * status polls stay local and never fetch.
+   */
+  const loadInitial = useCallback(async () => {
+    const first = await refreshStatus()
+    let latest = first
+    const needsPrime = first !== null
+      && first.status.config.repoUrl !== ''
+      && first.status.remotePluginCount === null
+      // Never fetch beside a running operation: wait for the poll to pick the
+      // finished sync up and refresh the lists then.
+      && first.status.busy !== true
+    if (needsPrime) {
+      try {
+        const primed = await api.getStatus({ refresh: true })
+        setStatus(primed)
+        setStatusError(null)
+        applyConfigView(primed.status.config)
+        latest = primed
+      } catch {
+        // Keep the local view; an explicit refresh or the automatic sync retries.
+      }
+    }
+    lastSyncMarkerRef.current = latest === null ? null : latest.status.lastSyncAt
+    await Promise.all([refreshPlugins(), refreshSkills(), refreshHistory()])
+  }, [refreshStatus, applyConfigView, refreshPlugins, refreshSkills, refreshHistory])
 
   // Initial load.
   useEffect(() => {
-    void refreshStatus()
-    void refreshPlugins()
-    void refreshSkills()
-    void refreshHistory()
-  }, [refreshStatus, refreshPlugins, refreshSkills, refreshHistory])
+    void loadInitial()
+  }, [loadInitial])
 
-  // Poll the status while mounted and visible.
+  // Poll the status while mounted and visible. A background sync that moved the
+  // repository also refreshes the lists, which are built from the remote state.
   useEffect(() => {
+    const check = async (): Promise<void> => {
+      const payload = await refreshStatus()
+      if (payload === null) return
+      const marker = payload.status.lastSyncAt
+      const previous = lastSyncMarkerRef.current
+      lastSyncMarkerRef.current = marker
+      if (previous !== null && marker !== null && marker !== previous) {
+        void refreshPlugins()
+        void refreshSkills()
+      }
+    }
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return
-      void refreshStatus()
+      void check()
     }, STATUS_POLL_MS)
     const onVisibilityChange = (): void => {
-      if (document.visibilityState === 'visible') void refreshStatus()
+      if (document.visibilityState === 'visible') void check()
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [refreshStatus])
+  }, [refreshStatus, refreshPlugins, refreshSkills])
 
   function clearFeedbackTimer(area: FeedbackArea): void {
     const timer = feedbackTimers.current[area]
@@ -730,10 +786,47 @@ export function Page({ t }: PageProps): ReactElement {
   const hostBusy = view !== null && view.busy
   const anyBusy = busy !== null || exclusionBusy || skillExclusionBusy
 
+  /** Open the repository's new-issue form with this install's facts prefilled. */
+  function openFeedback(): void {
+    const device = view?.config.device
+    const body = [
+      '### 问题描述',
+      '',
+      '（请描述遇到的问题）',
+      '',
+      '### 复现步骤',
+      '1. ',
+      '2. ',
+      '',
+      '### 期望结果',
+      '',
+      '',
+      '### 环境',
+      `- 插件版本: ${device?.pluginVersion ?? '未知'}`,
+      `- DSH 版本: ${device?.dshVersion ?? '未知'}`,
+      `- 系统: ${device === undefined ? '未知' : `${device.platform} ${device.arch}`.trim()}`,
+      `- Profile: ${view?.config.activeProfile ?? '未知'}`,
+      `- 页面: ${t('nav')}`,
+      '',
+      '### 截图',
+      '（可直接拖拽或粘贴到这里）',
+    ].join('\n')
+    window.open(
+      `${FEEDBACK_ISSUE_URL}?title=${encodeURIComponent('[Bug] ')}&body=${encodeURIComponent(body)}`,
+      '_blank',
+      'noopener,noreferrer',
+    )
+  }
+
   return (
     <div className="dgs-root">
       <style>{CSS}</style>
-      <p className="dgs-intro">{t('intro')}</p>
+      <div className="dgs-introRow">
+        <p className="dgs-intro">{t('intro')}</p>
+        <button type="button" className="dgs-feedback" onClick={openFeedback}>
+          {t('feedback')}
+        </button>
+      </div>
 
       {statusError === null || view === null ? null : (
         <Banner tone="error">

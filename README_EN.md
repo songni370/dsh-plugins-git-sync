@@ -24,6 +24,7 @@ Reinstalling DSH or moving to another machine no longer means rebuilding a plugi
 - **Automatic sync**: on client startup and plugin install/update/remove; **no interval timer**; repeated failures are shown on the settings page and cleared by the next successful operation.
 - **Agent tools**: six tools for status, backup, restore, sync, diff and history.
 - **Preview before upload**: `Check differences` lists the plugins that will be uploaded, installed, upgraded or deleted, so you can confirm first.
+- **Feedback**: the button next to the section intro opens this project's GitHub issue form, prefilled with the plugin version, DSH version, OS and profile facts; paste a screenshot there.
 - **Safety**: no tokens, passwords or private keys are read or uploaded; **plugin configuration, Agent presets and UI settings are never backed up**; no force pushes; a snapshot precedes local changes.
 
 Only **user-installed third-party plugins** and **deployed DSH skills** participate. DSH built-ins, loader internals (`cordis:*`) and this plugin itself are never backed up.

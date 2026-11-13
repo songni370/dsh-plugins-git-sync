@@ -22,7 +22,7 @@
 import { Component } from 'react'
 import type { ErrorInfo, ReactElement, ReactNode } from 'react'
 import { createTranslate, en, fallbackTranslate, NS, zh } from './i18n'
-import { installSettingsNavIcon } from './nav-icon'
+import { SettingsNavIcon } from './nav-icon'
 import { installPluginPageIcon } from './plugin-page-icon'
 import { pluginsTabEnabled, subscribePluginsTab } from './plugins-tab-visibility'
 import type { Translate, Vars } from './i18n'
@@ -44,7 +44,7 @@ interface LocaleService {
 
 /** Registration metadata the slots this plugin touches understand. */
 interface SlotRegistration {
-  name: 'settings.section' | 'plugins.tab' | 'plugins.detail.section'
+  name: 'settings.section' | 'settings.section.icon' | 'plugins.tab' | 'plugins.detail.section'
   id: string
   order?: number
   label?: () => string
@@ -60,7 +60,7 @@ interface SlotComponentProps extends SectionProps {
 /** The subset of the client slots service this plugin touches. */
 interface SlotsService {
   inject(slot: string, register: () => unknown): void
-  register(registration: SlotRegistration, component: (props: SlotComponentProps) => ReactElement | null): unknown
+  register<P extends object>(registration: SlotRegistration, component: (props: P) => ReactElement | null): unknown
 }
 
 /** The client cordis context shape this plugin relies on (structural typing
@@ -171,9 +171,8 @@ export function apply(ctx: ClientContext): void {
       )
     }
 
-    // The shell draws only its own gear for a third-party section; claim our
-    // nav row and paint the sync glyph (same label thunk as the registration).
-    installSettingsNavIcon(ctx, () => t('nav'))
+    // The shell owns the nav row; the icon seat (DSH 0.2.2+) lets us replace
+    // its gear fallback. The registration id must equal the section id.
     installPluginPageIcon(ctx)
 
     // The settings page appears once the shell declares the slot. The label
@@ -189,6 +188,17 @@ export function apply(ctx: ClientContext): void {
           inject: () => ({ t }),
         },
         Section,
+      ),
+    )
+    ctx.slots.inject('settings.section.icon', () =>
+      ctx.slots.register(
+        {
+          name: 'settings.section.icon',
+          id: 'git-sync',
+          locale: NS,
+          inject: () => ({ t }),
+        },
+        SettingsNavIcon,
       ),
     )
   } catch (error) {
