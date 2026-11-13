@@ -6,6 +6,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-11-13
+
 ### Added
 
 - 设置页简介行右侧新增带图标的「问题反馈」按钮：点击打开本项目的 GitHub 新建 issue 页面，并预填插件版本、DSH 版本、系统与 Profile 信息，可直接粘贴截图。
@@ -14,7 +16,7 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 - 打开「插件备份」页时，若本次 DSH 启动后仓库尚未拉取，会先静默拉取一次再加载插件与技能列表，列表直接显示与 Git 的真实对比，不再短暂显示为「全部仅本机」；后台自动同步完成或页面重新可见时也会自动刷新列表。
 - 技能列表改为默认折叠，与插件列表、历史记录一致，点击「展开列表」才显示表格。
-- 设置页左侧导航改用 DSH 0.2.2 的 `settings.section.icon` 槽位注册同步图标，不再出现「齿轮 + 自绘图标」两个图标。
+- 设置页左侧导航改用 DSH 0.2.2 的 `settings.section.icon` 槽位注册同步图标，不再出现「齿轮 + 自绘图标」两个图标；旧版 DSH 没有该槽位时会退回系统齿轮。
 
 ## [0.2.12] - 2026-11-09
 
@@ -178,7 +180,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 - 设置页基础界面、HTTP 路由与 6 个 Agent 工具。
 - 单元测试、双设备集成测试与 CI（macOS / Windows / Linux）。
 
-[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.12...HEAD
+[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.13...HEAD
+[0.2.13]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.9...v0.2.10
