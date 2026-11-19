@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -290,6 +290,29 @@ describe('persistence', () => {
       if (process.platform !== 'win32') expect(mode).toBe(0o600)
       const text = await readFile(path, 'utf8')
       expect(text).toContain('github.com')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rewrites a legacy configuration file in canonical form', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-git-test-'))
+    try {
+      const path = join(dir, 'config.json')
+      await writeFile(path, JSON.stringify({
+        repoUrl: 'https://github.com/a/b.git',
+        includeConfigs: true,
+        legacyUnknownKey: 1,
+        autoSync: { enabled: false, intervalMinutes: 30 },
+      }))
+      const store = new ConfigStore(path, input => normalizeConfig(input, 'desktop', ['desktop']))
+      const config = await store.read()
+      expect(config.includeConfigs).toBe(false)
+      expect(config.autoSync.intervalMinutes).toBe(30)
+      const text = await readFile(path, 'utf8')
+      expect(text).not.toContain('legacyUnknownKey')
+      expect(text).not.toContain('"includeConfigs": true')
+      expect(text).toContain('"includeConfigs": false')
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

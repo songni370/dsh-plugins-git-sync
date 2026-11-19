@@ -43,6 +43,7 @@ function toInstallOutcome(result: DshChangeResult, action: string): InstallOutco
     version: result.version,
     pendingBuilds: result.pendingBuilds,
     error: failed ? error : undefined,
+    ...(result.application === 'restart-required' ? { pendingActivation: true } : {}),
   }
 }
 
@@ -80,6 +81,18 @@ function normalizeVersion(version: string | null | undefined): string | null {
   if (version === null || version === undefined) return null
   const trimmed = version.trim().replace(/^v/i, '')
   return trimmed === '' ? null : trimmed
+}
+
+/** Installed version reported by the plugin manager, or null when unknown. */
+function installedVersionOf(bundle: DshBundleInfo | undefined): string | null {
+  return bundle === undefined ? null : normalizeVersion(bundle.version ?? bundle.installTarget?.version ?? null)
+}
+
+/** Spec that reinstalls the currently installed version, when one can be derived. */
+function restoreSpecFor(bundle: DshBundleInfo, installedVersion: string | null): string | null {
+  const spec = bundle.installTarget?.spec?.trim()
+  if (spec !== undefined && spec !== '') return spec
+  return installedVersion === null ? null : `${bundle.name}@${installedVersion}`
 }
 
 /** Package name from an npm-style spec, used when the caller did not provide one. */
@@ -121,13 +134,44 @@ export function createInstaller(options: InstallerOptions): PluginInstaller {
       const value = spec.trim()
       if (value === '') throw new SyncError('install-failed', '安装规格为空 / empty install spec')
 
-      /** Resolve an `already-installed` refusal: same version is a no-op, a different version is replaced. */
+      /** Read the bundle that provides a module name. */
+      const readBundle = async (name: string): Promise<DshBundleInfo | undefined> => {
+        const bundles = await manager.listBundles()
+        return bundles.find(item => item.name === name || item.rows.some(row => row.moduleName === name))
+      }
+
+      /** Check that a bundle is installed at exactly `targetVersion`. */
+      const verifyVersion = async (name: string, targetVersion: string): Promise<{ ok: boolean; version: string | null }> => {
+        try {
+          const version = installedVersionOf(await readBundle(name))
+          return { ok: version === targetVersion, version }
+        } catch {
+          return { ok: false, version: null }
+        }
+      }
+
+      /** Put the previous version back after a failed upgrade; returns a human-readable note. */
+      const restorePrevious = async (bundle: DshBundleInfo, installedVersion: string | null): Promise<string> => {
+        const spec = restoreSpecFor(bundle, installedVersion)
+        if (spec === null) {
+          return `无法自动恢复旧版（${bundle.name} 没有可用的安装来源），请手动重装 / cannot restore automatically`
+        }
+        try {
+          const result = await manager.installBundle(spec, { saveExact: true, enabled: true })
+          if (result.application === 'failed' || result.application === 'cancelled') {
+            const reason = redactText(result.error?.code ?? result.error?.diagnostic ?? 'unknown error')
+            return `旧版恢复失败 / could not restore ${bundle.name}: ${reason}；请手动安装 ${spec}`
+          }
+          return `已恢复旧版 / restored ${bundle.name}（${installedVersion ?? '版本未知'}）`
+        } catch (error) {
+          return `旧版恢复失败 / could not restore ${bundle.name}: ${redactText(errorMessage(error))}；请手动安装 ${spec}`
+        }
+      }
+
+      /** Resolve an `already-installed` refusal: same version is a no-op, a different version is replaced atomically. */
       const resolveAlreadyInstalled = async (): Promise<InstallOutcome> => {
         const targetName = request.name?.trim() || packageNameFromSpec(value)
-        const bundles = await manager.listBundles()
-        const bundle = targetName === null
-          ? undefined
-          : bundles.find(item => item.name === targetName || item.rows.some(row => row.moduleName === targetName))
+        const bundle = targetName === null ? undefined : await readBundle(targetName)
         if (bundle === undefined) {
           return {
             ok: false,
@@ -137,15 +181,33 @@ export function createInstaller(options: InstallerOptions): PluginInstaller {
             error: 'already-installed',
           }
         }
-        const installedVersion = normalizeVersion(bundle.version ?? bundle.installTarget?.version ?? null)
+        const installedVersion = installedVersionOf(bundle)
         const targetVersion = normalizeVersion(request.version ?? null)
-        if (targetVersion === null || installedVersion === null || targetVersion === installedVersion) {
+        if (targetVersion === null) {
+          return {
+            ok: false,
+            changed: false,
+            application: 'failed',
+            message: `${bundle.name} 已安装${installedVersion === null ? '' : `（${installedVersion}）`}，但无法确认目标版本；请在插件管理器中手动更新 / installed but the target version is unknown`,
+            error: 'already-installed',
+          }
+        }
+        if (installedVersion === null) {
+          return {
+            ok: false,
+            changed: false,
+            application: 'failed',
+            message: `${bundle.name} 已安装，但无法读取当前版本，无法安全升级到 ${targetVersion}；请手动更新 / installed version is unknown`,
+            error: 'already-installed',
+          }
+        }
+        if (installedVersion === targetVersion) {
           return {
             ok: true,
             changed: false,
             application: 'applied',
-            message: `${bundle.name} 已安装${installedVersion === null ? '' : `（${installedVersion}）`}，无需重复安装 / already installed`,
-            ...(installedVersion === null ? {} : { version: installedVersion }),
+            message: `${bundle.name} 已安装（${installedVersion}），无需重复安装 / already installed`,
+            version: installedVersion,
           }
         }
         if (!bundle.removable) {
@@ -173,10 +235,31 @@ export function createInstaller(options: InstallerOptions): PluginInstaller {
         }
         const result = await manager.installBundle(value, { saveExact: true, enabled: true })
         const outcome = toInstallOutcome(result, '升级 / upgrade')
+        if (outcome.ok && outcome.application === 'applied') {
+          const verification = await verifyVersion(bundle.name, targetVersion)
+          if (!verification.ok) {
+            const restored = await restorePrevious(bundle, installedVersion)
+            return {
+              ok: false,
+              changed: true,
+              application: 'failed',
+              message: `升级 ${bundle.name} 到 ${targetVersion} 后版本校验失败（实际 ${verification.version ?? '未知'}）；${restored}`,
+              error: 'version-mismatch',
+            }
+          }
+        }
         if (outcome.ok) {
           outcome.message = `${bundle.name} ${installedVersion} → ${targetVersion}，${outcome.message}`
+          return outcome
         }
-        return outcome
+        const restored = await restorePrevious(bundle, installedVersion)
+        return {
+          ok: false,
+          changed: outcome.changed,
+          application: outcome.application,
+          message: `升级 ${bundle.name} 到 ${targetVersion} 失败：${outcome.message}\n${restored}`,
+          error: outcome.error ?? 'upgrade-failed',
+        }
       }
 
       options.logger.info(`安装插件 / installing plugin: ${value}`)
@@ -188,6 +271,23 @@ export function createInstaller(options: InstallerOptions): PluginInstaller {
         const outcome = toInstallOutcome(result, '安装 / install')
         if (outcome.pendingBuilds !== undefined && outcome.pendingBuilds.length > 0) {
           outcome.message += `\n需要在插件管理器中批准构建脚本 / build scripts need approval: ${outcome.pendingBuilds.join(', ')}`
+        }
+        if (outcome.ok && outcome.application === 'applied') {
+          const targetName = request.name?.trim() || packageNameFromSpec(value)
+          const targetVersion = normalizeVersion(request.version ?? null)
+          if (targetName !== null && targetVersion !== null) {
+            const verification = await verifyVersion(targetName, targetVersion)
+            if (!verification.ok) {
+              return {
+                ok: false,
+                changed: outcome.changed,
+                application: 'failed',
+                message: `安装 ${value} 后版本校验失败（实际 ${verification.version ?? '未知'}，期望 ${targetVersion}）/ installed version mismatch`,
+                error: 'version-mismatch',
+                version: verification.version ?? undefined,
+              }
+            }
+          }
         }
         return outcome
       } catch (error) {

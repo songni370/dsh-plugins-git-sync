@@ -599,6 +599,7 @@ export class SyncEngine {
         const read = await this.readRemote(store, config, prepared.head)
         const plan = this.scopedPlan(config, planBackup(this.planInput(config, local, read, state)))
         if (plan.requiresConfirmation && options.confirmDestructive !== true) {
+          await this.persistConflicts(state, plan.conflicts)
           throw new SyncError(
             'confirmation-required',
             '备份包含删除远端记录的破坏性操作，需要确认 / the backup removes repository entries and requires confirmation',
@@ -789,6 +790,7 @@ export class SyncEngine {
         const plan = this.scopedPlan(config, planSync({ ...base, resolutions: options.resolutions }))
         const pending = blockingConflicts(plan, options.resolutions)
         if (pending.length > 0) {
+          await this.persistConflicts(state, pending)
           throw new SyncError(
             'conflict-present',
             describeConflicts(pending),
@@ -826,6 +828,7 @@ export class SyncEngine {
           }
         }
         if (plan.requiresConfirmation && options.confirmDestructive !== true) {
+          await this.persistConflicts(state, plan.conflicts)
           throw new SyncError(
             'confirmation-required',
             '同步包含破坏性操作，需要确认 / the sync contains destructive actions and requires confirmation',
@@ -1285,6 +1288,7 @@ export class SyncEngine {
         }
         const pending = blockingConflicts(plan, options.resolutions)
         if (pending.length > 0) {
+          await this.persistConflicts(state, pending)
           throw new SyncError(
             'conflict-present',
             describeConflicts(pending),
@@ -1309,6 +1313,7 @@ export class SyncEngine {
           }
         }
         if (plan.requiresConfirmation && options.confirmDestructive !== true) {
+          await this.persistConflicts(state, plan.conflicts)
           throw new SyncError(
             'confirmation-required',
             '恢复包含破坏性操作，需要确认 / the restore contains destructive actions and requires confirmation',
@@ -1581,6 +1586,28 @@ export class SyncEngine {
     state.autoSyncFailures = 0
     await this.deps.stateStore.write(state)
     this.deps.onOperationSuccess?.()
+  }
+
+  /**
+   * Persist the conflicts that still need a decision.
+   *
+   * A conflict-present error used to leave state.conflicts empty, so the status
+   * payload disagreed with a fresh plan (the page showed no conflict while the
+   * preview showed one) and a restart forgot it. Persisting the set also lets
+   * the UI explain why automatic synchronization is paused.
+   */
+  private async persistConflicts(
+    state: LocalState,
+    conflicts: readonly ConflictInfo[],
+  ): Promise<void> {
+    const next = conflicts.map(conflict => ({
+      pluginId: conflict.pluginId,
+      conflict,
+      detectedAt: new Date().toISOString(),
+    }))
+    if (JSON.stringify(next) === JSON.stringify(state.conflicts)) return
+    state.conflicts = next
+    await this.deps.stateStore.write(state)
   }
 
   /** Record a failed operation in state and logs. */

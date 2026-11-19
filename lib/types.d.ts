@@ -359,6 +359,8 @@ export interface ActionOutcome {
     action: PlanAction;
     ok: boolean;
     skipped?: boolean;
+    /** The plugin is installed but needs a DSH restart before it is active. */
+    pendingActivation?: boolean;
     detail?: string;
     error?: string;
 }
@@ -542,6 +544,8 @@ export interface InstallOutcome {
     message: string;
     version?: string;
     pendingBuilds?: string[];
+    /** Installed but not active until DSH restarts; must be verified after restart. */
+    pendingActivation?: boolean;
     error?: string;
 }
 /** Normalized enable/disable result. */

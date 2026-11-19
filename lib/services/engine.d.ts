@@ -242,6 +242,15 @@ export declare class SyncEngine {
      * automatic run used to clear it, and after a pause there is no automatic run.
      */
     private recordSuccess;
+    /**
+     * Persist the conflicts that still need a decision.
+     *
+     * A conflict-present error used to leave state.conflicts empty, so the status
+     * payload disagreed with a fresh plan (the page showed no conflict while the
+     * preview showed one) and a restart forgot it. Persisting the set also lets
+     * the UI explain why automatic synchronization is paused.
+     */
+    private persistConflicts;
     /** Record a failed operation in state and logs. */
     private recordFailure;
     /** Compose a commit message. */

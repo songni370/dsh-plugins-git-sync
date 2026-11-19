@@ -325,14 +325,24 @@ export class ConfigStore {
    * cache here once hid an external edit until the next DSH restart.
    */
   async read(): Promise<SyncConfig> {
+    let text: string | null = null
     let raw: unknown = null
     try {
-      const text = await readFile(this.path, 'utf8')
+      text = await readFile(this.path, 'utf8')
       raw = safeParseJson(text) ?? null
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    return this.onNormalize(raw)
+    const config = this.onNormalize(raw)
+    // Rewrite a legacy or hand-edited file in canonical form so disk and
+    // runtime agree. Older versions persisted includeConfigs: true and other
+    // keys the current schema no longer honours; without this write-back the
+    // file stays stale forever and every reader sees a different config.
+    if (text !== null) {
+      const canonical = `${JSON.stringify(config, null, 2)}\n`
+      if (text !== canonical) await writeFileAtomic(this.path, canonical)
+    }
+    return config
   }
 
   /** Persist a normalized configuration. */
