@@ -34,6 +34,7 @@ import type {
   OperationResult,
   PluginDiff,
   PluginInstaller,
+  PluginRecord,
   RemotePluginEntry,
   RemoteProfileState,
   RepoStore,
@@ -60,10 +61,21 @@ import {
   buildBackupFiles,
   buildBaseline,
   deviceSnapshotPath,
+  joinRepoPath,
   toDeviceSnapshot,
   toRemoteEntry,
   toTombstone,
 } from './repo-files.js'
+import {
+  buildOwnDeviceManifest,
+  buildV2RepoFiles,
+  detectRepoSchemaVersion,
+  desiredRemoteState,
+  previousPendingActivation,
+  readV2State,
+  type RepoV2Read,
+} from './repo-v2-bridge.js'
+import type { DevicePendingActivationV2 } from './repo-v2.js'
 import { executeLocalActions, isLocalAction } from './executor.js'
 import { createSnapshotService, snapshotConfigs, type SnapshotService } from './snapshot.js'
 import { fileExists } from '../state/store.js'
@@ -145,12 +157,14 @@ interface RemoteRead {
   skills: SkillBackup | null
   devices: Record<string, DeviceSnapshot>
   head: string | null
+  /** v2 repository model, or null for a legacy v1 repository. */
+  v2: RepoV2Read | null
 }
 
 /** Nullable JSON object alias used in this module. */
 type JsonValue = import('../types.js').JsonValue
 
-const EMPTY_REMOTE: RemoteRead = { manifest: null, state: null, configs: {}, skills: null, devices: {}, head: null }
+const EMPTY_REMOTE: RemoteRead = { manifest: null, state: null, configs: {}, skills: null, devices: {}, head: null, v2: null }
 
 /**
  * Whether a plugin belongs in the user-facing inventory.
@@ -328,7 +342,7 @@ export class SyncEngine {
       if (options.refresh === true) {
         try {
           const prepared = await store.prepare()
-          read = await this.readRemote(store, config, prepared.head)
+          read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
           connection = {
             ok: true,
             at: new Date().toISOString(),
@@ -348,7 +362,7 @@ export class SyncEngine {
         }
       } else if (hasLocalCopy && store.prepared()) {
         try {
-          read = await this.readRemote(store, config, state.lastCommit)
+          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
         } catch {
           read = EMPTY_REMOTE
         }
@@ -367,7 +381,7 @@ export class SyncEngine {
         localPlatform: this.deps.platform,
         local: localStates(local),
         remote: remoteStates(read),
-        remoteTombstones: new Set(Object.entries(read.state?.plugins ?? {}).filter(([, entry]) => entry.deleted === true).map(([id]) => id)),
+        remoteTombstones: this.tombstonesOf(read),
         remoteMeta: remoteMeta(read),
         base: baselineStates(baseline),
         warnings: [],
@@ -377,6 +391,35 @@ export class SyncEngine {
       downloads = counts.downloads
       planConflicts = plan.conflicts.length
     }
+
+    const devices: import('../types.js').StatusDevice[] =
+      read.v2 !== null
+        ? read.v2.manifest.devices.map(record => ({
+            id: record.id,
+            name: record.name,
+            platform: record.platform,
+            arch: record.arch,
+            dshVersion: record.dshVersion,
+            pluginVersion: record.pluginVersion,
+            lastSyncAt: record.lastSyncAt,
+            lastResult: record.lastResult ?? 'ok',
+            updatedAt: record.updatedAt,
+          }))
+        : Object.values(read.devices).map(snapshot => ({
+            id: snapshot.device.id,
+            name: snapshot.device.name,
+            platform: snapshot.device.platform,
+            arch: snapshot.device.arch,
+            dshVersion: snapshot.device.dshVersion,
+            pluginVersion: snapshot.device.pluginVersion,
+            lastSyncAt: null,
+            lastResult: 'ok',
+            updatedAt: snapshot.updatedAt,
+          }))
+    devices.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    const ownManifest = read.v2?.byId[device.id] ?? null
+    const repoSchemaVersion =
+      read.v2 !== null ? 2 : read.manifest !== null || read.state !== null ? 1 : null
 
     const conflictCount = Math.max(state.conflicts.length, planConflicts)
     let syncState: import('../types.js').SyncState
@@ -411,6 +454,10 @@ export class SyncEngine {
       autoSyncFailures: state.autoSyncFailures,
       busy: this.isBusy(),
       connection: connection ?? null,
+      remoteDeviceCount: devices.length,
+      devices,
+      pendingActivation: state.pendingActivation ?? ownManifest?.status.pendingActivation ?? [],
+      repoSchemaVersion,
     }
     return { status, logs: this.deps.logger.recent(50) }
   }
@@ -459,7 +506,7 @@ export class SyncEngine {
       try {
         const { store, workDir } = this.repoFor(config)
         if ((await fileExists(workDir)) && store.prepared()) {
-          const read = await this.readRemote(store, config, state.lastCommit)
+          const read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
           remoteSkills = read.skills?.skills ?? []
         }
       } catch {
@@ -497,7 +544,7 @@ export class SyncEngine {
       try {
         const { store, workDir } = this.repoFor(config)
         if ((await fileExists(workDir)) && store.prepared()) {
-          read = await this.readRemote(store, config, state.lastCommit)
+          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
         }
       } catch {
         read = EMPTY_REMOTE
@@ -596,8 +643,9 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare({ signal: options.signal })
         const local = await this.scanLocal(config, true)
-        const read = await this.readRemote(store, config, prepared.head)
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
         const plan = this.scopedPlan(config, planBackup(this.planInput(config, local, read, state)))
+        this.appendMultiDeviceBackupWarning(read, plan)
         if (plan.requiresConfirmation && options.confirmDestructive !== true) {
           await this.persistConflicts(state, plan.conflicts)
           throw new SyncError(
@@ -614,6 +662,8 @@ export class SyncEngine {
         const skillsForFiles = config.backupScopes.skills
           ? (skillSnapshot !== null && skillSnapshot.skills.length > 0 ? skillSnapshot : null)
           : undefined
+        const pendingActivation = this.pendingActivations([], state.pendingActivation ?? [], local)
+        state.pendingActivation = pendingActivation
         const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } =>
           this.buildRemoteFiles({
             config,
@@ -625,6 +675,7 @@ export class SyncEngine {
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
             previousSkills: this.filterSkillBackup(currentRead.skills, config),
+            pendingActivation,
           })
         const firstFiles = build(read, local)
         const now = new Date().toISOString()
@@ -646,7 +697,7 @@ export class SyncEngine {
               deletions: firstFiles.deletions,
               executables: firstFiles.executables,
               rebuild: async () => {
-                const freshRead = await this.readRemote(store, config, null)
+                const freshRead = await this.readRemote(store, config, null, this.selfRef(state))
                 const freshPlan = this.scopedPlan(config, planBackup(this.planInput(config, local, freshRead, await this.readState())))
                 return this.buildRemoteFiles({
                   config,
@@ -658,6 +709,7 @@ export class SyncEngine {
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
                   previousSkills: this.filterSkillBackup(freshRead.skills, config),
+                  pendingActivation,
                 })
               },
               message: this.commitMessage('backup', options.message),
@@ -665,7 +717,7 @@ export class SyncEngine {
               signal: options.signal,
             })
         const localAfter = await this.scanLocal(config, true)
-        const remoteAfter = await this.readRemote(store, config, write.commit)
+        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state))
         const baseline = buildBaseline({
           profile: this.deps.activeProfile,
           commit: write.commit ?? prepared.head,
@@ -731,7 +783,7 @@ export class SyncEngine {
       const { store } = this.repoFor(config)
       const prepared = await store.prepare({ signal: options.signal })
       const read = options.commit === undefined || options.commit === ''
-        ? await this.readRemote(store, config, prepared.head)
+        ? await this.readRemote(store, config, prepared.head, this.selfRef(state))
         : await this.readAtCommit(store, config, options.commit)
       const local = await this.scanLocal(config)
       const plan = this.scopedPlan(config, planRestore(this.planInput(config, local, read, state)))
@@ -765,7 +817,7 @@ export class SyncEngine {
       const state = await this.readState()
       const { store } = this.repoFor(config)
       const prepared = await store.prepare({ signal })
-      const read = await this.readRemote(store, config, prepared.head)
+      const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
       const local = await this.scanLocal(config)
       return { plan: this.scopedPlan(config, planSync(this.planInput(config, local, read, state))) }
     }, { wait: true })
@@ -785,7 +837,7 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare({ signal: options.signal })
         const local = await this.scanLocal(config, true)
-        const read = await this.readRemote(store, config, prepared.head)
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
         const base = this.planInput(config, local, read, state)
         const plan = this.scopedPlan(config, planSync({ ...base, resolutions: options.resolutions }))
         const pending = blockingConflicts(plan, options.resolutions)
@@ -876,6 +928,9 @@ export class SyncEngine {
             snapshot: snapshotId,
           }
         }
+        const pendingActivation = this.pendingActivations(outcomes, state.pendingActivation ?? [], local)
+        const pendingChanged = JSON.stringify(state.pendingActivation ?? []) !== JSON.stringify(pendingActivation)
+        state.pendingActivation = pendingActivation
         const build = (currentRead: RemoteRead, inventory: DeviceInventory): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } =>
           this.buildRemoteFiles({
             config,
@@ -887,15 +942,16 @@ export class SyncEngine {
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
             previousSkills: this.filterSkillBackup(currentRead.skills, config),
+            pendingActivation,
           })
         const firstFiles = build(read, local)
-        const write = (plan.actions.some(action => !isLocalAction(action)) || skillsChanged)
+        const write = (plan.actions.some(action => !isLocalAction(action)) || skillsChanged || pendingChanged)
           ? await store.write({
               files: firstFiles.files,
               deletions: firstFiles.deletions,
               executables: firstFiles.executables,
               rebuild: async () => {
-                const freshRead = await this.readRemote(store, config, null)
+                const freshRead = await this.readRemote(store, config, null, this.selfRef(state))
                 const freshPlan = this.scopedPlan(config, planSync({ ...this.planInput(config, await this.scanLocal(config, true), freshRead, state), resolutions: options.resolutions }))
                 return this.buildRemoteFiles({
                   config,
@@ -907,6 +963,7 @@ export class SyncEngine {
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
                   previousSkills: this.filterSkillBackup(freshRead.skills, config),
+                  pendingActivation,
                 })
               },
               message: this.commitMessage('sync', undefined),
@@ -922,7 +979,7 @@ export class SyncEngine {
             })
           : { changed: false, pushed: false, commit: prepared.head, changedFiles: [], retried: false }
         const localAfter = await this.scanLocal(config, true)
-        const remoteAfter = await this.readRemote(store, config, write.commit)
+        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state))
         const now = new Date().toISOString()
         state.baselines[this.deps.activeProfile] = buildBaseline({
           profile: this.deps.activeProfile,
@@ -1080,13 +1137,39 @@ export class SyncEngine {
   // Internals
   // -------------------------------------------------------------------------
 
+  /** Ids another device deleted: v1 tombstones plus v2 removals and deletion conflicts. */
+  private tombstonesOf(read: RemoteRead): Set<string> {
+    const tombstones = new Set<string>()
+    for (const [id, entry] of Object.entries(read.state?.plugins ?? {})) {
+      if (entry.deleted === true) tombstones.add(id)
+    }
+    if (read.v2 !== null) {
+      for (const removal of read.v2.desired.removals) tombstones.add(removal)
+      for (const conflict of read.v2.desired.conflicts) {
+        if (conflict.reason === 'deleted-while-declared') tombstones.add(conflict.pluginId)
+      }
+    }
+    return tombstones
+  }
+
   /** Build a plan input from the current reads. */
   private planInput(config: SyncConfig, local: DeviceInventory, read: RemoteRead, state: LocalState, resolutions?: ConflictResolution[]): PlanInput {
-    const tombstones = new Set(
-      Object.entries(read.state?.plugins ?? {})
-        .filter(([, entry]) => entry.deleted === true)
-        .map(([id]) => id),
-    )
+    const tombstones = this.tombstonesOf(read)
+    const warnings: string[] = []
+    if (read.v2 !== null) {
+      for (const conflict of read.v2.desired.conflicts) {
+        if (conflict.reason === 'deleted-while-declared') {
+          // One device removed the plugin, another still declares it. Treat it
+          // as a tombstone so the planner asks instead of resurrecting it.
+          warnings.push(`插件 ${conflict.pluginId} 存在设备间冲突：一台设备已删除，另一台仍声明 / deleted on one device but declared on another`)
+        } else {
+          warnings.push(`插件 ${conflict.pluginId}：${conflict.detail}`)
+        }
+      }
+      for (const blocked of read.v2.desired.blocked) {
+        warnings.push(`插件 ${blocked.pluginId} 需要更新的 DSH，已跳过 / requires a newer DSH: ${blocked.reason}`)
+      }
+    }
     const localMap = localStates(local)
     for (const id of Object.keys(localMap)) {
       const plugin = localMap[id]
@@ -1095,7 +1178,6 @@ export class SyncEngine {
       const syncable = isSyncable({ state: plugin, excludedPlugins: config.excludedPlugins, platform: this.deps.platform })
       localMap[id] = { ...plugin, syncable: syncable && !excluded }
     }
-    const warnings: string[] = []
     const meta = remoteMeta(read)
     for (const [id, entry] of Object.entries(read.state?.plugins ?? {})) {
       if (entry.deleted === true) continue
@@ -1122,6 +1204,91 @@ export class SyncEngine {
     }
   }
 
+  /** Apply the planned local actions to an inventory (used for the written device declaration). */
+  private inventoryAfterPlan(local: DeviceInventory, plan: SyncPlan, read: RemoteRead): DeviceInventory {
+    const removed = new Set<string>()
+    const updates = new Map<string, {
+      version?: string | null
+      enabled?: boolean
+      installSpec?: string | null
+      name?: string
+      origin?: PluginRecord['origin']
+    }>()
+    for (const action of plan.actions) {
+      if (action.kind === 'remove-local') {
+        removed.add(action.pluginId)
+      } else if (action.kind === 'install' || action.kind === 'upgrade' || action.kind === 'downgrade') {
+        const remote = read.state?.plugins[action.pluginId]
+        updates.set(action.pluginId, {
+          version: action.version ?? remote?.version ?? null,
+          enabled: action.enabled ?? remote?.enabled ?? true,
+          installSpec: action.installSpec ?? remote?.installSpec ?? null,
+          name: action.pluginName !== '' ? action.pluginName : remote?.name ?? action.pluginId,
+          origin: remote?.origin ?? 'npm',
+        })
+      } else if (action.kind === 'enable' || action.kind === 'disable') {
+        updates.set(action.pluginId, { enabled: action.kind === 'enable' })
+      }
+    }
+    const plugins: PluginRecord[] = []
+    for (const plugin of local.plugins) {
+      if (removed.has(plugin.id)) continue
+      const update = updates.get(plugin.id)
+      plugins.push(update === undefined ? plugin : { ...plugin, ...update })
+    }
+    for (const [id, update] of updates) {
+      if (removed.has(id)) continue
+      if (local.plugins.some(plugin => plugin.id === id)) continue
+      plugins.push({
+        id,
+        name: update.name ?? id,
+        version: update.version ?? null,
+        origin: update.origin ?? 'npm',
+        installSpec: update.installSpec ?? null,
+        enabled: update.enabled ?? true,
+        builtIn: false,
+        syncable: true,
+        pathOnly: false,
+        profile: this.deps.activeProfile,
+        platform: this.deps.platform,
+        rows: [],
+        configs: {},
+        configSkipped: [],
+      })
+    }
+    return { ...local, plugins }
+  }
+
+  /**
+   * Merge the previous pending-activation list with this run's outcomes. An
+   * entry is dropped once the installed inventory shows the expected version
+   * (the restart happened); restart-required outcomes are added.
+   */
+  private pendingActivations(
+    outcomes: readonly ActionOutcome[],
+    previous: readonly DevicePendingActivationV2[],
+    inventory: DeviceInventory,
+  ): DevicePendingActivationV2[] {
+    const installed = new Map<string, string | null>()
+    for (const plugin of inventory.plugins) installed.set(plugin.id, plugin.version ?? null)
+    const pending = new Map<string, DevicePendingActivationV2>()
+    for (const entry of previous) {
+      if (installed.get(entry.pluginId) === entry.version) continue
+      pending.set(entry.pluginId, entry)
+    }
+    for (const outcome of outcomes) {
+      if (outcome.pendingActivation !== true) continue
+      const version = outcome.action.version ?? null
+      if (version === null) continue
+      pending.set(outcome.action.pluginId, {
+        pluginId: outcome.action.pluginId,
+        version,
+        reason: 'restart-required',
+      })
+    }
+    return [...pending.values()].sort((left, right) => left.pluginId.localeCompare(right.pluginId))
+  }
+
   /** Build the repository file set for one plan. */
   private buildRemoteFiles(input: {
     config: SyncConfig
@@ -1133,6 +1300,7 @@ export class SyncEngine {
     plugins?: boolean
     skills?: SkillBackup | null
     previousSkills?: SkillBackup | null
+    pendingActivation?: readonly DevicePendingActivationV2[]
   }): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } {
     const localMap = localStates(input.local)
     const upserts = new Map<string, { entry: RemotePluginEntry; configs?: JsonObject }>()
@@ -1157,7 +1325,9 @@ export class SyncEngine {
           })
         }
         configWrites.set(action.pluginId, action.configs ?? {})
-      } else if (action.kind === 'remove-remote') {
+      } else if (action.kind === 'remove-remote' || action.kind === 'remove-local') {
+        // A propagated v2 deletion is mirrored as a v1 tombstone so an old
+        // v1 mirror reader does not resurrect the plugin.
         removals.add(action.pluginId)
       }
     }
@@ -1172,19 +1342,21 @@ export class SyncEngine {
         if (existing !== undefined) existing.configs = configs
       }
     }
+    const now = new Date().toISOString()
+    const afterInventory = this.inventoryAfterPlan(input.local, input.plan, input.read)
     const deviceSnapshot = toDeviceSnapshot({
       device: input.device,
       profile: this.deps.activeProfile,
-      now: new Date().toISOString(),
-      plugins: input.local.plugins,
+      now,
+      plugins: afterInventory.plugins,
     })
     const knownDevices = input.read.manifest?.devices ?? input.baselineRead.manifest?.devices ?? []
-    return buildBackupFiles({
+    const base = buildBackupFiles({
       backupDir: input.config.backupDir,
       generatorVersion: this.deps.pluginVersion,
       profile: this.deps.activeProfile,
       deviceId: input.device.id,
-      now: new Date().toISOString(),
+      now,
       previousManifest: input.read.manifest,
       previousState: input.read.state,
       plugins: input.plugins,
@@ -1196,6 +1368,39 @@ export class SyncEngine {
       deviceSnapshot,
       knownDevices,
     })
+    const previousDevice = input.read.v2?.byId[input.device.id] ?? null
+    const selfManifest = buildOwnDeviceManifest({
+      previous: previousDevice,
+      inventory: input.local,
+      after: afterInventory,
+      profile: this.deps.activeProfile,
+      now,
+      explicitRemovals: new Set(input.plan.actions.filter(action => action.kind === 'remove-local').map(action => action.pluginId)),
+      pendingActivation: input.pendingActivation ?? previousPendingActivation(previousDevice),
+      lastResult: input.plan.actions.length === 0 ? 'no-changes' : 'ok',
+      lastError: null,
+      baseCommit: input.read.head,
+    })
+    const legacyDevices: Record<string, { device: DeviceInfo; updatedAt: string }> = {}
+    for (const [deviceId, snapshot] of Object.entries(input.read.devices)) {
+      legacyDevices[deviceId] = { device: snapshot.device, updatedAt: snapshot.updatedAt }
+    }
+    const v2Files = buildV2RepoFiles({
+      read: input.read.v2,
+      selfManifest,
+      profile: this.deps.activeProfile,
+      pluginVersion: this.deps.pluginVersion,
+      now,
+      legacyDevices,
+      commit: input.read.head,
+    })
+    const files: Record<string, string | Uint8Array> = { ...base.files }
+    if (input.config.backupScopes.plugins) {
+      for (const [relative, content] of Object.entries(v2Files)) {
+        files[joinRepoPath(input.config.backupDir, relative)] = content
+      }
+    }
+    return { files, deletions: base.deletions, executables: base.executables }
   }
 
   /** Return the cached store for this configuration, creating it on change. */
@@ -1215,21 +1420,37 @@ export class SyncEngine {
   }
 
   /** Read everything needed from the repository. */
-  private async readRemote(store: RepoStore, config: SyncConfig, head: string | null): Promise<RemoteRead> {
+  private async readRemote(
+    store: RepoStore,
+    config: SyncConfig,
+    head: string | null,
+    self?: { id: string; dshVersion: string },
+  ): Promise<RemoteRead> {
     let manifest: Manifest | null = null
     let state: RemoteProfileState | null = null
     let configs: Record<string, Record<string, JsonValue>> = {}
     let skills: SkillBackup | null = null
     let devices: Record<string, DeviceSnapshot> = {}
-    try {
-      manifest = await store.readManifest()
-    } catch (error) {
-      if (!isMissingRepository(error)) throw error
+    let v2: RepoV2Read | null = null
+    const schemaVersion = await detectRepoSchemaVersion(store).catch(() => null)
+    if (schemaVersion === 2 && self !== undefined) {
+      v2 = await readV2State(store, this.deps.activeProfile, self.id, self.dshVersion)
+      if (v2 !== null) {
+        // The v2 model is authoritative; the v1 view is derived from it.
+        state = desiredRemoteState(v2, this.deps.activeProfile, new Date().toISOString())
+      }
     }
-    try {
-      state = await store.readProfileState(this.deps.activeProfile)
-    } catch (error) {
-      if (!isMissingRepository(error)) throw error
+    if (v2 === null) {
+      try {
+        manifest = await store.readManifest()
+      } catch (error) {
+        if (!isMissingRepository(error)) throw error
+      }
+      try {
+        state = await store.readProfileState(this.deps.activeProfile)
+      } catch (error) {
+        if (!isMissingRepository(error)) throw error
+      }
     }
     try {
       configs = await store.readConfigs(this.deps.activeProfile)
@@ -1246,7 +1467,12 @@ export class SyncEngine {
     } catch {
       devices = {}
     }
-    return { manifest, state, configs, skills, devices, head }
+    return { manifest, state, configs, skills, devices, head, v2 }
+  }
+
+  /** Identity used when reading the v2 repository model. */
+  private selfRef(state: LocalState): { id: string; dshVersion: string } {
+    return { id: state.device.id, dshVersion: state.device.dshVersion }
   }
 
   /** Read a repository state at one commit. */
@@ -1262,6 +1488,7 @@ export class SyncEngine {
       skills: snapshot.skills,
       devices: snapshot.device === null ? {} : {},
       head: commit,
+      v2: null,
     }
   }
 
@@ -1278,7 +1505,7 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare({ signal: options.signal })
         const read = options.commit === undefined || options.commit === ''
-          ? await this.readRemote(store, config, prepared.head)
+          ? await this.readRemote(store, config, prepared.head, this.selfRef(state))
           : await this.readAtCommit(store, config, options.commit)
         const local = await this.scanLocal(config, true)
         let plan = this.scopedPlan(config, planRestore(this.planInput(config, local, read, state, options.resolutions)))
@@ -1474,9 +1701,29 @@ export class SyncEngine {
     const state = await this.readState()
     const { store } = this.repoFor(config)
     const prepared = await store.prepare({ signal })
-    const read = await this.readRemote(store, config, prepared.head)
+    const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
     const local = await this.scanLocal(config)
-    return planBackup(this.planInput(config, local, read, state))
+    const plan = planBackup(this.planInput(config, local, read, state))
+    this.appendMultiDeviceBackupWarning(read, plan)
+    return plan
+  }
+
+  /**
+   * Explain the multi-device caveat on backup plans.
+   *
+   * Backup only uploads this device; it never installs what other devices
+   * published. With a v2 repository the policy can turn the notice off; with a
+   * v1 repository (or no policy yet) it is always shown because there is no
+   * safer default.
+   */
+  private appendMultiDeviceBackupWarning(read: RemoteRead, plan: SyncPlan): void {
+    const deviceCount = read.v2 !== null ? read.v2.manifest.devices.length : Object.keys(read.devices).length
+    const enabled = read.v2 === null || read.v2.policy.backupButton.warnWhenMultiDevice
+    if (deviceCount <= 1 || !enabled) return
+    plan.warnings.push(
+      `仓库中有 ${deviceCount} 台设备。备份只上传本机状态，不会安装其他设备的新版本；多设备请使用「同步」/ ` +
+        `${deviceCount} devices share this repository. Backup only uploads this device and installs nothing; use Sync instead.`,
+    )
   }
 
   /** Read configuration. */

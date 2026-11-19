@@ -1,9 +1,9 @@
 # 多设备同步设计（v0.3.0）
 
-- 状态：草案，待确认
+- 状态：已在 0.3.0 实现（本文保留设计依据与规则表；实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md) 3.6、5.2 与 `services/repo-v2.ts`）
 - 目标版本：0.3.0（发版只在你明确说「发版」时进行）
 - 基线版本：0.2.13
-- 相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)（v0.2.x 实现）、[PUBLISHING.md](PUBLISHING.md)
+- 相关文档：[ARCHITECTURE.md](ARCHITECTURE.md)、[PUBLISHING.md](PUBLISHING.md)
 - 证据来源：A/B 两台 Mac 的真实仓库 `dsh-plugin-backup`（34 个提交）、A 机 `sync.log`、B 机只读诊断报告（2026-11-19）
 
 ---

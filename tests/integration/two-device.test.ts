@@ -86,7 +86,7 @@ describe('two-device synchronization', () => {
     expect(allText).not.toContain('hunter2hunter2')
 
     const manifest = JSON.parse(readRepoFile(ctx.bareRepo, 'manifest.json')) as { schemaVersion: number }
-    expect(manifest.schemaVersion).toBe(1)
+    expect(manifest.schemaVersion).toBe(2)
 
     // Second device: preview then restore.
     const preview = await ctx.win.engine.previewRestore()
@@ -178,15 +178,21 @@ describe('two-device synchronization', () => {
     expect(state.plugins.beta?.deleted).toBe(true)
   }, 120_000)
 
-  it('backs up a plugin the repository deleted instead of pausing', async () => {
-    const sync = await ctx.win.engine.sync({ confirmDestructive: true })
-    expect(sync.ok).toBe(true)
-    expect(ctx.win.plugin('beta')).toBeDefined()
+  it('stops and asks before resurrecting a plugin deleted by another device', async () => {
+    const error = await expectRejection(ctx.win.engine.sync(), 'conflict-present')
+    const details = error.details as { plan?: { conflicts: { pluginId: string; reason: string }[] } }
+    expect(details.plan?.conflicts.some(conflict => conflict.pluginId === 'beta' && conflict.reason === 'remote-deleted')).toBe(true)
+
+    const resolved = await ctx.win.engine.sync({
+      confirmDestructive: true,
+      resolutions: [{ pluginId: 'beta', choice: 'remote' }],
+    })
+    expect(resolved.ok).toBe(true)
+    expect(ctx.win.plugin('beta')).toBeUndefined()
     const state = JSON.parse(readRepoFile(ctx.bareRepo, 'profiles/desktop/plugins.json')) as {
       plugins: Record<string, { deleted?: boolean; version?: string }>
     }
-    expect(state.plugins.beta?.deleted).not.toBe(true)
-    expect(state.plugins.beta?.version).toBe('2.0.0')
+    expect(state.plugins.beta?.deleted).toBe(true)
   }, 120_000)
   it('rolls back configuration and enablement from a snapshot', async () => {
     const snapshots = await ctx.win.engine.listSnapshots()
@@ -273,6 +279,16 @@ describe('two-device synchronization', () => {
     expect(status.config.repoUrl).toBe(ctx.bareRepo)
     expect(status.localPluginCount).toBeGreaterThan(0)
     expect(['synced', 'ahead', 'behind', 'diverged', 'conflict', 'error', 'unknown', 'not-configured']).toContain(status.state)
+  }, 120_000)
+
+  it('exposes repository devices and the multi-device backup caveat', async () => {
+    const { status } = await ctx.mac.engine.status({ refresh: true })
+    expect(status.repoSchemaVersion).toBe(2)
+    expect(status.remoteDeviceCount).toBe(2)
+    expect((status.devices ?? []).map(device => device.name).sort()).toEqual(['mac', 'win'])
+
+    const preview = await ctx.mac.engine.diff({ direction: 'push' })
+    expect(preview.plan.warnings.some(warning => warning.includes('备份只上传'))).toBe(true)
   }, 120_000)
   it('backs up deployed skills and restores only missing ones', async () => {
     const macAlpha = join(ctx.mac.root, 'skills', 'alpha-skill')
@@ -417,4 +433,36 @@ describe('two-device synchronization', () => {
 
 
 
+
+  it('records plugins that only activate after a restart', async () => {
+    const bare = createBareRepo(ctx.root, 'restart.git')
+    const source = await createFakeDevice({ root: ctx.root, name: 'restart-source', repoUrl: bare, platform: 'darwin' })
+    source.addPlugin({ name: 'delta', version: '1.2.3', enabled: true, configs: {} })
+    expect((await source.engine.backup({ confirmDestructive: true })).ok).toBe(true)
+
+    const target = await createFakeDevice({
+      root: ctx.root,
+      name: 'restart-target',
+      repoUrl: bare,
+      platform: 'darwin',
+      hostHooks: {
+        install: spec => ({
+          changed: true,
+          application: 'restart-required',
+          restartReason: 'test restart',
+          stage: 'install',
+          target: spec,
+        }),
+      },
+    })
+    const synced = await target.engine.sync({ confirmDestructive: true })
+    expect(synced.ok).toBe(true)
+    const { status } = await target.engine.status({ refresh: true })
+    expect((status.pendingActivation ?? []).map(entry => entry.pluginId)).toContain('delta')
+
+    const manifest = JSON.parse(readRepoFile(bare, `devices/${target.device.id}/desktop.json`)) as {
+      status: { pendingActivation: Array<{ pluginId: string }> }
+    }
+    expect(manifest.status.pendingActivation.some(entry => entry.pluginId === 'delta')).toBe(true)
+  }, 120_000)
 })

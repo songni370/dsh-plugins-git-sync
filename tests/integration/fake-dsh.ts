@@ -78,9 +78,22 @@ export interface FakeDevice {
   scan(): Promise<import('../../src/types.js').DeviceInventory>
 }
 
+/**
+ * Optional Host-behaviour hooks for integration tests: incompatible installs,
+ * restart-required results, version skew and bundle removability.
+ */
+export interface FakeHostHooks {
+  /** Override the result of one installBundle call; undefined uses the default. */
+  install?: (spec: string, device: FakeDevice) => DshChangeResult | undefined
+  /** Version the Host claims for an installed bundle (undefined → the plugin's version). */
+  installedVersion?: (name: string) => string | undefined
+  /** Whether a bundle may be replaced by remove+install (default: not built-in). */
+  removable?: (name: string) => boolean
+}
+
 /** In-memory plugin manager implementing the Host service contract. */
 export class FakePluginManager implements DshPluginManager {
-  constructor(private readonly device: FakeDevice) {}
+  constructor(private readonly device: FakeDevice, private readonly hooks?: FakeHostHooks) {}
 
   private plugin(name: string): FakePlugin | undefined {
     return this.device.plugins.get(name)
@@ -104,12 +117,12 @@ export class FakePluginManager implements DshPluginManager {
       installTarget: plugin.builtIn === true
         ? undefined
         : { spec: plugin.spec ?? `${plugin.name}@${plugin.version}`, version: plugin.version },
-      version: plugin.version,
+      version: this.hooks?.installedVersion?.(plugin.name) ?? plugin.version,
       source: plugin.source,
       enabled: plugin.enabled,
       installed: true,
       optional: false,
-      removable: plugin.builtIn !== true,
+      removable: this.hooks?.removable?.(plugin.name) ?? plugin.builtIn !== true,
       rows: [{ rowId: plugin.name, moduleName: plugin.name, entryId: `entry:${plugin.name}` }],
       overrides: [],
     }))
@@ -122,6 +135,8 @@ export class FakePluginManager implements DshPluginManager {
   }
 
   async installBundle(spec: string, options?: { enabled?: boolean }): Promise<DshChangeResult> {
+    const override = this.hooks?.install?.(spec, this.device)
+    if (override !== undefined) return override
     const parsed = parseNpmSpec(spec)
     if (parsed === null) {
       return { changed: false, application: 'failed', stage: 'install', target: spec, error: { code: 'invalid-spec' } }
@@ -240,6 +255,8 @@ export async function createFakeDevice(options: {
   repoUrl: string
   branch?: string
   platform?: string
+  /** Optional Host-behaviour overrides (incompatible installs, restart-required, version skew). */
+  hostHooks?: FakeHostHooks
   /** Called by the engine after every successful repository operation. */
   onOperationSuccess?: () => void
 }): Promise<FakeDevice> {
@@ -272,7 +289,7 @@ export async function createFakeDevice(options: {
     device: createDeviceInfo({
       existing: null,
       name: options.name,
-      dshVersion: '0.2.1-test',
+      dshVersion: '0.2.2-rc.5',
       pluginVersion: '0.1.0',
     }),
     manager: undefined as unknown as FakePluginManager,
@@ -295,7 +312,7 @@ export async function createFakeDevice(options: {
       return scanner.scan({ config, profile })
     },
   }
-  device.manager = new FakePluginManager(device)
+  device.manager = new FakePluginManager(device, options.hostHooks)
   device.configEditor = new FakeConfigEditor(device)
 
   const activeProfile = profile
@@ -320,7 +337,7 @@ export async function createFakeDevice(options: {
     },
     profilesRoot,
     pluginVersion: '0.1.0',
-    dshVersion: '0.2.1-test',
+    dshVersion: '0.2.2-rc.5',
     logger,
     device: device.device,
   })
@@ -351,7 +368,7 @@ export async function createFakeDevice(options: {
     configGateway,
     installer,
     pluginVersion: '0.1.0',
-    dshVersion: '0.2.1-test',
+    dshVersion: '0.2.2-rc.5',
     dshHome: home,
     activeProfile,
     availableProfiles,

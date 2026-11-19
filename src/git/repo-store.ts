@@ -923,6 +923,25 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     return parseManifestJson(text)
   }
 
+  /** Read one arbitrary UTF-8 repository file (used by the v2 model). */
+  const readRepoText = async (relative: string): Promise<string | null> => {
+    await ensurePrepared()
+    const { backupDir } = settings()
+    if ((await readHead()) === null) return null
+    if (!isSafeRelativePath(relative)) return null
+    return await readRepoFile(workDir, repoPath(backupDir, relative))
+  }
+
+  /** List one repository directory (used to discover v2 device manifests). */
+  const listRepoPath = async (relative: string): Promise<Array<{ name: string; directory: boolean }> | null> => {
+    await ensurePrepared()
+    const { backupDir } = settings()
+    if ((await readHead()) === null) return null
+    if (relative !== '' && !isSafeRelativePath(relative)) return null
+    const entries = await listRepoDirectory(workDir, repoPath(backupDir, relative))
+    return entries === null ? null : entries.map(entry => ({ name: entry.name, directory: entry.isDirectory() }))
+  }
+
   const readProfileState = async (profile: string): Promise<RemoteProfileState | null> => {
     await ensurePrepared()
     const { backupDir } = settings()
@@ -1012,7 +1031,12 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     const readSnapshotDevice = async (repoRelative: string): Promise<DeviceInfo | null> => {
       const text = await showAtRevision(revision, repoRelative, signal)
       if (text === null) return null
-      return parseDeviceSnapshotJson(text).device
+      try {
+        return parseDeviceSnapshotJson(text).device
+      } catch {
+        // v2 device manifests live at the same path but use the v2 layout.
+        return null
+      }
     }
     if (options.deviceId !== undefined && options.deviceId !== '') {
       const deviceId = assertDeviceId(options.deviceId)
@@ -1099,8 +1123,19 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
       }
     }
     const device = await deviceAtRevision(revision, profile, backupDir)
+    // A v2 commit's manifest.json and device manifests use the v2 layout. Rollback
+    // and restore still work from the v1 profile mirror written alongside them, so
+    // a parse failure here must not make the whole revision unreadable.
+    const parseTolerant = <T>(text: string | null, parser: (input: string) => T): T | null => {
+      if (text === null) return null
+      try {
+        return parser(text)
+      } catch {
+        return null
+      }
+    }
     return {
-      manifest: manifestText === null ? null : parseManifestJson(manifestText),
+      manifest: parseTolerant(manifestText, parseManifestJson),
       state: stateText === null ? null : parseRemoteProfileStateJson(stateText),
       configs,
       skills,
@@ -1182,6 +1217,8 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     prepare,
     prepared: () => preparedOnce,
     readManifest,
+    readRepoText,
+    listRepoPath,
     readProfileState,
     readConfigs,
     readSkills,

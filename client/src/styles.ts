@@ -1021,6 +1021,36 @@ export const CSS = `
   gap: 10px 20px;
   min-width: 0;
 }
+.dgs-statusDevices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  min-width: 0;
+}
+.dgs-statusDeviceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+.dgs-statusDeviceName {
+  color: var(--dsh-text-primary, inherit);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dgs-statusDeviceMeta {
+  color: var(--dsh-text-tertiary, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
 .dgs-statusMetaItem {
   display: flex;
   flex-direction: column;

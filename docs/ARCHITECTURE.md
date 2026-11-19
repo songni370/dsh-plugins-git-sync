@@ -62,6 +62,8 @@ This document is for maintainers: module boundaries, data flow, state files, the
 | 调度 | `services/scheduler.ts` | 定时/启动检查/变更触发；互斥、冷却、退避、暂停；定时器随生命周期清理。 | → engine |
 | 快照 | `services/snapshot.ts` | 快照创建/读取/列表；回滚启用状态（不能重装插件）。 | → state/store, gateway, installer |
 | 仓库文件 | `services/repo-files.ts` | 把计划结果转成仓库文件集合与删除列表；序列化前清洗行内 `moduleName`/`entryId`（绝对/本地路径替换为包名）；构建基线。 | → manifest, core/paths |
+| 多设备模型 | `services/repo-v2.ts` | v2 仓库文档的类型/默认策略/解析与确定性序列化；`mergeDesired` 把各设备声明合并成本机期望状态（scope、`track`/`pin`、删除传播、最低 DSH 版本、冲突与 blocked 原因）。 | → types, core/version |
+| 多设备桥接 | `services/repo-v2-bridge.ts` | 读取 v2 布局（manifest / policy / devices）、把期望状态投影成 `RemoteProfileState` 供现有 planner 使用、构建本设备声明与下一次提交的 v2 文件（含 v1→v2 迁移标记）。 | → repo-v2, repo-files |
 | 扫描 | `scanner/inventory.ts` | 从 plugin manager（主）或 profile `package.json`（降级）生成 `DeviceInventory`；分类来源、计算 `installSpec`；不读取配置。 | → config-gateway, profiles, core |
 | 配置网关 | `scanner/config-gateway.ts` | 历史模块；配置备份移除后扫描与备份路径不再调用。 | → core/redact |
 | 安装器 | `adapters/installer.ts` | `pluginManager.installBundle` / `setBundleEnabled` / `setPluginEnabled` / `removeBundle`；不允许跨 Profile 操作；返回 `pendingBuilds`。 | → dsh 结构类型 |
@@ -175,12 +177,27 @@ engine 任意一次 sync/backup/restore 成功 → 持久化 autoSyncFailures=0�
 scheduler.noteSuccess()：手动操作修复仓库后自动同步恢复，无需重启。
 ```
 
+### 3.6 多设备 v2 仓库模型（读取与写入）
+
+v0.3.0 在 v1 的 `profiles/<profile>/plugins.json` 之外引入 v2 布局（完整说明见 `docs/MULTI_DEVICE_SYNC.md`）：
+
+```text
+manifest.json                         schemaVersion 2；设备列表、profile 索引、迁移标记
+policies/<profile>.json               仓库策略：同步模式、删除传播、版本策略、最低 DSH 版本
+devices/<deviceId>/<profile>.json     该设备声明的期望状态 + removed 删除记录 + skills + status
+profiles/<profile>/plugins.json       仍作为 v1 只读镜像写入，供旧版客户端读取
+```
+
+读取（`engine.readRemote`）：先探测 `manifest.json` 的 `schemaVersion`。为 2 时读取 manifest、policy 与全部设备声明，调用 `mergeDesired({ selfId, policy, devices, localDshVersion })` 得到本机期望状态，再用 `desiredRemoteState()` 投影成 `RemoteProfileState`，后续 `planSync`/`planBackup`/`planRestore` 无需知道 v2 的存在。删除目标 = v1 tombstone ∪ v2 `removed` ∪ `deleted-while-declared` 冲突，统一交给 planner 处理。为 1 或仓库为空时按旧路径读取，下次写入自动迁移。
+
+写入（`buildRemoteFiles`）：在 v1 文件集合之上合并 `buildV2RepoFiles()` 产出的 `manifest.json`、`policies/<profile>.json`、`devices/<self>/<profile>.json`；设备声明由 `buildOwnDeviceManifest()` 基于「扫描 + 计划动作后的库存」生成：保留旧声明的 scope/pin，只有明确的本机删除才写入 `removed`，失败的安装或临时缺失不会写成删除；`status.pendingActivation` 记录等待重启生效的插件。本机状态 `state.json` 同样保存 `pendingActivation`，没有提交时状态页也能显示。首次写入时 `migratedFrom: 1` 并把仓库里已有的 v1 设备快照并入 manifest。
+
 ## 4. 本机状态文件
 
 | 路径（`$DSH_HOME/dsh-plugins-git-sync/`） | 写入者 | 内容 |
 | --- | --- | --- |
 | `config.json` | `state/store.ts` `ConfigStore` | 归一化后的 `SyncConfig`（无秘密；`tokenEnvVar` 只是变量名） |
-| `state.json` | `StateStore` | `LocalState`：设备身份、`lastSyncAt`、`lastCommit`、`lastOperation`、`lastError`、`baselines`、`conflicts`、`connection`、`autoSyncFailures` |
+| `state.json` | `StateStore` | `LocalState`：设备身份、`lastSyncAt`、`lastCommit`、`lastOperation`、`lastError`、`baselines`、`conflicts`、`connection`、`autoSyncFailures`、`pendingActivation`（等待重启生效的插件，也同步写入设备声明） |
 | `sync.log` | `core/logger.ts` | JSONL，每行 `{at, level, message, details?}`（已脱敏）；内存环形缓冲 500 条 |
 | `snapshots/<id>/snapshot.json` | `services/snapshot.ts` | 快照：`{schemaVersion, createdAt, operation, profile, device, inventory, configs}`；id 形如 `20261028-150501-ab12` |
 | `work/<hash>/` | `git/repo-store.ts` | 备份仓库的工作副本；`hash = sha256(repoUrl + "\n" + branch)` 前 20 个十六进制字符；纯缓存，可删除 |
@@ -225,13 +242,13 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 | --- | --- | --- | --- | --- |
 | 有 | 有 | 否 | 否 | 无动作（可能记录 `identical` 差异） |
 | 有（改动） | 有 | 是 | 否 | `push-plugin`：把本机状态写进仓库 |
-| 有 | 无 | 任意 | 任意 | 不算冲突：`push-plugin` 把本机插件重新写入仓库；不可安装时追加「仅记录」警告 |
+| 有 | 无（仓库 tombstone） | 任意 | 任意 | 冲突 `remote-deleted`：`local` → 重新推送（复活，需要确认）；`remote` → 删除本机（破坏性）；未选择时同步停止 |
 | 无（本机删除） | 有 | 是 | 否 | 冲突 `local-deleted`；选择 `local` → `remove-remote`（破坏性）；选择 `remote` → 恢复本机；`skip` 保留冲突 |
 | 有/无 | 有（改动） | 否 | 是 | `install/upgrade/downgrade`（+`enable/disable`）应用远端状态 |
 | 有 | 有 | 是 | 是 | 状态仍不同则冲突 `both-changed` |
 | 无 | 无 | — | — | 无动作 |
 
-本机有、仓库没有时，即使基线显示仓库曾经删除过它，也不再产生 `remote-deleted` 冲突；同步会按本机状态重新备份。仓库条目的删除只在本机删除后的 `local-deleted` 冲突中发生，并且必须由用户显式选择。
+仓库里的删除记录（tombstone）优先于本机状态：其他设备同步到「仓库已删除、本机仍有」时会停下来询问，选 `local` 才会复活该插件，默认不会自动重写。只有本机明确指出 `remove-local`（同步删除）时才会写删除记录；备份不会因为某次扫描缺失就写删除。
 
 插件配置不参与比较：两边只在配置上不同、版本和启停一致时，视为没有变化；不会生成 `push-config` / `restore-config`，也不会因此产生冲突。
 
@@ -239,10 +256,10 @@ statesEqual(a, b) = a 存在性相同 && a.version === b.version
 
 | choice | 双方都改（均存在） | 本机删除 / 远端仍在 | 远端删除 / 本机仍在 |
 | --- | --- | --- | --- |
-| `local` | `push-plugin` | `remove-remote`（破坏性，从仓库删除） |
-| `remote` | 应用远端（install/upgrade/...） | 应用远端（恢复本机插件） |
-| `skip`（默认） | 不处理该插件，其余动作继续；冲突保留 | 不处理该插件，仓库保持不变，其余动作继续 |
-| `manual` | 保留冲突（需人工处理） | 保留冲突 |
+| `local` | `push-plugin` | `remove-remote`（破坏性，从仓库删除） | `push-plugin`（复活，需确认） |
+| `remote` | 应用远端（install/upgrade/...） | 应用远端（恢复本机插件） | `remove-local`（破坏性，删除本机） |
+| `skip`（默认） | 不处理该插件，其余动作继续；冲突保留 | 不处理该插件，仓库保持不变，其余动作继续 | 不处理该插件，冲突保留 |
+| `manual` | 保留冲突（需人工处理） | 保留冲突 | 保留冲突 |
 
 恢复（`planRestore`）不再产生配置冲突；它只安装/升级/启停插件，不读写插件配置。
 
@@ -383,6 +400,7 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | --- | --- | --- |
 | **本地插件归档与恢复** | 扫描器在 `PluginRecord.archive` 填 `PluginArchive`；`repo-files.ts` 写入/读取 tarball；`plan.ts` 为本机/远端本地插件生成 `installSpec = "backup-tarball:<path>"`；`engine.resolveTarballSpec()` 已支持该前缀（`executor.ts` 也会走它）；恢复前校验 `sha256`/`size` | 归档内容会进仓库，注意体积上限（`MAX_BACKUP_FILES`）与解包/路径安全；平台差异仍需警告 |
 | **多 Profile 同步** | `SyncConfig.profiles` 已存在（当前被归一化为「当前 profile 在前」）；需要把 `engine` 里所有 `this.deps.activeProfile` 换成「遍历 profiles」的上下文，并让基线/状态按 profile 存（`state.baselines` 已是 map）；安装器 `requireActiveProfile()` 需要放宽或改为按 profile 路由 | 先在 DSH 侧确认跨 Profile 安装/启停的 API 是否可用 |
+| **per-device scope / 版本策略扩展** | v0.3.0 已把 scope、`track`/`pin`、删除传播放进仓库策略与设备声明（`services/repo-v2.ts`）；新增字段时同时改 `defaultPolicy()`、`parse*V2`、`mergeDesired` 与 `docs/MULTI_DEVICE_SYNC.md` 的规则表 | 旧版插件读不到 v2 字段会忽略；不要改变已有字段语义，新增字段必须可选 |
 | **新认证方式** | `types.ts` 的 `GitAuthMode`、`state/store.ts` 归一化、`index.ts` 的 `tokenProvider`/`git-runner` 环境注入、`client` 配置表单 | 任何凭据都应只存在于环境/子进程运行时，不落配置与日志 |
 | **新动作类型** | `types.ts` `PlanActionKind`、`plan.ts` 生成、`executor.ts` 执行（本机动作）或 `repo-files.ts`（仓库动作）、UI 的 `planKind*` 文案 | 破坏性动作必须 `destructive: true` 并让引擎要求确认 |
 | **新 HTTP 路由** | `http/api-types.ts` 的 `ApiRouteName` + `http/routes.ts` 的 `handlers` + `client/src/api.ts` | 保持 POST + 信封；错误用 `SyncError` 以便统一映射 |
@@ -403,10 +421,12 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `tests/unit/git-runner.test.ts` | Git 参数校验（NUL/选项注入）、无 shell、超时、输出截断、令牌只进环境、错误分类与脱敏 |
 | `tests/unit/repo-store.test.ts` | 克隆/刷新、事务化写入、无变化不提交、非快进重试与 `rebuild()`、history 解析、readAtCommit |
 | `tests/unit/repo-files.test.ts` | 序列化边界的机器路径清洗（`sanitizeModuleName`/`sanitizePluginRecord`/`toRemoteEntry`）、配置仅在变化时重写、版本化布局 |
+| `tests/unit/repo-v2.test.ts` | v2 文档解析/序列化、默认策略、`mergeDesired` 全部规则（scope、删除传播、pin/track、预发布、LWW、blocked） |
+| `tests/unit/repo-v2-bridge.test.ts` | v2 文件构建、v1→v2 迁移标记、旧设备并入 |
 | `tests/unit/tools.test.ts` | 恰好注册 6 个工具、工具结果是无损 JSON、两阶段确认（预览后才执行）、错误归一化 |
 | `tests/unit/routes.test.ts` | HTTP 面：文档化的路由全部 POST、`{ok,value}`/`{ok,error}` 信封、非法请求体、`direction` 透传与返回形状、破坏性确认带 plan、未知错误不泄露细节 |
 | `tests/unit/scheduler.test.ts` | 自动同步调度：关闭时不动作、按间隔运行所选模式、冲突暂停、失败退避、变更防抖、引擎忙时跳过、启动检查、dispose 清理定时器 |
 | `tests/client/render.test.tsx` | 设置页 jsdom 渲染冒烟：挂载与初始 Host 调用、状态/仓库配置/插件列表分区渲染、`confirmation-required` 时打开确认对话框（**不是**真实 Harness 页面） |
 | `tests/integration/two-device.test.ts` | 两台模拟设备 + 真实本地 bare Git 仓库的端到端流程：备份/恢复、无变化不提交、并发新增、版本变更、配置冲突、删除确认、历史 trailer、非法 manifest、不可达仓库、本地插件排除、状态计数 |
 
-集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**13 个测试文件 / 191 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。
+集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**37 个测试文件 / 367 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。

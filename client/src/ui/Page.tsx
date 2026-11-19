@@ -909,6 +909,17 @@ export function Page({ t }: PageProps): ReactElement {
                     {t('autoSyncFailureNotice', { count: view.autoSyncFailures ?? 0 })}
                   </Banner>
                 ) : null}
+                {view.pendingActivation !== undefined && view.pendingActivation.length > 0 ? (
+                  <Banner tone="warn">
+                    {t('pendingActivationNotice', {
+                      count: view.pendingActivation.length,
+                      plugins: view.pendingActivation.map(entry => entry.pluginId).join(', '),
+                    })}
+                  </Banner>
+                ) : null}
+                {(view.remoteDeviceCount ?? 0) > 1 ? (
+                  <Banner tone="idle">{t('backupMultiDeviceHint')}</Banner>
+                ) : null}
               </>
             }
             autoPanel={

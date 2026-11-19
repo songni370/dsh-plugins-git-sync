@@ -482,6 +482,34 @@ export interface StatusView {
   busy: boolean
   /** Repository reachability from the last check. */
   connection: ConnectionTestResult | null
+  /** Number of devices that declared state in the repository. */
+  remoteDeviceCount?: number
+  /** Known devices, newest state first (v2 manifests or legacy snapshots). */
+  devices?: StatusDevice[]
+  /** Plugins installed earlier that still need a restart to activate. */
+  pendingActivation?: StatusPendingActivation[]
+  /** Repository layout version: 2 for the multi-device model, 1 for legacy. */
+  repoSchemaVersion?: number | null
+}
+
+/** One device known to the repository, as shown by the settings page. */
+export interface StatusDevice {
+  id: string
+  name: string
+  platform: string
+  arch: string
+  dshVersion: string
+  pluginVersion: string
+  lastSyncAt: string | null
+  lastResult: string
+  updatedAt: string
+}
+
+/** A plugin whose new version is installed but not active until a restart. */
+export interface StatusPendingActivation {
+  pluginId: string
+  version: string
+  reason: string
 }
 
 /** Outcome of a repository connectivity test. */
@@ -567,6 +595,12 @@ export interface LocalState {
    * settings-page notice. Any successful repository operation resets it.
    */
   autoSyncFailures: number
+  /**
+   * Plugins installed by a restart-required Host operation whose new version
+   * becomes active only after the next DSH restart. Local to this device; the
+   * same list is also published in the device manifest when a commit is written.
+   */
+  pendingActivation?: Array<{ pluginId: string; version: string; reason: string }>
 }
 
 // ---------------------------------------------------------------------------
@@ -690,6 +724,10 @@ export interface RepoStore {
   prepared(): boolean
   /** Read the root manifest, or null when the repository is empty. */
   readManifest(): Promise<Manifest | null>
+  /** Read one arbitrary UTF-8 repository file (v2 layout); null when absent. */
+  readRepoText(relative: string): Promise<string | null>
+  /** List one repository directory (v2 device discovery); null when absent. */
+  listRepoPath(relative: string): Promise<Array<{ name: string; directory: boolean }> | null>
   /** Read one profile's shared state. */
   readProfileState(profile: string): Promise<RemoteProfileState | null>
   /** Read one profile's config files. */

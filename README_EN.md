@@ -19,6 +19,10 @@ Reinstalling DSH or moving to another machine no longer means rebuilding a plugi
 - **Backup / restore**: push user-installed plugins (version, enabled state) to Git; install them back on another device.
 - **Skill backup**: capture deployed files under `~/.dsh/skills` (following symlinks to their content) as a real file tree at `profiles/<profile>/skills/<name>/...`; restore only missing skills and never overwrite an existing one.
 - **Two-way sync**: upload local changes, download repository changes; when both sides changed it stops and asks.
+- **Per-device declarations**: the repository now uses a v2 model — each device declares its own plugins, enabled state, per-device scope and skills, while repository policy controls deletion propagation and version policies. Existing v1 repositories migrate automatically on the first write and the v1 mirror is still written for older clients.
+- **Deletions do not resurrect**: only an explicit local uninstall records a deletion, and it propagates to the devices in scope; a device that still has the plugin stops and asks instead of silently re-uploading it.
+- **Device visibility**: the status card lists the devices sharing the repository with their last result; backup warns that it only uploads and suggests Sync when more than one device is present.
+- **Pending activation**: installs that the Host reports as `restart-required` are shown as pending instead of being reported as active.
 - **Conflict handling**: overwrite repository with this device / overwrite this device with repository / leave for now; each button explains what it will do. When this device removed a plugin that the repository still backs up, choose Delete from repository or Keep repository.
 - **History rollback**: restore this device to any previous commit; local safety snapshots keep the latest 20 automatically.
 - **Automatic sync**: on client startup and plugin install/update/remove; **no interval timer**; repeated failures are shown on the settings page and cleared by the next successful operation.
@@ -100,6 +104,8 @@ Install with the local directory path via `plugin_manager.install_bundle`; rebui
 4. Click "Sync" to create the first backup.
 5. On a second device: install the plugin, configure the same repository, save, then "Sync" (or "Restore from Git").
 
+The repository uses the v2 layout (`manifest.json` + `policies/<profile>.json` + `devices/<deviceId>/<profile>.json`) and still writes the v1 `profiles/<profile>/plugins.json` mirror; upgrading from an older repository migrates it automatically.
+
 Each DSH profile installs and syncs separately; the repository separates them under `profiles/<profile>/`.
 
 ## How sync decides
@@ -112,12 +118,15 @@ The device keeps a **baseline** of the last agreed state and compares `base / lo
 | Only remote changed | Apply locally (install/upgrade/downgrade/enable/disable) |
 | Neither changed | Skip |
 | Both changed identically | Skip |
-| Present here, missing in the repository | Not a conflict; back it up into the repository |
+| Present here, missing in the repository (no deletion record) | Back it up into the repository |
+| Present here, deleted in the repository by another device | Conflict: restore the repository copy or delete locally; it is not resurrected automatically |
 | Missing here, still in the repository | Conflict: delete from repository or keep repository |
 | Both changed differently | Conflict; wait for your choice |
 
 - Plugin configuration is never synchronized: only plugin names, versions, enabled state, install source and deployed skills are backed up.
 - A repository entry is only deleted after you explicitly choose “Delete from repository”; “Keep repository” keeps it and lets the rest of the sync run.
+- Deletion records follow the repository policy (propagate by default); other devices ask before removing or re-creating, never silently.
+- Version policy tracks the newest by default; downgrades need confirmation; plugins that require a newer DSH are skipped and marked blocked instead of failing repeatedly.
 - When the repository is missing a plugin this device has, nothing is removed here; it is backed up again.
 - Deleting repository entries is destructive and only runs after confirmation.
 - A local snapshot is taken before changing this device; enabled state is rolled back on failure when possible.

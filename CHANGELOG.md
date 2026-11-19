@@ -6,17 +6,31 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
-### Fixed
+## [0.3.0] - 2026-11-19
 
-- 修复插件升级失败时先卸载旧版、安装新版本被宿主拒绝后插件消失且无法回滚的问题：升级改为可恢复流程，失败时自动装回旧版本；安装完成后校验实际版本，`restart-required` 会标记为「待重启生效」而不再当作已生效。
-- 修复「已安装」但插件管理器没有报告版本时被静默当作成功的问题（升级被吞掉、同步反复重复同一动作并一直显示版本落后）；版本未知时明确失败并给出原因。
-- 检测到冲突后把未解决冲突写入本机状态，重启后仍然可见，解决后自动清除；此前页面显示 0 个冲突而预检显示 1 个，自动同步的暂停原因也无法解释。
-- 读取旧版配置文件（例如 `includeConfigs: true`）后自动规范化写回，避免磁盘配置与运行时配置长期不一致。
+多设备同步重构：仓库升级为 v2 模型（每台设备声明自己的期望状态 + 仓库策略），删除、版本与安装行为都有明确规则；旧仓库首次写入时自动迁移，v1 镜像继续保留供旧版读取。
+
+### Added
+
+- 仓库 v2 模型：`manifest.json`（schemaVersion 2）、仓库策略 `policies/<profile>.json`、每台设备的 `devices/<deviceId>/<profile>.json`（插件、删除记录、技能、最近同步状态）；旧版 `profiles/<profile>/plugins.json` 继续作为只读镜像写入，旧版客户端仍可读取仓库。
+- 每设备声明与期望状态合并：支持按设备限定插件 `scope`、`track`/`pin` 版本策略、降级确认与最低 DSH 版本预检；冲突（pin 不一致、一台已删除另一台仍声明、只能安装预发布版）会作为阻塞原因返回并写明处理方式。
+- 删除语义：只有本机明确卸载才会写入删除记录，并默认传播到范围内的其他设备；其他设备同步时若仍保留该插件会停下来要求确认，不再自动复活已删除的插件。
+- 设备可见性：状态卡显示仓库中的设备数量，以及每台设备最近同步结果与 DSH 版本；检测到多设备时备份会提示「备份只上传本机状态，不会安装其他设备的新版本，请使用同步」。
+- 待重启生效：Host 返回 `restart-required` 的安装会记录为「待重启生效」（本机状态与设备声明），不再被误报为已生效。
+- 仓库 v1→v2 迁移：首次写入 v2 时记录 `migratedFrom: 1` 并把已有设备快照并入；回滚与恢复仍可读取旧版镜像。
 
 ### Changed
 
+- 同步与备份计划把 v2 期望状态作为远端状态参与三方比较；删除目标（tombstone）在计划中单独处理，推送删除与本地删除都需要显式确认。
 - 启用/停用插件失败时把该动作标记为失败，不再只写入错误文本。
-- 新增 `docs/MULTI_DEVICE_SYNC.md`：v0.3.0 多设备同步设计草案（仓库 v2 模型、删除与版本策略、安装管线、迁移与测试矩阵）。
+- 新增 `docs/MULTI_DEVICE_SYNC.md`：v0.3.0 多设备同步设计说明（仓库 v2 模型、删除与版本策略、安装管线、迁移与测试矩阵）。
+
+### Fixed
+
+- 修复插件升级失败时先卸载旧版、安装新版本被宿主拒绝后插件消失且无法回滚的问题：升级改为可恢复流程，失败时自动装回旧版本；安装完成后校验实际版本，`restart-required` 不再当作已生效。
+- 修复「已安装」但插件管理器没有报告版本时被静默当作成功的问题（升级被吞掉、同步反复重复同一动作并一直显示版本落后）；版本未知时明确失败并给出原因。
+- 检测到冲突后把未解决冲突写入本机状态，重启后仍然可见，解决后自动清除；此前页面显示 0 个冲突而预检显示 1 个，自动同步的暂停原因也无法解释。
+- 读取旧版配置文件（例如 `includeConfigs: true`）后自动规范化写回，避免磁盘配置与运行时配置长期不一致。
 
 ## [0.2.13] - 2026-11-13
 
@@ -192,7 +206,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 - 设置页基础界面、HTTP 路由与 6 个 Agent 工具。
 - 单元测试、双设备集成测试与 CI（macOS / Windows / Linux）。
 
-[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.13...HEAD
+[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.13...v0.3.0
 [0.2.13]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.10...v0.2.11

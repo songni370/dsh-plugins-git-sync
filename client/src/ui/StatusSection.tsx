@@ -176,6 +176,9 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
 
       <div className="dgs-statusMeta">
         <MetaCell label={t('statusDevice')} value={status.config.device.name} title={status.config.device.name} />
+        {status.remoteDeviceCount === undefined ? null : (
+          <MetaCell label={t('statusDevices')} value={String(status.remoteDeviceCount)} />
+        )}
         <MetaCell
           label={t('statusBranch')}
           value={status.branch === '' ? t('notAvailable') : status.branch}
@@ -214,6 +217,20 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
           }
         />
       </div>
+
+      {status.devices !== undefined && status.devices.length > 1 ? (
+        <div className="dgs-statusDevices">
+          {status.devices.map(device => (
+            <div key={device.id} className="dgs-statusDeviceRow" title={device.id}>
+              <span className="dgs-statusDeviceName">{device.name}</span>
+              <span className="dgs-statusDeviceMeta">
+                {device.platform} · {device.dshVersion} · {resultLabel(t, device.lastResult)} ·{' '}
+                {formatDateTime(device.lastSyncAt, t('never'))}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
     </>
   )

@@ -182,14 +182,26 @@ export declare class SyncEngine {
     listSnapshots(): Promise<string[]>;
     /** Roll back the configuration/enablement half of one snapshot. */
     rollbackSnapshot(id: string): Promise<OperationResult>;
+    /** Ids another device deleted: v1 tombstones plus v2 removals and deletion conflicts. */
+    private tombstonesOf;
     /** Build a plan input from the current reads. */
     private planInput;
+    /** Apply the planned local actions to an inventory (used for the written device declaration). */
+    private inventoryAfterPlan;
+    /**
+     * Merge the previous pending-activation list with this run's outcomes. An
+     * entry is dropped once the installed inventory shows the expected version
+     * (the restart happened); restart-required outcomes are added.
+     */
+    private pendingActivations;
     /** Build the repository file set for one plan. */
     private buildRemoteFiles;
     /** Return the cached store for this configuration, creating it on change. */
     private repoFor;
     /** Read everything needed from the repository. */
     private readRemote;
+    /** Identity used when reading the v2 repository model. */
+    private selfRef;
     /** Read a repository state at one commit. */
     private readAtCommit;
     /** Execute a restore (or history rollback) with a safety snapshot. */
@@ -206,6 +218,15 @@ export declare class SyncEngine {
     private filterSkillBackup;
     /** Preview a backup (used by the diff view). */
     private previewBackup;
+    /**
+     * Explain the multi-device caveat on backup plans.
+     *
+     * Backup only uploads this device; it never installs what other devices
+     * published. With a v2 repository the policy can turn the notice off; with a
+     * v1 repository (or no policy yet) it is always shown because there is no
+     * safer default.
+     */
+    private appendMultiDeviceBackupWarning;
     /** Read configuration. */
     private readConfig;
     /** Read local state. */

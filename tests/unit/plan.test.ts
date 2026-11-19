@@ -277,25 +277,42 @@ describe('two-way sync plan', () => {
     expect(restoreLocal.conflicts).toHaveLength(0)
   })
 
-  it('backs up a local plugin when the repository no longer has it', () => {
-    const plan = planSync(input({
+  it('asks before resurrecting a plugin deleted in the repository', () => {
+    const tombstoned = {
       base: { alpha: plugin('alpha') },
       local: { alpha: plugin('alpha') },
       remoteTombstones: new Set(['alpha']),
-    }))
-    expect(plan.conflicts).toHaveLength(0)
-    expect(actionsOf(plan, 'push-plugin', 'alpha')).toHaveLength(1)
+    }
+    const plan = planSync(input(tombstoned))
+    expect(plan.conflicts).toHaveLength(1)
+    expect(plan.conflicts[0]?.reason).toBe('remote-deleted')
+    expect(actionsOf(plan, 'push-plugin', 'alpha')).toHaveLength(0)
     expect(actionsOf(plan, 'remove-local')).toHaveLength(0)
+
+    const restore = planSync(input({
+      ...tombstoned,
+      resolutions: [{ pluginId: 'alpha', choice: 'local' }],
+    }))
+    expect(actionsOf(restore, 'push-plugin', 'alpha')).toHaveLength(1)
+
+    const remove = planSync(input({
+      ...tombstoned,
+      resolutions: [{ pluginId: 'alpha', choice: 'remote' }],
+    }))
+    const removals = actionsOf(remove, 'remove-local', 'alpha')
+    expect(removals).toHaveLength(1)
+    expect(removals[0]?.destructive).toBe(true)
   })
 
-  it('backs up a local plugin even when both sides changed and the repository copy is gone', () => {
+  it('asks before resurrecting even when the local version changed', () => {
     const plan = planSync(input({
       base: { alpha: plugin('alpha', { version: '1.0.0' }) },
       local: { alpha: plugin('alpha', { version: '1.1.0' }) },
       remoteTombstones: new Set(['alpha']),
     }))
-    expect(plan.conflicts).toHaveLength(0)
-    expect(actionsOf(plan, 'push-plugin', 'alpha')).toHaveLength(1)
+    expect(plan.conflicts).toHaveLength(1)
+    expect(plan.conflicts[0]?.reason).toBe('remote-deleted')
+    expect(actionsOf(plan, 'push-plugin', 'alpha')).toHaveLength(0)
   })
   it('detects enablement changes in both directions', () => {
     const push = planSync(input({

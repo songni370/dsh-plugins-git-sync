@@ -398,6 +398,15 @@ export function planBackup(input: PlanInput): SyncPlan {
       continue
     }
     if (local !== null) {
+      // A tombstone means another device deliberately deleted this plugin. A
+      // backup must never resurrect it; the user can restore it with sync.
+      if (input.remoteTombstones.has(id)) {
+        warnings.push(
+          `插件 ${local.name} 在仓库中已被删除，本次备份不会恢复 / deleted in the repository; backup will not restore it`,
+        )
+        diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
+        continue
+      }
       const push = remotePushActions(local, remote, includeConfigs)
       if (push.length === 0) {
         diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
@@ -583,6 +592,39 @@ export function planSync(input: PlanInput): SyncPlan {
       continue
     }
     if (remote !== null && (remote.builtIn || !remote.syncable)) continue
+
+    // Another device deliberately deleted this plugin (tombstone/removal).
+    // Never resurrect it silently; the user decides between keeping the local
+    // copy (restore) and propagating the deletion (uninstall locally).
+    if (input.remoteTombstones.has(id)) {
+      if (local === null) {
+        diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
+        continue
+      }
+      const tombstoneResolution = resolutionFor(resolutions, id)
+      if (tombstoneResolution?.choice === 'local') {
+        actions.push(...remotePushActions(local, remote, includeConfigs))
+        diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
+        continue
+      }
+      if (tombstoneResolution?.choice === 'remote') {
+        actions.push({
+          kind: 'remove-local',
+          pluginId: id,
+          pluginName: local.name,
+          detail: '仓库中已被其他设备删除，同步删除本机 / removed in the repository; removing locally',
+          destructive: true,
+          ...(local.version === null ? {} : { from: local.version }),
+        })
+        destructive.add(id)
+        diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
+        continue
+      }
+      const tombstoneConflict = makeConflict(id, 'remote-deleted', base, local, remote, input.remoteMeta[id])
+      conflicts.push(tombstoneConflict)
+      diffs.push(makeDiff(id, { local, remote, base, conflict: tombstoneConflict, includeConfigs }))
+      continue
+    }
 
     if (local === null && remote === null) {
       diffs.push(makeDiff(id, { local, remote, base, includeConfigs }))
