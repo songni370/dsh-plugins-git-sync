@@ -450,6 +450,30 @@ describe('mergeDesired: basic declarations', () => {
     expect(result.plugins['alpha']?.enabled).toBe(true)
     expect(result.plugins['alpha']?.updatedBy).toBe('dev-b')
   })
+
+  it('lets this device override the merged enabled state', () => {
+    // dev-b is the last writer (enabled: true); dev-a overrides itself to off.
+    const devices = [
+      deviceManifest('dev-a', {
+        alpha: pluginEntry({ enabled: false, enabledOverride: false, updatedAt: T1, updatedBy: 'dev-a' }),
+      }),
+      deviceManifest('dev-b', {
+        alpha: pluginEntry({ enabled: true, updatedAt: T2, updatedBy: 'dev-b' }),
+      }),
+    ]
+    expect(merge(devices, { selfId: 'dev-a' }).plugins['alpha']?.enabled).toBe(false)
+    expect(merge(devices, { selfId: 'dev-b' }).plugins['alpha']?.enabled).toBe(true)
+  })
+
+  it('falls back to the last writer for devices without an override', () => {
+    const result = merge([
+      deviceManifest('dev-a', {
+        alpha: pluginEntry({ enabled: false, enabledOverride: false, updatedAt: T1, updatedBy: 'dev-a' }),
+      }),
+      deviceManifest('dev-b', { alpha: pluginEntry({ enabled: true, updatedAt: T2, updatedBy: 'dev-b' }) }),
+    ], { selfId: 'dev-b' })
+    expect(result.plugins['alpha']?.enabled).toBe(true)
+  })
 })
 
 describe('mergeDesired: scope filtering', () => {
@@ -759,5 +783,19 @@ describe('mergeDesired: determinism', () => {
     ])
     expect(result.conflicts.map(conflict => conflict.pluginId)).toEqual(['alpha', 'zeta'])
     expect(result.removals).toEqual(['beta', 'omega'])
+  })
+})
+
+describe('enabled overrides', () => {
+  it('round-trips an explicit per-device override', () => {
+    const manifest = deviceManifest('dev-a', { alpha: pluginEntry({ enabledOverride: false }) })
+    const parsed = parseDeviceManifestV2(JSON.parse(serializeDeviceManifestV2(manifest)))
+    expect(parsed?.plugins['alpha']?.enabledOverride).toBe(false)
+  })
+
+  it('omits the field when no override is declared', () => {
+    const manifest = deviceManifest('dev-a', { alpha: pluginEntry() })
+    const text = serializeDeviceManifestV2(manifest)
+    expect(text).not.toContain('enabledOverride')
   })
 })

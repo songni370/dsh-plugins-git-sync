@@ -201,6 +201,7 @@ export function buildOwnDeviceManifest(input: OwnDeviceManifestInput): DeviceMan
       id,
       version: plugin.version,
       enabled: plugin.enabled,
+      ...(old?.enabledOverride === undefined ? {} : { enabledOverride: old.enabledOverride }),
       installSpec: plugin.installSpec,
       origin: plugin.origin,
       syncable: plugin.syncable,

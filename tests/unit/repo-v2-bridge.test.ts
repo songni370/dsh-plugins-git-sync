@@ -84,3 +84,50 @@ describe('buildV2RepoFiles', () => {
     expect(manifest?.devices.map(record => record.id).sort()).toEqual(['dev-old', 'dev-self'])
   })
 })
+
+describe('buildOwnDeviceManifest', () => {
+  it('preserves an explicit enabled override from the previous manifest', async () => {
+    const { buildOwnDeviceManifest } = await import('../../src/services/repo-v2-bridge.js')
+    const previous = selfManifest()
+    previous.plugins['alpha'] = {
+      id: 'alpha',
+      version: '1.0.0',
+      enabled: true,
+      enabledOverride: false,
+      installSpec: 'alpha@1.0.0',
+      origin: 'npm',
+      syncable: true,
+      scope: { mode: 'all' },
+      versionPolicy: 'track',
+      pinnedVersion: null,
+      updatedAt: T1,
+      updatedBy: 'dev-self',
+    }
+    const inventory = {
+      schemaVersion: 1,
+      generatedAt: T1,
+      profile: PROFILE,
+      device: { ...previous.device, id: 'dev-self' },
+      plugins: [
+        {
+          id: 'alpha',
+          name: 'alpha',
+          version: '1.0.0',
+          origin: 'npm' as const,
+          installSpec: 'alpha@1.0.0',
+          enabled: true,
+          builtIn: false,
+          syncable: true,
+          pathOnly: false,
+          profile: PROFILE,
+          platform: 'darwin',
+          rows: [],
+          configs: {},
+          configSkipped: [],
+        },
+      ],
+    }
+    const built = buildOwnDeviceManifest({ previous, inventory, profile: PROFILE, now: T1 })
+    expect(built.plugins['alpha']?.enabledOverride).toBe(false)
+  })
+})

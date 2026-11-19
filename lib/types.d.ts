@@ -648,6 +648,8 @@ export interface RepoStore {
         name: string;
         directory: boolean;
     }> | null>;
+    /** Create (and best-effort push) the pre-migration tag at HEAD; false when it already exists. */
+    ensureMigrationTag(name: string): Promise<boolean>;
     /** Read one profile's shared state. */
     readProfileState(profile: string): Promise<RemoteProfileState | null>;
     /** Read one profile's config files. */

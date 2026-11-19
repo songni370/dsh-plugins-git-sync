@@ -33,6 +33,12 @@ export interface DevicePluginEntryV2 {
   id: string
   version: string | null
   enabled: boolean
+  /**
+   * Explicit per-device override for the desired enabled state. When this
+   * device declares it, it wins over the last-writer-wins result for this
+   * device only; other devices keep merging normally.
+   */
+  enabledOverride?: boolean
   installSpec: string | null
   origin: string
   syncable: boolean
@@ -191,6 +197,13 @@ function fieldBoolean(record: Record<string, unknown>, key: string): FieldRead<b
   return typeof value === 'boolean' ? { ok: true, value } : fieldMissing
 }
 
+/** Read an optional boolean; absent means "no explicit value". */
+function fieldOptionalBoolean(record: Record<string, unknown>, key: string): FieldRead<boolean | undefined> {
+  const value = record[key]
+  if (value === undefined) return { ok: true, value: undefined }
+  return typeof value === 'boolean' ? { ok: true, value } : fieldMissing
+}
+
 /** Read a required finite number. */
 function fieldNumber(record: Record<string, unknown>, key: string): FieldRead<number> {
   const value = record[key]
@@ -267,12 +280,14 @@ function readPluginEntry(value: unknown): DevicePluginEntryV2 | null {
   const pinnedVersion = fieldNullableString(value, 'pinnedVersion')
   const updatedAt = fieldString(value, 'updatedAt')
   const updatedBy = fieldString(value, 'updatedBy')
+  const enabledOverride = fieldOptionalBoolean(value, 'enabledOverride')
   const scope = readScope(value['scope'])
   const versionPolicy = readVersionPolicy(value['versionPolicy'])
   if (
     !id.ok ||
     !version.ok ||
     !enabled.ok ||
+    !enabledOverride.ok ||
     !installSpec.ok ||
     !origin.ok ||
     !syncable.ok ||
@@ -288,6 +303,7 @@ function readPluginEntry(value: unknown): DevicePluginEntryV2 | null {
     id: id.value,
     version: version.value,
     enabled: enabled.value,
+    ...(enabledOverride.value === undefined ? {} : { enabledOverride: enabledOverride.value }),
     installSpec: installSpec.value,
     origin: origin.value,
     syncable: syncable.value,
@@ -967,7 +983,10 @@ export function mergeDesired(input: {
     if (entries.length === 0) continue
     const lastWriter = pickLastWriter(entries)
     if (lastWriter === null) continue
-    const enabled = lastWriter.entry.enabled
+    // An explicit override on this device's own declaration wins for this
+    // device only; without one, the last writer decides globally.
+    const ownOverride = entries.find(item => item.deviceId === input.selfId)?.entry.enabledOverride
+    const enabled = ownOverride ?? lastWriter.entry.enabled
 
     const pinEntries = entries.filter(item => item.entry.versionPolicy === 'pin')
     const pinnedVersions = sortVersions(

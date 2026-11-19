@@ -682,14 +682,16 @@ export class SyncEngine {
         const repositoryHasData = read.manifest !== null || read.state !== null
         const nothingToRecord = plan.actions.length === 0 && !skillsChanged
           && (repositoryHasData || !config.backupScopes.skills)
+        const migrating = read.v2 === null && (read.manifest !== null || read.state !== null)
         const trailers = {
           operation: 'backup',
           deviceId: state.device.id,
           deviceName: state.device.name,
           profile: this.deps.activeProfile,
-          result: plan.actions.length === 0 && !skillsChanged ? 'no-changes' : 'ok',
+          result: migrating ? 'migrated' : plan.actions.length === 0 && !skillsChanged ? 'no-changes' : 'ok',
           pluginCount: String(local.plugins.filter(plugin => !plugin.builtIn).length),
         }
+        if (!nothingToRecord && migrating) await store.ensureMigrationTag('pre-v2-migration')
         const write = nothingToRecord
           ? { changed: false, pushed: false, commit: prepared.head, changedFiles: [], retried: false }
           : await store.write({
@@ -945,7 +947,10 @@ export class SyncEngine {
             pendingActivation,
           })
         const firstFiles = build(read, local)
-        const write = (plan.actions.some(action => !isLocalAction(action)) || skillsChanged || pendingChanged)
+        const migrating = read.v2 === null && (read.manifest !== null || read.state !== null)
+        const needsWrite = plan.actions.some(action => !isLocalAction(action)) || skillsChanged || pendingChanged
+        if (needsWrite && migrating) await store.ensureMigrationTag('pre-v2-migration')
+        const write = needsWrite
           ? await store.write({
               files: firstFiles.files,
               deletions: firstFiles.deletions,
@@ -972,7 +977,7 @@ export class SyncEngine {
                 deviceId: state.device.id,
                 deviceName: state.device.name,
                 profile: this.deps.activeProfile,
-                result: 'ok',
+                result: migrating ? 'migrated' : 'ok',
                 pluginCount: String(local.plugins.filter(plugin => !plugin.builtIn).length),
               },
               signal: options.signal,

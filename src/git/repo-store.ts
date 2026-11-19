@@ -942,6 +942,24 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     return entries === null ? null : entries.map(entry => ({ name: entry.name, directory: entry.isDirectory() }))
   }
 
+  /**
+   * Tag the current HEAD before the first v2 write (one-way repository
+   * migration). The tag lets the user roll back with plain Git. Pushing the tag
+   * is best-effort: a missing tag on the remote is not a sync failure.
+   */
+  const ensureMigrationTag = async (name: string): Promise<boolean> => {
+    await ensurePrepared()
+    if ((await readHead()) === null) return false
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) return false
+    const ref = `refs/tags/${name}`
+    const existing = await options.run.run(['rev-parse', '--verify', '--quiet', ref], { cwd: workDir })
+    if (existing.code === 0) return false
+    await runGit(['tag', name], {})
+    const pushed = await options.run.run(['push', 'origin', ref], { cwd: workDir })
+    if (pushed.code !== 0) logger.warn('could not push the migration tag', { name })
+    return true
+  }
+
   const readProfileState = async (profile: string): Promise<RemoteProfileState | null> => {
     await ensurePrepared()
     const { backupDir } = settings()
@@ -1219,6 +1237,7 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
     readManifest,
     readRepoText,
     listRepoPath,
+    ensureMigrationTag,
     readProfileState,
     readConfigs,
     readSkills,

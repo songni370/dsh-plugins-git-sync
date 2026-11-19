@@ -27,6 +27,12 @@ export interface DevicePluginEntryV2 {
     id: string;
     version: string | null;
     enabled: boolean;
+    /**
+     * Explicit per-device override for the desired enabled state. When this
+     * device declares it, it wins over the last-writer-wins result for this
+     * device only; other devices keep merging normally.
+     */
+    enabledOverride?: boolean;
     installSpec: string | null;
     origin: string;
     syncable: boolean;

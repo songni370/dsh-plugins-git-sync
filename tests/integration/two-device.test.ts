@@ -465,4 +465,30 @@ describe('two-device synchronization', () => {
     }
     expect(manifest.status.pendingActivation.some(entry => entry.pluginId === 'delta')).toBe(true)
   }, 120_000)
+
+  it('keeps device-scoped plugins on the devices that declare them', async () => {
+    const bare = createBareRepo(ctx.root, 'scope.git')
+    const owner = await createFakeDevice({ root: ctx.root, name: 'scope-owner', repoUrl: bare, platform: 'darwin' })
+    owner.addPlugin({ name: 'epsilon', version: '2.0.0', enabled: true, configs: {} })
+    expect((await owner.engine.backup({ confirmDestructive: true })).ok).toBe(true)
+
+    // Simulate the owner narrowing the declaration to itself in the repository.
+    const deviceFile = `devices/${owner.device.id}/desktop.json`
+    const manifest = JSON.parse(readRepoFile(bare, deviceFile)) as {
+      plugins: Record<string, { scope?: unknown }>
+    }
+    manifest.plugins['epsilon'] = {
+      ...(manifest.plugins['epsilon'] ?? {}),
+      scope: { mode: 'devices', devices: [owner.device.id] },
+    }
+    await writeRepoFileDirect(bare, deviceFile, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    const other = await createFakeDevice({ root: ctx.root, name: 'scope-other', repoUrl: bare, platform: 'win32' })
+    const synced = await other.engine.sync({ confirmDestructive: true })
+    expect(synced.ok).toBe(true)
+    expect(other.plugin('epsilon')).toBeUndefined()
+    // The owner keeps the declaration; the other device must not resurrect or remove it.
+    const after = JSON.parse(readRepoFile(bare, deviceFile)) as { plugins: Record<string, unknown> }
+    expect(after.plugins['epsilon']).toBeDefined()
+  }, 120_000)
 })

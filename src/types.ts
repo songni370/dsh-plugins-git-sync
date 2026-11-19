@@ -728,6 +728,8 @@ export interface RepoStore {
   readRepoText(relative: string): Promise<string | null>
   /** List one repository directory (v2 device discovery); null when absent. */
   listRepoPath(relative: string): Promise<Array<{ name: string; directory: boolean }> | null>
+  /** Create (and best-effort push) the pre-migration tag at HEAD; false when it already exists. */
+  ensureMigrationTag(name: string): Promise<boolean>
   /** Read one profile's shared state. */
   readProfileState(profile: string): Promise<RemoteProfileState | null>
   /** Read one profile's config files. */

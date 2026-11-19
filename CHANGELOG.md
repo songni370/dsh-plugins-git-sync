@@ -13,11 +13,11 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 ### Added
 
 - 仓库 v2 模型：`manifest.json`（schemaVersion 2）、仓库策略 `policies/<profile>.json`、每台设备的 `devices/<deviceId>/<profile>.json`（插件、删除记录、技能、最近同步状态）；旧版 `profiles/<profile>/plugins.json` 继续作为只读镜像写入，旧版客户端仍可读取仓库。
-- 每设备声明与期望状态合并：支持按设备限定插件 `scope`、`track`/`pin` 版本策略、降级确认与最低 DSH 版本预检；冲突（pin 不一致、一台已删除另一台仍声明、只能安装预发布版）会作为阻塞原因返回并写明处理方式。
+- 每设备声明与期望状态合并：支持按设备限定插件 `scope`、`track`/`pin` 版本策略、降级确认与最低 DSH 版本预检；`enabled` 默认全局，本机可用显式 `enabledOverride` 覆盖；冲突（pin 不一致、一台已删除另一台仍声明、只能安装预发布版）会作为阻塞原因返回并写明处理方式。
 - 删除语义：只有本机明确卸载才会写入删除记录，并默认传播到范围内的其他设备；其他设备同步时若仍保留该插件会停下来要求确认，不再自动复活已删除的插件。
 - 设备可见性：状态卡显示仓库中的设备数量，以及每台设备最近同步结果与 DSH 版本；检测到多设备时备份会提示「备份只上传本机状态，不会安装其他设备的新版本，请使用同步」。
 - 待重启生效：Host 返回 `restart-required` 的安装会记录为「待重启生效」（本机状态与设备声明），不再被误报为已生效。
-- 仓库 v1→v2 迁移：首次写入 v2 时记录 `migratedFrom: 1` 并把已有设备快照并入；回滚与恢复仍可读取旧版镜像。
+- 仓库 v1→v2 迁移：首次写入 v2 时记录 `migratedFrom: 1` 并把已有设备快照并入；迁移前给当前 HEAD 打 `pre-v2-migration` 标签（尽力推送），提交 trailer 记为 `Result: migrated`，可用 Git 回滚；回滚与恢复仍可读取旧版镜像。
 
 ### Changed
 

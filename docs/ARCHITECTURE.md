@@ -190,7 +190,7 @@ profiles/<profile>/plugins.json       仍作为 v1 只读镜像写入，供旧�
 
 读取（`engine.readRemote`）：先探测 `manifest.json` 的 `schemaVersion`。为 2 时读取 manifest、policy 与全部设备声明，调用 `mergeDesired({ selfId, policy, devices, localDshVersion })` 得到本机期望状态，再用 `desiredRemoteState()` 投影成 `RemoteProfileState`，后续 `planSync`/`planBackup`/`planRestore` 无需知道 v2 的存在。删除目标 = v1 tombstone ∪ v2 `removed` ∪ `deleted-while-declared` 冲突，统一交给 planner 处理。为 1 或仓库为空时按旧路径读取，下次写入自动迁移。
 
-写入（`buildRemoteFiles`）：在 v1 文件集合之上合并 `buildV2RepoFiles()` 产出的 `manifest.json`、`policies/<profile>.json`、`devices/<self>/<profile>.json`；设备声明由 `buildOwnDeviceManifest()` 基于「扫描 + 计划动作后的库存」生成：保留旧声明的 scope/pin，只有明确的本机删除才写入 `removed`，失败的安装或临时缺失不会写成删除；`status.pendingActivation` 记录等待重启生效的插件。本机状态 `state.json` 同样保存 `pendingActivation`，没有提交时状态页也能显示。首次写入时 `migratedFrom: 1` 并把仓库里已有的 v1 设备快照并入 manifest。
+写入（`buildRemoteFiles`）：在 v1 文件集合之上合并 `buildV2RepoFiles()` 产出的 `manifest.json`、`policies/<profile>.json`、`devices/<self>/<profile>.json`；设备声明由 `buildOwnDeviceManifest()` 基于「扫描 + 计划动作后的库存」生成：保留旧声明的 scope/pin，只有明确的本机删除才写入 `removed`，失败的安装或临时缺失不会写成删除；`status.pendingActivation` 记录等待重启生效的插件。本机状态 `state.json` 同样保存 `pendingActivation`，没有提交时状态页也能显示。首次写入时 `migratedFrom: 1` 并把仓库里已有的 v1 设备快照并入 manifest；写入前给当前 HEAD 打 `pre-v2-migration` 标签（尽力推送）便于用 Git 回滚，提交 trailer 记为 `Result: migrated`。设备声明的 `enabled` 默认全局合并，本机可用可选字段 `enabledOverride` 覆盖自己的期望启停状态。
 
 ## 4. 本机状态文件
 
@@ -422,11 +422,12 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `tests/unit/repo-store.test.ts` | 克隆/刷新、事务化写入、无变化不提交、非快进重试与 `rebuild()`、history 解析、readAtCommit |
 | `tests/unit/repo-files.test.ts` | 序列化边界的机器路径清洗（`sanitizeModuleName`/`sanitizePluginRecord`/`toRemoteEntry`）、配置仅在变化时重写、版本化布局 |
 | `tests/unit/repo-v2.test.ts` | v2 文档解析/序列化、默认策略、`mergeDesired` 全部规则（scope、删除传播、pin/track、预发布、LWW、blocked） |
-| `tests/unit/repo-v2-bridge.test.ts` | v2 文件构建、v1→v2 迁移标记、旧设备并入 |
+| `tests/unit/repo-v2-bridge.test.ts` | v2 文件构建、v1→v2 迁移标记、旧设备并入、`enabledOverride` 保留 |
 | `tests/unit/tools.test.ts` | 恰好注册 6 个工具、工具结果是无损 JSON、两阶段确认（预览后才执行）、错误归一化 |
 | `tests/unit/routes.test.ts` | HTTP 面：文档化的路由全部 POST、`{ok,value}`/`{ok,error}` 信封、非法请求体、`direction` 透传与返回形状、破坏性确认带 plan、未知错误不泄露细节 |
 | `tests/unit/scheduler.test.ts` | 自动同步调度：关闭时不动作、按间隔运行所选模式、冲突暂停、失败退避、变更防抖、引擎忙时跳过、启动检查、dispose 清理定时器 |
 | `tests/client/render.test.tsx` | 设置页 jsdom 渲染冒烟：挂载与初始 Host 调用、状态/仓库配置/插件列表分区渲染、`confirmation-required` 时打开确认对话框（**不是**真实 Harness 页面） |
-| `tests/integration/two-device.test.ts` | 两台模拟设备 + 真实本地 bare Git 仓库的端到端流程：备份/恢复、无变化不提交、并发新增、版本变更、配置冲突、删除确认、历史 trailer、非法 manifest、不可达仓库、本地插件排除、状态计数 |
+| `tests/integration/two-device.test.ts` | 两台模拟设备 + 真实本地 bare Git 仓库的端到端流程：备份/恢复、无变化不提交、并发新增、版本变更、配置冲突、删除确认、历史 trailer、非法 manifest、不可达仓库、本地插件排除、状态计数、设备可见性、待重启生效、设备限定插件 |
+| `tests/integration/migration-v2.test.ts` | 真实 v1 仓库首次同步：v2 manifest/policy/设备声明生成、`migratedFrom: 1`、`pre-v2-migration` 标签、`Result: migrated` trailer、v1 镜像仍可读 |
 
-集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**37 个测试文件 / 367 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。
+集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**38 个测试文件 / 374 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。
