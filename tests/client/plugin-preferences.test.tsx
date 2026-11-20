@@ -74,7 +74,7 @@ describe('per-plugin preferences', () => {
     expect(html.match(/aria-haspopup="menu"/g)?.length).toBe(2)
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('所有设备')
-    expect(html).toContain('跟随')
+    expect(html).toContain('跟随全局')
     expect(html).not.toContain('role="menu"')
   })
 
