@@ -115,8 +115,15 @@ export interface PluginListResponse {
   repoSchemaVersion?: number | null
 }
 
+export type { PluginPreferenceUpdate } from '../types.js'
+
 /** Update one plugin's per-device preferences. */
-export type PluginPreferencesRequest = PluginPreferenceUpdate
+export type PluginPreferencesRequest = PluginPreferenceUpdate | PluginPreferencesBatchRequest
+
+/** Update several plugins' per-device preferences in one repository write. */
+export interface PluginPreferencesBatchRequest {
+  updates: PluginPreferenceUpdate[]
+}
 
 /** Plugin list after the preference update (same shape as `plugins/list`). */
 export type PluginPreferencesResponse = PluginListResponse

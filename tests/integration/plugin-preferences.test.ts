@@ -11,7 +11,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SyncError } from '../../src/core/errors.js'
-import { createBareRepo, createFakeDevice, readRepoFile, type FakeDevice } from './fake-dsh.js'
+import { createBareRepo, createFakeDevice, readRepoFile, repoCommitCount, type FakeDevice } from './fake-dsh.js'
 
 interface TestContext {
   root: string
@@ -89,6 +89,23 @@ describe('per-device plugin preferences', () => {
       readRepoFile(ctx.bareRepo, `devices/${ctx.win.device.id}/desktop.json`),
     ) as { removed: Array<{ id: string }> }
     expect(winFile.removed.map(entry => entry.id)).not.toContain('alpha')
+  }, 120_000)
+
+  it('applies a multiple-row selection in a single repository commit', async () => {
+    ctx.mac.addPlugin({ name: 'gamma', version: '3.0.0', enabled: true, configs: {} })
+    ctx.mac.addPlugin({ name: 'delta', version: '4.0.0', enabled: true, configs: {} })
+    const backup = await ctx.mac.engine.backup({ confirmDestructive: true })
+    expect(backup.ok).toBe(true)
+    const before = repoCommitCount(ctx.bareRepo)
+    const list = await ctx.mac.engine.setPluginPreferencesBatch([
+      { pluginId: 'gamma', scope: 'self' },
+      { pluginId: 'delta', enabledOverride: false },
+    ])
+    // One bulk action must not produce one commit per plugin.
+    expect(repoCommitCount(ctx.bareRepo)).toBe(before + 1)
+    expect(list.rows.find(item => item.id === 'gamma')?.scopeSelfOnly).toBe(true)
+    expect(list.rows.find(item => item.id === 'delta')?.enabledOverride).toBe(false)
+    expect(ctx.mac.plugin('delta')?.enabled).toBe(false)
   }, 120_000)
 
   it('disables a plugin only on this device', async () => {

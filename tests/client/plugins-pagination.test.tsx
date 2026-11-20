@@ -66,7 +66,9 @@ describe('plugin list exclusions', () => {
     )
     expect(html).toContain('已排除')
     expect(html).toContain('type="checkbox"')
-    expect(html).not.toContain('disabled=""')
+    // The row's sync switch stays operable; the separate bulk-selection box
+    // may be disabled for rows without a local install.
+    expect(html).not.toMatch(/aria-label="同步: Plugin 0"[^>]*disabled/)
   })
 })
 

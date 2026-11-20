@@ -15,7 +15,7 @@ import { API_PREFIX } from './api-types.js'
 import type { ApiError } from './api-types.js'
 import type { DshConnection, DshContext, DshDisposer } from '../dsh.js'
 import type { SyncEngine } from '../services/engine.js'
-import type { ConflictResolution, JsonObject, SyncLogger } from '../types.js'
+import type { ConflictResolution, JsonObject, PluginPreferenceUpdate, SyncLogger } from '../types.js'
 import { isJsonValue } from '../core/json.js'
 
 /** Maximum JSON body accepted by one route. */
@@ -86,19 +86,43 @@ export function registerHttpRoutes(options: { ctx: DshContext; engine: SyncEngin
       'connection/test': async body => options.engine.testConnection(asObject(body.config) as never),
       'plugins/list': async () => options.engine.listPlugins(),
       'plugins/preferences': async body => {
-        if (typeof body.pluginId !== 'string' || body.pluginId.trim() === '') {
-          throw new SyncError('invalid-config', '缺少插件标识 / pluginId is required')
+        const parseUpdate = (value: Record<string, unknown>, index: number): PluginPreferenceUpdate => {
+          const where = index >= 0 ? ` #${index + 1}` : ''
+          if (typeof value.pluginId !== 'string' || value.pluginId.trim() === '') {
+            throw new SyncError('invalid-config', `缺少插件标识 / pluginId is required${where}`)
+          }
+          const scope = value.scope === 'all' || value.scope === 'self' ? value.scope : undefined
+          if (value.scope !== undefined && scope === undefined) {
+            throw new SyncError('invalid-config', `使用范围必须是 all 或 self / scope must be all or self${where}`)
+          }
+          const enabledOverride =
+            typeof value.enabledOverride === 'boolean'
+              ? value.enabledOverride
+              : value.enabledOverride === null
+                ? null
+                : undefined
+          if (value.enabledOverride !== undefined && enabledOverride === undefined) {
+            throw new SyncError(
+              'invalid-config',
+              `启停偏好必须是 true、false 或 null / enabledOverride must be true, false or null${where}`,
+            )
+          }
+          if (scope === undefined && enabledOverride === undefined) {
+            throw new SyncError('invalid-config', `没有可保存的偏好 / no preference to save${where}`)
+          }
+          return { pluginId: value.pluginId, scope, enabledOverride }
         }
-        const scope = body.scope === 'all' || body.scope === 'self' ? body.scope : undefined
-        if (body.scope !== undefined && scope === undefined) {
-          throw new SyncError('invalid-config', '使用范围必须是 all 或 self / scope must be all or self')
+        if (Array.isArray(body.updates)) {
+          if (body.updates.length === 0) {
+            throw new SyncError('invalid-config', '没有可保存的偏好 / no preference to save')
+          }
+          return options.engine.setPluginPreferencesBatch(
+            body.updates.map((item, index) =>
+              item !== null && typeof item === 'object' ? parseUpdate(item as Record<string, unknown>, index) : parseUpdate({}, index),
+            ),
+          )
         }
-        const enabledOverride =
-          typeof body.enabledOverride === 'boolean' ? body.enabledOverride : body.enabledOverride === null ? null : undefined
-        if (body.enabledOverride !== undefined && enabledOverride === undefined) {
-          throw new SyncError('invalid-config', '启停偏好必须是 true、false 或 null / enabledOverride must be true, false or null')
-        }
-        return options.engine.setPluginPreferences({ pluginId: body.pluginId, scope, enabledOverride })
+        return options.engine.setPluginPreferences(parseUpdate(body, -1))
       },
       'skills/list': async () => options.engine.listSkills(),
       diff: async body => options.engine.diff({

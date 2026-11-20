@@ -1,29 +1,24 @@
 /**
  * "Plugins" card: this device's plugins joined with the repository state, plus
- * the per-row sync switch and per-device preferences.
+ * the per-row sync switch and inline per-device preference actions.
  *
  * The switch is a check on top of the Host payload: it displays
  * `syncable`/`syncStatus` from `/plugins/list` and persists a change through
  * `config/save`'s `excludedPlugins` (the only exclusion endpoint the contract
  * has). Turning it off never uninstalls anything — it stops future syncs.
- * The per-row "settings" dialog edits this device's declaration instead:
- * availability (all devices vs this device only) and a local enabled override.
+ * The per-row controls edit this device's declaration directly, without a
+ * second dialog: availability (all devices vs this device only) and a local
+ * enabled override. Rows can be multi-selected so one preference applies to a
+ * whole selection in a single repository commit.
  * @module ui/PluginsSection
  */
 
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
-import type { PluginListResponse, PluginListRow } from '../../../src/http/api-types'
+import type { PluginListResponse, PluginListRow, PluginPreferenceUpdate } from '../../../src/http/api-types'
 import type { Translate } from '../i18n'
 import type { Tone } from './controls'
-import { Badge, Banner, Button, Card, Checkbox, Field, LinkButton, Loading, Select } from './controls'
-import { Modal } from './Modal'
-
-/** What the per-row preferences dialog sends back to the Host. */
-export interface PluginPreferenceChoice {
-  scope: 'all' | 'self'
-  enabledOverride: boolean | null
-}
+import { Badge, Banner, Button, Card, Checkbox, LinkButton, Loading, Select } from './controls'
 
 /** Rows-per-page choices for the plugin table. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
@@ -73,8 +68,8 @@ export interface PluginsSectionProps {
   onFilterChange: (value: string) => void
   onToggle: (row: PluginListRow, next: boolean) => void
   onRefresh: () => void
-  /** Save this device's scope / enabled preference for one row. */
-  onSavePreferences?: (row: PluginListRow, choice: PluginPreferenceChoice) => Promise<void>
+  /** Apply preference updates for one row or a multi-row selection. */
+  onApplyPreferences?: (updates: PluginPreferenceUpdate[]) => Promise<void>
 }
 
 /** Render the plugin list card. */
@@ -100,32 +95,65 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
   const start = (currentPage - 1) * pageSize
   const pageRows = visible.slice(start, start + pageSize)
 
-  const [prefRow, setPrefRow] = useState<PluginListRow | null>(null)
-  const [prefScope, setPrefScope] = useState<'all' | 'self'>('all')
-  const [prefEnabled, setPrefEnabled] = useState<'follow' | 'enabled' | 'disabled'>('follow')
+  // Multi-row selection for "apply this preference to everything selected".
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [prefBusy, setPrefBusy] = useState(false)
   const [prefError, setPrefError] = useState<string | null>(null)
 
-  function openPreferences(row: PluginListRow): void {
-    setPrefRow(row)
-    setPrefScope(row.scopeSelfOnly === true ? 'self' : 'all')
-    setPrefEnabled(
-      row.enabledOverride === true ? 'enabled' : row.enabledOverride === false ? 'disabled' : 'follow',
-    )
-    setPrefError(null)
-    setOpen(true)
+  function eligibleRow(row: PluginListRow): boolean {
+    return row.local !== undefined && row.syncable && !props.busy
   }
 
-  async function savePreferences(): Promise<void> {
-    if (prefRow === null || props.onSavePreferences === undefined) return
+  // Selections only exist for actionable rows; pruning keeps a bulk action
+  // from touching rows that became remote-only or busy in the meantime.
+  useEffect(() => {
+    setSelected(current => {
+      if (current.size === 0) return current
+      const applicable = new Set(rows.filter(row => row.local !== undefined && row.syncable).map(row => row.id))
+      const next = new Set([...current].filter(id => applicable.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [rows])
+
+  const selectedRows = rows.filter(row => selected.has(row.id) && eligibleRow(row))
+
+  function scopePressed(row: PluginListRow, scope: 'all' | 'self'): boolean {
+    return scope === 'self' ? row.scopeSelfOnly === true : row.scopeSelfOnly !== true
+  }
+
+  function enabledPressed(row: PluginListRow, value: boolean | null): boolean {
+    return value === null ? row.enabledOverride === undefined : row.enabledOverride === value
+  }
+
+  function toggleSelected(id: string): void {
+    setSelected(current => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectPage(): void {
+    const pageEligible = pageRows.filter(eligibleRow)
+    setSelected(current => {
+      const allSelected = pageEligible.length > 0 && pageEligible.every(row => current.has(row.id))
+      const next = new Set(current)
+      for (const row of pageEligible) {
+        if (allSelected) next.delete(row.id)
+        else next.add(row.id)
+      }
+      return next
+    })
+  }
+
+  async function applyPreferences(updates: PluginPreferenceUpdate[]): Promise<void> {
+    if (updates.length === 0 || props.onApplyPreferences === undefined) return
     setPrefBusy(true)
     setPrefError(null)
     try {
-      await props.onSavePreferences(prefRow, {
-        scope: prefScope,
-        enabledOverride: prefEnabled === 'follow' ? null : prefEnabled === 'enabled',
-      })
-      setPrefRow(null)
+      await props.onApplyPreferences(updates)
+      setSelected(new Set())
     } catch (error) {
       setPrefError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -134,7 +162,6 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
   }
 
   return (
-    <>
       <Card
       title={t('pluginsTitle')}
       description={open ? t('pluginsDesc') : undefined}
@@ -198,6 +225,73 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
         </Button>
       </div>
 
+      {prefError === null ? null : (
+        <Banner tone="error">{t('pluginPrefsFailed', { message: prefError })}</Banner>
+      )}
+
+      {props.onApplyPreferences === undefined || selectedRows.length === 0 ? null : (
+        <div className="dgs-bulkBar">
+          <span className="dgs-hint">{t('pluginPrefsBulkSelected', { count: selectedRows.length })}</span>
+          <span className="dgs-prefGroup" role="group" aria-label={t('pluginPrefsScope')}>
+            <button
+              type="button"
+              className="dgs-prefBtn"
+              disabled={prefBusy || props.busy}
+              onClick={() => {
+                void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope: 'all' as const })))
+              }}
+            >
+              {t('pluginPrefsScopeAll')}
+            </button>
+            <button
+              type="button"
+              className="dgs-prefBtn"
+              disabled={prefBusy || props.busy}
+              onClick={() => {
+                void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope: 'self' as const })))
+              }}
+            >
+              {t('pluginPrefsScopeSelf')}
+            </button>
+          </span>
+          <span className="dgs-prefGroup" role="group" aria-label={t('pluginPrefsEnabled')}>
+            <button
+              type="button"
+              className="dgs-prefBtn"
+              disabled={prefBusy || props.busy}
+              onClick={() => {
+                void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, enabledOverride: null })))
+              }}
+            >
+              {t('pluginPrefsFollowShort')}
+            </button>
+            <button
+              type="button"
+              className="dgs-prefBtn"
+              disabled={prefBusy || props.busy}
+              onClick={() => {
+                void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, enabledOverride: true })))
+              }}
+            >
+              {t('pluginPrefsEnableShort')}
+            </button>
+            <button
+              type="button"
+              className="dgs-prefBtn"
+              disabled={prefBusy || props.busy}
+              onClick={() => {
+                void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, enabledOverride: false })))
+              }}
+            >
+              {t('pluginPrefsDisableShort')}
+            </button>
+          </span>
+          <Button small onClick={() => setSelected(new Set())} disabled={prefBusy}>
+            {t('pluginPrefsBulkClear')}
+          </Button>
+        </div>
+      )}
+
       {props.loading && props.plugins === null ? <Loading text={t('loading')} /> : null}
 
       {rows.length === 0 && !props.loading && props.error === null ? (
@@ -211,12 +305,24 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
           <table className="dgs-table">
             <thead>
               <tr>
+                <th className="dgs-tableCellCheck">
+                  <Checkbox
+                    checked={
+                      pageRows.length > 0 &&
+                      pageRows.filter(eligibleRow).length > 0 &&
+                      pageRows.filter(eligibleRow).every(row => selected.has(row.id))
+                    }
+                    disabled={props.busy || pageRows.filter(eligibleRow).length === 0}
+                    label={t('pluginPrefsSelectAll')}
+                    onChange={toggleSelectPage}
+                  />
+                </th>
                 <th className="dgs-tableCellCheck">{t('pluginsSyncable')}</th>
                 <th>{t('pluginsName')}</th>
                 <th>{t('pluginsLocalVersion')}</th>
                 <th>{t('pluginsRemoteVersion')}</th>
                 <th>{t('pluginsStatus')}</th>
-                {props.onSavePreferences === undefined ? null : <th>{t('pluginPrefsColumn')}</th>}
+                {props.onApplyPreferences === undefined ? null : <th>{t('pluginPrefsColumn')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -228,6 +334,16 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                 const remoteVersion = row.remoteVersion ?? row.remote?.version ?? null
                 return (
                   <tr key={row.id}>
+                    <td className="dgs-tableCellCheck">
+                      <Checkbox
+                        checked={selected.has(row.id)}
+                        disabled={!eligibleRow(row)}
+                        label={t('pluginPrefsSelectRow', { name: row.displayName ?? row.name })}
+                        onChange={() => {
+                          toggleSelected(row.id)
+                        }}
+                      />
+                    </td>
                     <td className="dgs-tableCellCheck">
                       <Checkbox
                         checked={checked}
@@ -259,17 +375,81 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                         {row.enabledOverride === false ? <Badge tone="idle">{t('pluginPrefsDisabledBadge')}</Badge> : null}
                       </span>
                     </td>
-                    {props.onSavePreferences === undefined ? null : (
+                    {props.onApplyPreferences === undefined ? null : (
                       <td className="dgs-nowrap">
-                        <Button
-                          small
-                          onClick={() => {
-                            openPreferences(row)
-                          }}
-                          disabled={row.local === undefined || !row.syncable || props.busy}
-                        >
-                          {t('pluginPrefsEdit')}
-                        </Button>
+                        {row.local === undefined || !row.syncable ? null : (
+                          <span className="dgs-prefCell">
+                            <span className="dgs-prefGroup" role="group" aria-label={t('pluginPrefsScope')}>
+                              <button
+                                type="button"
+                                className="dgs-prefBtn"
+                                aria-pressed={scopePressed(row, 'all')}
+                                title={t('pluginPrefsScopeHint')}
+                                disabled={prefBusy || props.busy}
+                                onClick={() => {
+                                  if (scopePressed(row, 'all')) return
+                                  void applyPreferences([{ pluginId: row.id, scope: 'all' }])
+                                }}
+                              >
+                                {t('pluginPrefsScopeAll')}
+                              </button>
+                              <button
+                                type="button"
+                                className="dgs-prefBtn"
+                                aria-pressed={scopePressed(row, 'self')}
+                                title={t('pluginPrefsScopeHint')}
+                                disabled={prefBusy || props.busy}
+                                onClick={() => {
+                                  if (scopePressed(row, 'self')) return
+                                  void applyPreferences([{ pluginId: row.id, scope: 'self' }])
+                                }}
+                              >
+                                {t('pluginPrefsScopeSelf')}
+                              </button>
+                            </span>
+                            <span className="dgs-prefGroup" role="group" aria-label={t('pluginPrefsEnabled')}>
+                              <button
+                                type="button"
+                                className="dgs-prefBtn"
+                                aria-pressed={enabledPressed(row, null)}
+                                title={t('pluginPrefsEnabledHint')}
+                                disabled={prefBusy || props.busy}
+                                onClick={() => {
+                                  if (enabledPressed(row, null)) return
+                                  void applyPreferences([{ pluginId: row.id, enabledOverride: null }])
+                                }}
+                              >
+                                {t('pluginPrefsFollowShort')}
+                              </button>
+                              <button
+                                type="button"
+                                className="dgs-prefBtn"
+                                aria-pressed={enabledPressed(row, true)}
+                                title={t('pluginPrefsEnabledHint')}
+                                disabled={prefBusy || props.busy}
+                                onClick={() => {
+                                  if (enabledPressed(row, true)) return
+                                  void applyPreferences([{ pluginId: row.id, enabledOverride: true }])
+                                }}
+                              >
+                                {t('pluginPrefsEnableShort')}
+                              </button>
+                              <button
+                                type="button"
+                                className="dgs-prefBtn"
+                                aria-pressed={enabledPressed(row, false)}
+                                title={t('pluginPrefsEnabledHint')}
+                                disabled={prefBusy || props.busy}
+                                onClick={() => {
+                                  if (enabledPressed(row, false)) return
+                                  void applyPreferences([{ pluginId: row.id, enabledOverride: false }])
+                                }}
+                              >
+                                {t('pluginPrefsDisableShort')}
+                              </button>
+                            </span>
+                          </span>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -327,42 +507,6 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
 
       </div>
       </Card>
-      {prefRow === null || props.onSavePreferences === undefined ? null : (
-        <Modal
-          t={t}
-          title={t('pluginPrefsTitle', { name: prefRow.displayName ?? prefRow.name })}
-          description={t('pluginPrefsDesc')}
-          confirmLabel={t('pluginPrefsSave')}
-          busy={prefBusy}
-          onConfirm={() => void savePreferences()}
-          onClose={() => setPrefRow(null)}
-        >
-          {prefError === null ? null : <Banner tone="error">{t('pluginPrefsFailed', { message: prefError })}</Banner>}
-          <Field id="dgs-plugin-prefs-scope" label={t('pluginPrefsScope')} hint={t('pluginPrefsScopeHint')}>
-            <Select
-              id="dgs-plugin-prefs-scope"
-              value={prefScope}
-              options={[
-                { value: 'all', label: t('pluginPrefsScopeAll') },
-                { value: 'self', label: t('pluginPrefsScopeSelf') },
-              ]}
-              onChange={value => setPrefScope(value)}
-            />
-          </Field>
-          <Field id="dgs-plugin-prefs-enabled" label={t('pluginPrefsEnabled')} hint={t('pluginPrefsEnabledHint')}>
-            <Select
-              id="dgs-plugin-prefs-enabled"
-              value={prefEnabled}
-              options={[
-                { value: 'follow', label: t('pluginPrefsEnabledFollow') },
-                { value: 'enabled', label: t('pluginPrefsEnabledOn') },
-                { value: 'disabled', label: t('pluginPrefsEnabledOff') },
-              ]}
-              onChange={value => setPrefEnabled(value)}
-            />
-          </Field>
-        </Modal>
-      )}
-    </>
-  )
+    )
 }
+

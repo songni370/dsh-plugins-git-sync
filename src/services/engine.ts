@@ -638,41 +638,87 @@ export class SyncEngine {
    * devices see it on their next synchronization.
    */
   async setPluginPreferences(update: PluginPreferenceUpdate): Promise<PluginListResponse> {
+    return await this.setPluginPreferencesBatch([update])
+  }
+
+  /**
+   * Apply several per-device preference updates in one repository commit.
+   *
+   * Bulk actions (e.g. "this device only" for a selection) must not create one
+   * commit per plugin, and an enable override must never rewrite the shared
+   * enabled vote other devices follow.
+   */
+  async setPluginPreferencesBatch(updates: readonly PluginPreferenceUpdate[]): Promise<PluginListResponse> {
     return this.mutex.runExclusive(async () => {
       this.busy = true
       try {
+        if (updates.length === 0) {
+          throw new SyncError('invalid-config', '没有可保存的偏好 / no preference to save')
+        }
+        const seen = new Set<string>()
+        for (const update of updates) {
+          if (seen.has(update.pluginId)) {
+            throw new SyncError('invalid-config', `重复的插件标识 / duplicate pluginId: ${update.pluginId}`)
+          }
+          seen.add(update.pluginId)
+          if (update.scope === undefined && update.enabledOverride === undefined) {
+            throw new SyncError('invalid-config', '没有可保存的偏好 / no preference to save')
+          }
+        }
         const config = await this.readConfig()
         this.ensureConfigured(config)
         let state = await this.readState()
         state = await this.persistDeviceIfChanged(state, config)
         let local = await this.scanLocal(config, true)
-        const record = local.plugins.find(plugin => plugin.id === update.pluginId || plugin.name === update.pluginId)
-        if (record === undefined) {
-          throw new SyncError('invalid-config', '插件未安装在本机 / plugin is not installed on this device')
-        }
-        if (record.builtIn || !record.syncable) {
-          throw new SyncError('invalid-config', '该插件不参与同步 / this plugin is not synchronized')
-        }
-        if (update.scope === undefined && update.enabledOverride === undefined) {
-          throw new SyncError('invalid-config', '没有可保存的偏好 / no preference to save')
-        }
         const now = new Date().toISOString()
         const { store } = this.repoFor(config)
         const prepared = await store.prepare()
         const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
         const previous = read.v2?.byId[state.device.id] ?? null
-        // The shared enabled vote this declaration already carried. The local
-        // state follows the requested override, but the shared vote must not.
-        const sharedEnabled = previous?.plugins[record.id]?.enabled ?? record.enabled
-        let targetEnabled = record.enabled
-        if (update.enabledOverride === true) targetEnabled = true
-        else if (update.enabledOverride === false) targetEnabled = false
-        else if (update.enabledOverride === null) targetEnabled = sharedEnabled
-        if (update.enabledOverride !== undefined && targetEnabled !== record.enabled) {
-          const toggle = await this.deps.installer.setEnabled(record.id, targetEnabled, { profile: this.deps.activeProfile })
-          if (!toggle.ok) throw new SyncError('install-failed', toggle.message)
-          local = await this.scanLocal(config, true)
+        const resolved = updates.map(update => {
+          const record = local.plugins.find(plugin => plugin.id === update.pluginId || plugin.name === update.pluginId)
+          if (record === undefined) {
+            throw new SyncError('invalid-config', '插件未安装在本机 / plugin is not installed on this device')
+          }
+          if (record.builtIn || !record.syncable) {
+            throw new SyncError('invalid-config', '该插件不参与同步 / this plugin is not synchronized')
+          }
+          // The shared enabled vote this declaration already carried. The local
+          // state follows the requested override, but the shared vote must not.
+          const sharedEnabled = previous?.plugins[record.id]?.enabled ?? record.enabled
+          let targetEnabled = record.enabled
+          if (update.enabledOverride === true) targetEnabled = true
+          else if (update.enabledOverride === false) targetEnabled = false
+          else if (update.enabledOverride === null) targetEnabled = sharedEnabled
+          return {
+            update,
+            record,
+            sharedEnabled,
+            targetEnabled,
+            toggle: update.enabledOverride !== undefined && targetEnabled !== record.enabled,
+          }
+        })
+        const applied: Array<{ recordId: string; before: boolean }> = []
+        try {
+          for (const item of resolved) {
+            if (!item.toggle) continue
+            const toggle = await this.deps.installer.setEnabled(item.record.id, item.targetEnabled, {
+              profile: this.deps.activeProfile,
+            })
+            if (!toggle.ok) throw new SyncError('install-failed', toggle.message)
+            applied.push({ recordId: item.record.id, before: item.record.enabled })
+          }
+        } catch (error) {
+          // Restore the plugins this batch already toggled before rethrowing so a
+          // rejected bulk action never leaves a partially applied state.
+          for (const restore of applied.reverse()) {
+            await this.deps.installer.setEnabled(restore.recordId, restore.before, {
+              profile: this.deps.activeProfile,
+            })
+          }
+          throw error
         }
+        if (applied.length > 0) local = await this.scanLocal(config, true)
         const selfManifest = buildOwnDeviceManifest({
           previous,
           inventory: local,
@@ -683,22 +729,37 @@ export class SyncEngine {
           lastError: null,
           baseCommit: prepared.head,
         })
-        const entry = selfManifest.plugins[record.id]
-        if (entry === undefined) {
-          throw new SyncError('invalid-config', '该插件不参与同步 / this plugin is not synchronized')
+        const labels: string[] = []
+        for (const item of resolved) {
+          const entry = selfManifest.plugins[item.record.id]
+          if (entry === undefined) {
+            throw new SyncError('invalid-config', '该插件不参与同步 / this plugin is not synchronized')
+          }
+          if (item.update.scope !== undefined) {
+            entry.scope =
+              item.update.scope === 'self' ? { mode: 'devices', devices: [state.device.id] } : { mode: 'all' }
+          }
+          if (item.update.enabledOverride !== undefined) {
+            if (item.update.enabledOverride === null) delete entry.enabledOverride
+            else entry.enabledOverride = item.update.enabledOverride
+            // The shared enabled vote must not follow the device-local toggle:
+            // "disable on this device" has to leave other devices untouched.
+            entry.enabled = item.sharedEnabled
+          }
+          entry.updatedAt = now
+          entry.updatedBy = state.device.id
+          const scopeLabel =
+            item.update.scope === 'self' ? ' 仅本机 / this device only' : item.update.scope === 'all' ? ' 所有设备 / all devices' : ''
+          const enabledLabel =
+            item.update.enabledOverride === undefined
+              ? ''
+              : item.update.enabledOverride === null
+                ? ' 跟随全局 / follow shared'
+                : item.update.enabledOverride
+                  ? ' 本机启用 / enabled here'
+                  : ' 本机停用 / disabled here'
+          labels.push(`${item.record.name}${scopeLabel}${enabledLabel}`)
         }
-        if (update.scope !== undefined) {
-          entry.scope = update.scope === 'self' ? { mode: 'devices', devices: [state.device.id] } : { mode: 'all' }
-        }
-        if (update.enabledOverride !== undefined) {
-          if (update.enabledOverride === null) delete entry.enabledOverride
-          else entry.enabledOverride = update.enabledOverride
-          // The shared enabled vote must not follow the device-local toggle:
-          // "disable on this device" has to leave other devices untouched.
-          entry.enabled = sharedEnabled
-        }
-        entry.updatedAt = now
-        entry.updatedBy = state.device.id
         const relativeFiles = buildV2RepoFiles({
           read: read.v2,
           selfManifest,
@@ -714,20 +775,15 @@ export class SyncEngine {
         }
         const migrating = read.v2 === null && (read.manifest !== null || read.state !== null)
         if (migrating) await store.ensureMigrationTag('pre-v2-migration')
-        const scopeLabel = update.scope === 'self' ? ' 仅本机 / this device only' : update.scope === 'all' ? ' 所有设备 / all devices' : ''
-        const enabledLabel =
-          update.enabledOverride === undefined
-            ? ''
-            : update.enabledOverride === null
-              ? ' 跟随全局 / follow shared'
-              : update.enabledOverride
-                ? ' 本机启用 / enabled here'
-                : ' 本机停用 / disabled here'
+        const subject =
+          labels.length <= 3
+            ? labels.join('; ')
+            : `${labels.slice(0, 3).join('; ')} 等 ${labels.length} 个 / and ${labels.length - 3} more`
         const write = await store.write({
           files,
           deletions: [],
           executables: [],
-          message: this.commitMessage('preferences', `${record.name}${scopeLabel}${enabledLabel}`),
+          message: this.commitMessage('preferences', subject),
           trailers: {
             operation: 'preferences',
             deviceId: state.device.id,
@@ -739,7 +795,13 @@ export class SyncEngine {
         })
         state.lastCommit = write.commit ?? state.lastCommit
         state.lastError = null
-        state.lastOperation = { operation: 'preferences', at: now, ok: true, commit: write.commit, changedPlugins: 1 }
+        state.lastOperation = {
+          operation: 'preferences',
+          at: now,
+          ok: true,
+          commit: write.commit,
+          changedPlugins: resolved.length,
+        }
         await this.deps.stateStore.write(state)
         return await this.listPlugins()
       } finally {

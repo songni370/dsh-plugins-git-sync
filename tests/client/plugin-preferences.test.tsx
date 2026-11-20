@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Per-plugin preference controls: each row can open the settings dialog, and
- * rows with a device-local choice show a badge instead of silently differing.
+ * Per-plugin preference controls: every row exposes inline availability and
+ * enabled-override actions (no second dialog), and device-local choices are
+ * marked with a badge.
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -25,6 +26,23 @@ function row(patch: Partial<PluginListRow> = {}): PluginListRow {
     inSync: false,
     syncable: true,
     selected: true,
+    local: {
+      id: 'alpha',
+      name: 'alpha',
+      displayName: 'alpha',
+      version: '1.0.0',
+      origin: 'npm',
+      installSpec: 'alpha@1.0.0',
+      enabled: false,
+      builtIn: false,
+      syncable: true,
+      pathOnly: false,
+      profile: 'desktop',
+      platform: 'darwin',
+      rows: [],
+      configs: {},
+      configSkipped: [],
+    },
     ...patch,
   }
 }
@@ -42,19 +60,28 @@ function render(rows: PluginListRow[]): string {
       onFilterChange={() => undefined}
       onToggle={() => undefined}
       onRefresh={() => undefined}
-      onSavePreferences={async () => undefined}
+      onApplyPreferences={async () => undefined}
     />,
   )
 }
 
 describe('per-plugin preferences', () => {
-  it('offers a settings action for every row', () => {
-    expect(render([row()])).toContain('设置')
+  it('offers inline actions for every row without a dialog', () => {
+    const html = render([row()])
+    expect(html).not.toContain('>设置<')
+    expect(html).toContain('所有设备')
+    expect(html).toContain('仅本机')
+    expect(html).toContain('跟随')
+    expect(html).toContain('本机启用')
+    expect(html).toContain('本机停用')
+    expect(html).toContain('本机偏好')
   })
 
-  it('marks a device-local availability choice', () => {
+  it('marks a device-local availability choice and reflects it in the buttons', () => {
     const html = render([row({ scopeSelfOnly: true, enabledOverride: false, scopeDevices: ['dev-a'] })])
     expect(html).toContain('仅本机')
     expect(html).toContain('本机停用')
+    // Both the scope and the enabled state report their active button.
+    expect(html.match(/aria-pressed="true"/g)?.length).toBe(2)
   })
 })

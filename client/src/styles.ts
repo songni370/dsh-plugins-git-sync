@@ -773,6 +773,56 @@ export const CSS = `
   flex-wrap: wrap;
   gap: 4px;
 }
+
+/* Inline per-device preference actions: compact buttons, no dialog. */
+.dgs-prefCell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.dgs-prefGroup {
+  display: inline-flex;
+  gap: 2px;
+}
+.dgs-prefBtn {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--dsw-alias-border-l2, #d9dde3);
+  border-radius: 5px;
+  background: var(--dsw-alias-bg-layer-2, #f3f4f6);
+  color: var(--dsw-alias-label-secondary, #5c6570);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dgs-prefBtn:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l1, #b6bcc6);
+}
+.dgs-prefBtn[aria-pressed='true'] {
+  border-color: var(--dsw-alias-brand-primary, #4f6ef7);
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  color: var(--dsw-alias-brand-primary, #4f6ef7);
+  font-weight: 600;
+}
+.dgs-prefBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Multi-select toolbar shown above the plugin table. */
+.dgs-bulkBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  border: 1px solid var(--dsw-alias-border-l2, #d9dde3);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2, #f3f4f6);
+}
 .dgs-pluginId {
   font-size: 11px;
   line-height: 16px;

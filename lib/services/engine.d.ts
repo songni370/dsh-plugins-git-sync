@@ -136,6 +136,14 @@ export declare class SyncEngine {
      * devices see it on their next synchronization.
      */
     setPluginPreferences(update: PluginPreferenceUpdate): Promise<PluginListResponse>;
+    /**
+     * Apply several per-device preference updates in one repository commit.
+     *
+     * Bulk actions (e.g. "this device only" for a selection) must not create one
+     * commit per plugin, and an enable override must never rewrite the shared
+     * enabled vote other devices follow.
+     */
+    setPluginPreferencesBatch(updates: readonly PluginPreferenceUpdate[]): Promise<PluginListResponse>;
     /** Compute the plan for a direction without executing anything. */
     diff(options?: DiffOptions): Promise<{
         direction: 'push' | 'pull' | 'two-way';

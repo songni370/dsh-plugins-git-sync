@@ -84,8 +84,13 @@ export interface PluginListResponse {
     /** Repository schema version when it could be read (2 for v2 repositories). */
     repoSchemaVersion?: number | null;
 }
+export type { PluginPreferenceUpdate } from '../types.js';
 /** Update one plugin's per-device preferences. */
-export type PluginPreferencesRequest = PluginPreferenceUpdate;
+export type PluginPreferencesRequest = PluginPreferenceUpdate | PluginPreferencesBatchRequest;
+/** Update several plugins' per-device preferences in one repository write. */
+export interface PluginPreferencesBatchRequest {
+    updates: PluginPreferenceUpdate[];
+}
 /** Plugin list after the preference update (same shape as `plugins/list`). */
 export type PluginPreferencesResponse = PluginListResponse;
 /** One deployed or repository-side skill, named and sized for the settings list. */
