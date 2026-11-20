@@ -104,6 +104,12 @@ export declare class SyncEngine {
     private repoCache;
     private busy;
     private lastError;
+    /**
+     * Connection result from the last explicit refresh in this process. Later
+     * polls reuse it; otherwise they would fall back to the persisted value and
+     * the page could show an older check timestamp than the one it just fetched.
+     */
+    private lastConnection;
     private readonly dshHome;
     constructor(deps: EngineDeps);
     /** Whether an operation currently runs. */

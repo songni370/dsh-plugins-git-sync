@@ -261,15 +261,15 @@ export function Page({ t }: PageProps): ReactElement {
    * A fresh DSH process has no prepared work tree, so `/plugins/list` and
    * `/skills/list` would compare the local inventory against an unknown
    * repository and read as "local only". Prime it once per page load — one
-   * fetch, no sync — then load the lists against the real remote state. Later
-   * status polls stay local and never fetch.
+   * fetch, no sync — so the lists, the remote counts and the connection badge
+   * all reflect the repository now. Later status polls stay local and never
+   * fetch.
    */
   const loadInitial = useCallback(async () => {
     const first = await refreshStatus()
     let latest = first
     const needsPrime = first !== null
       && first.status.config.repoUrl !== ''
-      && first.status.remotePluginCount === null
       // Never fetch beside a running operation: wait for the poll to pick the
       // finished sync up and refresh the lists then.
       && first.status.busy !== true

@@ -69,6 +69,55 @@ function render(scopes: { plugins: boolean; skills: boolean }): string {
   )
 }
 
+function statusWithDevices(): StatusView {
+  const view = statusView({ plugins: true, skills: true })
+  view.remoteDeviceCount = 2
+  view.devices = [
+    {
+      id: 'dev-a',
+      name: 'Mac A',
+      platform: 'darwin',
+      arch: 'arm64',
+      dshVersion: '0.2.2-rc.5',
+      pluginVersion: '0.3.0',
+      lastSyncAt: '2026-11-20T08:00:00.000Z',
+      lastResult: 'ok',
+      updatedAt: '2026-11-20T08:00:00.000Z',
+    },
+    {
+      id: 'dev-b',
+      name: 'Mac B',
+      platform: 'win32',
+      arch: 'x64',
+      dshVersion: '0.2.2-rc.1',
+      pluginVersion: '0.3.0',
+      lastSyncAt: null,
+      lastResult: 'ok',
+      updatedAt: '2026-11-19T08:00:00.000Z',
+    },
+  ]
+  view.connection = {
+    ok: true,
+    at: '2026-11-20T09:00:00.000Z',
+    branch: 'main',
+    head: 'abc1234',
+    message: '仓库连接正常',
+    authMethod: 'ssh',
+  }
+  return view
+}
+
+describe('device list', () => {
+  it('shows a never-synced device without a contradictory success label', () => {
+    const html = renderToStaticMarkup(<StatusSection t={t} status={statusWithDevices()} skills={skills} embedded />)
+    expect(html).toContain('Mac A')
+    expect(html).toContain('Mac B')
+    expect(html).toContain('从未同步')
+    expect(html).not.toContain('成功 · 从未')
+    expect(html).toContain('检查于')
+  })
+})
+
 describe('sync status tiles', () => {
   it('shows plugin and skill tiles when both scopes are enabled', () => {
     const html = render({ plugins: true, skills: true })

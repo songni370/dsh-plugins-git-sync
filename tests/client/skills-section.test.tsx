@@ -42,7 +42,7 @@ describe('skill card', () => {
 
   it('shows a column header row like the plugin list', () => {
     const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={skills} />)
-    expect(html).toContain('>同步<')
+    expect(html).toContain('>备份<')
     expect(html).toContain('>技能<')
     expect(html).toContain('>文件 / 大小<')
     expect(html).toContain('>状态<')
@@ -74,9 +74,9 @@ describe('skill card', () => {
       <SkillsSection {...baseProps} skills={skills} exclusions={new Set(['skill-1'])} />,
     )
     expect(html.match(/type="checkbox"/g)).toHaveLength(10)
-    expect(html).toContain('aria-label="同步: skill-0"')
-    expect(html).toContain('aria-label="同步: skill-1"')
-    expect(html).not.toContain('aria-label="同步: skill-10"')
+    expect(html).toContain('aria-label="备份: skill-0"')
+    expect(html).toContain('aria-label="备份: skill-1"')
+    expect(html).not.toContain('aria-label="备份: skill-10"')
   })
 
   it('shows only the first ten skills on the default page', () => {

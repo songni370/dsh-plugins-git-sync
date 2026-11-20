@@ -290,6 +290,12 @@ export class SyncEngine {
   private repoCache: { key: string; store: RepoStore; workDir: string } | null = null
   private busy = false
   private lastError: string | null = null
+  /**
+   * Connection result from the last explicit refresh in this process. Later
+   * polls reuse it; otherwise they would fall back to the persisted value and
+   * the page could show an older check timestamp than the one it just fetched.
+   */
+  private lastConnection: import('../types.js').ConnectionTestResult | null = null
   private readonly dshHome: string
 
   constructor(deps: EngineDeps) {
@@ -331,7 +337,7 @@ export class SyncEngine {
     }
 
     let read: RemoteRead = EMPTY_REMOTE
-    let connection = state.connection
+    let connection = this.lastConnection ?? state.connection
     if (config.repoUrl !== '') {
       const { store, workDir } = this.repoFor(config)
       const hasLocalCopy = await fileExists(workDir)
@@ -352,6 +358,7 @@ export class SyncEngine {
             message: '仓库连接正常 / repository reachable',
             authMethod: this.authMethod(config),
           }
+          this.lastConnection = connection
         } catch (error) {
           connection = {
             ok: false,
@@ -360,6 +367,7 @@ export class SyncEngine {
             branch: config.branch,
             authMethod: this.authMethod(config),
           }
+          this.lastConnection = connection
         }
       } else if (hasLocalCopy && store.prepared()) {
         try {
@@ -472,6 +480,7 @@ export class SyncEngine {
       // A different repository invalidates the cached connection result.
       const state = await this.readState()
       state.connection = null
+      this.lastConnection = null
       await this.deps.stateStore.write(state)
     }
     await this.deps.configStore.write(merged as SyncConfig)
@@ -493,6 +502,7 @@ export class SyncEngine {
     const result = await store.testConnection()
     const state = await this.readState()
     state.connection = result
+    this.lastConnection = result
     await this.deps.stateStore.write(state)
     return result
   }

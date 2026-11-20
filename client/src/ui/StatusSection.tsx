@@ -210,7 +210,9 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
                   {connection.ok ? t('statusConnectionOk') : t('statusConnectionFail')}
                 </Badge>
                 <span className="dgs-statusConnectionText">
-                  {connection.ok ? formatDateTime(connection.at, t('unknown')) : connection.message}
+                  {connection.ok
+                    ? t('statusConnectionAt', { time: formatDateTime(connection.at, t('unknown')) })
+                    : connection.message}
                 </span>
               </span>
             )
@@ -224,8 +226,10 @@ export function StatusSection(props: StatusSectionProps): ReactElement {
             <div key={device.id} className="dgs-statusDeviceRow" title={device.id}>
               <span className="dgs-statusDeviceName">{device.name}</span>
               <span className="dgs-statusDeviceMeta">
-                {device.platform} · {device.dshVersion} · {resultLabel(t, device.lastResult)} ·{' '}
-                {formatDateTime(device.lastSyncAt, t('never'))}
+                {device.platform} · {device.dshVersion} ·{' '}
+                {!device.lastSyncAt
+                  ? t('statusNeverSynced')
+                  : `${resultLabel(t, device.lastResult)} · ${formatDateTime(device.lastSyncAt, t('unknown'))}`}
               </span>
             </div>
           ))}

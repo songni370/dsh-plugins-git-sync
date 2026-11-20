@@ -732,9 +732,26 @@ export const CSS = `
 }
 .dgs-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
   line-height: 20px;
+}
+/* Fixed column budget keeps long plugin names/versions from reflowing the row. */
+.dgs-colCheck {
+  width: 30px;
+}
+.dgs-colSync {
+  width: 34px;
+}
+.dgs-colVersion {
+  width: 56px;
+}
+.dgs-colStatus {
+  width: 64px;
+}
+.dgs-colPrefs {
+  width: 148px;
 }
 .dgs-table th {
   padding: 6px 8px;
@@ -765,8 +782,11 @@ export const CSS = `
   min-width: 0;
 }
 .dgs-pluginName {
+  display: block;
   font-weight: 500;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dgs-pluginBadges {
   display: inline-flex;
@@ -811,6 +831,69 @@ export const CSS = `
   opacity: 0.55;
   cursor: not-allowed;
 }
+/* Dropdown form of the preference button: the trigger shows the active choice. */
+.dgs-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.dgs-dropdownToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dgs-dropdownLabel {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dgs-dropdownChevron {
+  flex: none;
+  opacity: 0.65;
+}
+.dgs-dropdownToggle[aria-expanded='true'] {
+  border-color: var(--dsw-alias-brand-primary, #4f6ef7);
+  color: var(--dsw-alias-brand-primary, #4f6ef7);
+}
+.dgs-dropdownMenu {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--dsw-alias-border-l2, #d9dde3);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+.dgs-dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dgs-dropdownItem:hover {
+  background: var(--dsw-alias-bg-layer-2, #f3f4f6);
+}
+.dgs-dropdownItem[aria-checked='true'] {
+  color: var(--dsw-alias-brand-primary, #4f6ef7);
+  font-weight: 600;
+}
+.dgs-dropdownItemCheck {
+  width: 12px;
+  flex: none;
+  text-align: center;
+}
 /* Multi-select toolbar shown above the plugin table. */
 .dgs-bulkBar {
   display: flex;
@@ -824,10 +907,13 @@ export const CSS = `
   background: var(--dsw-alias-bg-layer-2, #f3f4f6);
 }
 .dgs-pluginId {
+  display: block;
   font-size: 11px;
   line-height: 16px;
   color: var(--dsw-alias-label-secondary, #5c6570);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dgs-nowrap {
   white-space: nowrap;

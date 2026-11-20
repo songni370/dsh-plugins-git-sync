@@ -446,9 +446,11 @@ describe('settings page render', () => {
     expect(listIndex).toBeGreaterThan(refreshIndex)
   })
 
-  it('does not refetch the repository when the remote side is already known', async () => {
+  it('primes the repository once per load even when the remote side is already known', async () => {
     await settle()
-    expect(statusBodies().every(body => !body.includes('"refresh":true'))).toBe(true)
+    // One explicit fetch keeps the connection badge, remote counts and lists
+    // honest after a restart; later polls always read the local snapshot.
+    expect(statusBodies().filter(body => body.includes('"refresh":true'))).toHaveLength(1)
   })
 
   it('opens a prefilled GitHub issue from the intro row', async () => {
