@@ -194,6 +194,8 @@ export interface DesiredBlockedV2 {
 export interface DesiredMergeV2 {
     plugins: Record<string, DesiredPluginV2>;
     removals: string[];
+    /** Removals caused only by another device's explicit scope restriction. */
+    scopeExcluded: string[];
     conflicts: DesiredConflictV2[];
     blocked: DesiredBlockedV2[];
     warnings: string[];

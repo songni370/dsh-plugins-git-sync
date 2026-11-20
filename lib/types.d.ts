@@ -383,12 +383,27 @@ export interface OperationResult {
 export type SyncState = 'not-configured' | 'synced' | 'ahead' | 'behind' | 'diverged' | 'conflict' | 'error' | 'syncing' | 'unknown';
 /** Last operation, for the status panel. */
 export interface LastOperation {
-    operation: 'backup' | 'restore' | 'sync' | 'rollback';
+    operation: 'backup' | 'restore' | 'sync' | 'rollback' | 'preferences';
     at: string;
     ok: boolean;
     error?: string;
     commit?: string | null;
     changedPlugins?: number;
+}
+/**
+ * Per-device plugin preference update from the plugin list.
+ *
+ * `scope` writes this device's declaration into the repository: `all` means
+ * every device takes part, `self` records an explicit "this device only"
+ * restriction. `enabledOverride` is local to this device: `true`/`false` keep
+ * using the plugin here regardless of what other devices declare, `null`
+ * removes the override and follows the shared state again.
+ */
+export interface PluginPreferenceUpdate {
+    /** Plugin id (module name) or npm package name. */
+    pluginId: string;
+    scope?: 'all' | 'self';
+    enabledOverride?: boolean | null;
 }
 /** Everything the settings page needs for its status area. */
 export interface StatusView {

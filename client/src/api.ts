@@ -31,6 +31,8 @@ import type {
   LogsResponse,
   OperationResponse,
   PluginListResponse,
+  PluginPreferencesRequest,
+  PluginPreferencesResponse,
   SkillListResponse,
   RestorePreviewRequest,
   RestorePreviewResponse,
@@ -141,6 +143,11 @@ export function testConnection(body: TestConnectionRequest = {}): Promise<TestCo
 /** Local plugins joined with the repository's shared state. */
 export function getPlugins(): Promise<PluginListResponse> {
   return request<PluginListResponse>('plugins/list')
+}
+
+/** Save this device's scope / enabled preference for one plugin. */
+export function savePluginPreferences(body: PluginPreferencesRequest): Promise<PluginPreferencesResponse> {
+  return request<PluginPreferencesResponse>('plugins/preferences', body)
 }
 
 /** Deployed skills shown below the plugin list. */

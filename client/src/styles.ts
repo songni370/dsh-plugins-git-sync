@@ -768,6 +768,11 @@ export const CSS = `
   font-weight: 500;
   overflow-wrap: anywhere;
 }
+.dgs-pluginBadges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 .dgs-pluginId {
   font-size: 11px;
   line-height: 16px;

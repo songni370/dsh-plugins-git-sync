@@ -136,6 +136,31 @@ export function desiredRemoteState(
       updatedBy: plugin.updatedBy,
     }
   }
+  // Another device's scope restriction is not a repository-wide deletion: keep
+  // it out of the v1 mirror's tombstone view, which has no per-device notion.
+  const restricted = new Set(read.desired.scopeExcluded)
+  const deletionIntents = new Set(read.desired.removals)
+  for (const conflict of read.desired.conflicts) {
+    if (conflict.reason === 'deleted-while-declared') deletionIntents.add(conflict.pluginId)
+  }
+  for (const id of deletionIntents) {
+    if (restricted.has(id)) continue
+    plugins[id] = {
+      id,
+      name: id,
+      version: null,
+      origin: 'unknown',
+      installSpec: null,
+      enabled: false,
+      builtIn: false,
+      syncable: true,
+      pathOnly: false,
+      rows: [],
+      deleted: true,
+      updatedAt: now,
+      updatedBy: '',
+    }
+  }
   return {
     schemaVersion: 2,
     profile,
@@ -197,10 +222,14 @@ export function buildOwnDeviceManifest(input: OwnDeviceManifestInput): DeviceMan
   const plugins: Record<string, DevicePluginEntryV2> = {}
   for (const [id, plugin] of [...current.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const old = previous?.plugins[id]
+    // A local enabled override makes the local enabled state personal: keep the
+    // shared vote this declaration already carried instead of rewriting it from
+    // the device-local state on every sync (which would flip other devices).
+    const enabled = old?.enabledOverride === undefined ? plugin.enabled : (old.enabled ?? plugin.enabled)
     plugins[id] = {
       id,
       version: plugin.version,
-      enabled: plugin.enabled,
+      enabled,
       ...(old?.enabledOverride === undefined ? {} : { enabledOverride: old.enabledOverride }),
       installSpec: plugin.installSpec,
       origin: plugin.origin,
@@ -226,8 +255,12 @@ export function buildOwnDeviceManifest(input: OwnDeviceManifestInput): DeviceMan
     removed.push({ id, at: input.now, name })
     knownRemoved.add(id)
   }
-  // A plugin that is declared again is no longer pending deletion.
-  const pruned = removed.filter(entry => !current.has(entry.id))
+  // A plugin that is declared again is no longer pending deletion, and an id
+  // protected by the caller (external removal / restriction) is not this
+  // device's deletion intent either.
+  const pruned = removed.filter(
+    entry => !current.has(entry.id) && input.protectedIds?.has(entry.id) !== true,
+  )
 
   const status: DeviceStatusV2 = {
     lastSyncAt: input.now,

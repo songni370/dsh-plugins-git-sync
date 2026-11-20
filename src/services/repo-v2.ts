@@ -720,6 +720,8 @@ export interface DesiredBlockedV2 {
 export interface DesiredMergeV2 {
   plugins: Record<string, DesiredPluginV2>
   removals: string[]
+  /** Removals caused only by another device's explicit scope restriction. */
+  scopeExcluded: string[]
   conflicts: DesiredConflictV2[]
   blocked: DesiredBlockedV2[]
   warnings: string[]
@@ -900,19 +902,33 @@ export function mergeDesired(input: {
 
   const manifests = [...input.devices].sort(compareManifests)
 
-  // Rule 1: entries whose scope covers this device participate. Non-syncable
-  // declarations are kept for rule 3 ("still declared") but never become
-  // desired, and only syncable ones can be installed.
-  const scopedEntries = new Map<string, ScopedEntry[]>()
+  // Rule 1: collect every declaration, then decide which ones cover this
+  // device. A device restriction is authoritative: when any device limits a
+  // plugin to a set of devices, a device outside that set must not keep the
+  // plugin even if it still declares it locally (that declaration is stale and
+  // the device is asked to remove the plugin). Non-syncable declarations are
+  // kept for rule 3 ("still declared") but never become desired.
+  const entriesByPlugin = new Map<string, ScopedEntry[]>()
   for (const manifest of manifests) {
     for (const pluginId of Object.keys(manifest.plugins).sort(compareStrings)) {
       const entry = manifest.plugins[pluginId]
-      if (entry === undefined || !scopeApplies(entry.scope, input.selfId)) continue
-      const list = scopedEntries.get(pluginId)
+      if (entry === undefined) continue
+      const list = entriesByPlugin.get(pluginId)
       const scoped: ScopedEntry = { deviceId: manifest.device.id, entry }
-      if (list === undefined) scopedEntries.set(pluginId, [scoped])
+      if (list === undefined) entriesByPlugin.set(pluginId, [scoped])
       else list.push(scoped)
     }
+  }
+  const scopedEntries = new Map<string, ScopedEntry[]>()
+  const scopeExcluded = new Set<string>()
+  for (const [pluginId, allEntries] of entriesByPlugin) {
+    const restrictions = allEntries.filter(item => item.entry.scope.mode === 'devices')
+    if (restrictions.some(item => !(item.entry.scope.devices ?? []).includes(input.selfId))) {
+      scopeExcluded.add(pluginId)
+      continue
+    }
+    const applicable = allEntries.filter(item => scopeApplies(item.entry.scope, input.selfId))
+    if (applicable.length > 0) scopedEntries.set(pluginId, applicable)
   }
 
   // Rule 2: a device below the policy minimum does nothing at all.
@@ -928,7 +944,7 @@ export function mergeDesired(input: {
       `Local DSH version ${input.localDshVersion} is below the repository minimum ` +
         `${input.policy.minDshVersion}; no plugin is synchronized.`,
     )
-    return { plugins, removals: [], conflicts, blocked, warnings }
+    return { plugins, removals: [], scopeExcluded: [], conflicts, blocked, warnings }
   }
 
   // Rule 3: explicit deletions from every device manifest.
@@ -974,6 +990,14 @@ export function mergeDesired(input: {
           'deletion.propagate is false, so the removal is not applied.',
       )
     }
+  }
+
+  // Devices outside an explicit restriction must not keep the plugin: surface
+  // it as a removal so the local planner asks to uninstall it, exactly like an
+  // explicit deletion (never silently left behind and never re-uploaded).
+  for (const pluginId of [...scopeExcluded].sort(compareStrings)) {
+    if (conflictedRemovals.has(pluginId)) continue
+    removals.add(pluginId)
   }
 
   // Rules 4-8: per plugin, pins first, then the highest tracked version.
@@ -1052,6 +1076,7 @@ export function mergeDesired(input: {
   return {
     plugins,
     removals: [...removals].sort(compareStrings),
+    scopeExcluded: [...scopeExcluded].sort(compareStrings),
     conflicts,
     blocked,
     warnings,

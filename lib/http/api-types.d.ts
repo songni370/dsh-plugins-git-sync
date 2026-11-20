@@ -8,7 +8,7 @@
  * browser bundle.
  * @module http/api-types
  */
-import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillSyncStatus, SyncState } from '../types.js';
+import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginPreferenceUpdate, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillSyncStatus, SyncState } from '../types.js';
 /** Route prefix shared by every endpoint. */
 export declare const API_PREFIX = "/api/dsh-plugins-git-sync";
 /** Error body. */
@@ -69,13 +69,25 @@ export interface PluginListRow {
     selected: boolean;
     conflict?: boolean;
     diff?: PluginDiff;
+    /** True when this device's declaration restricts the plugin to itself. */
+    scopeSelfOnly?: boolean;
+    /** Device ids this device's declaration restricts the plugin to. */
+    scopeDevices?: string[];
+    /** This device's local enabled override; absent when it follows the shared state. */
+    enabledOverride?: boolean;
 }
 /** Plugin list response. */
 export interface PluginListResponse {
     rows: PluginListRow[];
     activeProfile: string;
     availableProfiles: string[];
+    /** Repository schema version when it could be read (2 for v2 repositories). */
+    repoSchemaVersion?: number | null;
 }
+/** Update one plugin's per-device preferences. */
+export type PluginPreferencesRequest = PluginPreferenceUpdate;
+/** Plugin list after the preference update (same shape as `plugins/list`). */
+export type PluginPreferencesResponse = PluginListResponse;
 /** One deployed or repository-side skill, named and sized for the settings list. */
 export interface SkillSummary {
     name: string;
@@ -195,6 +207,6 @@ export interface OverviewResponse extends StatusPayload {
     pluginVersion: number | string;
 }
 /** Request handler map keyed by route name (no `/api` prefix). */
-export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'skills/list' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
+export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'plugins/preferences' | 'skills/list' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
 /** A sync state alias for the UI. */
 export type { SyncState };

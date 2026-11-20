@@ -357,6 +357,7 @@ describe('mergeDesired: basic declarations', () => {
   it('resolves a single device declaration', () => {
     const result = merge([deviceManifest('dev-a', { alpha: pluginEntry() })])
     expect(result).toEqual({
+      scopeExcluded: [],
       plugins: {
         alpha: {
           id: 'alpha',
@@ -489,6 +490,16 @@ describe('mergeDesired: scope filtering', () => {
     const result = merge([deviceManifest('dev-b', { alpha: scoped })])
     expect(result.plugins['alpha']?.version).toBe('1.0.0')
     expect(result.plugins['alpha']?.sources).toEqual(['dev-b'])
+  })
+
+  it('turns a restriction from another device into a local removal request', () => {
+    const result = merge([
+      deviceManifest('dev-a', { alpha: pluginEntry({ version: '1.0.0' }) }),
+      deviceManifest('dev-b', { alpha: pluginEntry({ scope: { mode: 'devices', devices: ['dev-b'] } }) }),
+    ])
+    expect(result.plugins).toEqual({})
+    expect(result.removals).toEqual(['alpha'])
+    expect(result.conflicts).toEqual([])
   })
 })
 

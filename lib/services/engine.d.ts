@@ -10,7 +10,7 @@
  */
 import type { FileSyncLogger } from '../core/logger.js';
 import type { ConfigStore, StateStore } from '../state/store.js';
-import type { ConnectionTestResult, ConflictResolution, ConfigGateway, HistoryEntry, InventoryScanner, LocalState, OperationResult, PluginInstaller, RepoStore, SyncConfig, SyncConfigView, SyncPlan } from '../types.js';
+import type { ConnectionTestResult, ConflictResolution, ConfigGateway, HistoryEntry, InventoryScanner, LocalState, OperationResult, PluginInstaller, PluginPreferenceUpdate, RepoStore, SyncConfig, SyncConfigView, SyncPlan } from '../types.js';
 import type { PluginListResponse, SkillListResponse } from '../http/api-types.js';
 /** Everything the engine needs, injected by the plugin entry. */
 export interface EngineDeps {
@@ -125,6 +125,17 @@ export declare class SyncEngine {
     listSkills(): Promise<SkillListResponse>;
     /** List plugins with their sync status for the settings page. */
     listPlugins(): Promise<PluginListResponse>;
+    /**
+     * Update this device's declaration for one plugin.
+     *
+     * `scope` decides whether every device takes part or the plugin is recorded
+     * as "this device only" (other devices then stop installing it and are asked
+     * to remove an existing copy). `enabledOverride` only changes the enabled
+     * state on this device and never affects other devices. The preference is
+     * committed to the repository (creating the v2 layout on first use) so other
+     * devices see it on their next synchronization.
+     */
+    setPluginPreferences(update: PluginPreferenceUpdate): Promise<PluginListResponse>;
     /** Compute the plan for a direction without executing anything. */
     diff(options?: DiffOptions): Promise<{
         direction: 'push' | 'pull' | 'two-way';

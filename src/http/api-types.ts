@@ -19,6 +19,7 @@ import type {
   LogEntry,
   OperationResult,
   PluginDiff,
+  PluginPreferenceUpdate,
   PluginRecord,
   RemotePluginEntry,
   StatusView,
@@ -97,6 +98,12 @@ export interface PluginListRow {
   selected: boolean
   conflict?: boolean
   diff?: PluginDiff
+  /** True when this device's declaration restricts the plugin to itself. */
+  scopeSelfOnly?: boolean
+  /** Device ids this device's declaration restricts the plugin to. */
+  scopeDevices?: string[]
+  /** This device's local enabled override; absent when it follows the shared state. */
+  enabledOverride?: boolean
 }
 
 /** Plugin list response. */
@@ -104,7 +111,15 @@ export interface PluginListResponse {
   rows: PluginListRow[]
   activeProfile: string
   availableProfiles: string[]
+  /** Repository schema version when it could be read (2 for v2 repositories). */
+  repoSchemaVersion?: number | null
 }
+
+/** Update one plugin's per-device preferences. */
+export type PluginPreferencesRequest = PluginPreferenceUpdate
+
+/** Plugin list after the preference update (same shape as `plugins/list`). */
+export type PluginPreferencesResponse = PluginListResponse
 
 /** One deployed or repository-side skill, named and sized for the settings list. */
 export interface SkillSummary {
@@ -247,6 +262,7 @@ export type ApiRouteName =
   | 'config/save'
   | 'connection/test'
   | 'plugins/list'
+  | 'plugins/preferences'
   | 'skills/list'
   | 'diff'
   | 'backup'

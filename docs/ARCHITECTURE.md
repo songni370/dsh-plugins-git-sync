@@ -31,7 +31,7 @@ This document is for maintainers: module boundaries, data flow, state files, the
         │                                │                                    │
 ┌───────▼────────┐              ┌────────▼─────────┐              ┌───────────▼──────────┐
 │ services/      │              │ http/routes.ts   │              │ tools/tools.ts       │
-│  engine.ts     │◄─────────────┤ 15 个 POST 路由  │              │ 6 个 Agent 工具      │
+│  engine.ts     │◄─────────────┤ 16 个 POST 路由  │              │ 6 个 Agent 工具      │
 │  (唯一编排)    │◄─────────────┤ api-types.ts     │              │                      │
 └───┬───┬───┬────┘              └──────────────────┘              └──────────────────────┘
     │   │   │
@@ -73,7 +73,7 @@ This document is for maintainers: module boundaries, data flow, state files, the
 | 布局与路径 | `git/repo-paths.ts` | 仓库布局常量、备份目录归一化、拒绝符号链接/`.git`/逃逸路径的读写。 | → core/paths, manifest |
 | 清单 | `manifest/manifest.ts` | schema 版本校验、所有仓库文档的解析与校验、确定性序列化、`metadata/schema.json` 生成；`buildManifest({ generatorVersion })` 与 `buildSchemaDocument(pluginVersion)` 记录**运行中的插件版本**（由 engine 传入 `deps.pluginVersion`），不写死常量。 | → core |
 | 本机状态 | `state/store.ts` | 配置/状态 JSON 的原子读写与归一化、设备身份、路径解析、字段校验（仓库 URL、分支名、间隔范围等）。 | → core |
-| Web | `http/routes.ts` + `http/api-types.ts` | 15 个 POST 路由与线上契约（`{ok:true,value}` / `{ok:false,error}`）。 | → engine |
+| Web | `http/routes.ts` + `http/api-types.ts` | 16 个 POST 路由与线上契约（`{ok:true,value}` / `{ok:false,error}`）。 | → engine |
 | 工具 | `tools/tools.ts` | 6 个工具定义；确认语义；错误归一化为工具结果。 | → engine |
 | 浏览器 | `client/src/**` | React 设置页，经 `scripts/build-client.mjs` 打成 `lib/client.js`（`window.__ModuleLoader__.load`），React 由宿主模块表提供。 | 只 `import type` Host 契约 |
 
@@ -91,7 +91,7 @@ status(refresh?)
   → planSync(...)  → countPlanChanges → StatusView + logs
 ```
 
-`plugins/list` 用同样的 local/remote 读取，把 `planSync` 的 `diffs` 映射成表格行（`synced` / `local-only` / `remote-only` / `version-diff` / `config-diff` / `enabled-diff` / `conflict` / `excluded`）。`diff` 只调用 `previewBackup` / `previewRestore` / `previewSync`。
+`plugins/list` 用同样的 local/remote 读取，把 `planSync` 的 `diffs` 映射成表格行（`synced` / `local-only` / `remote-only` / `version-diff` / `config-diff` / `enabled-diff` / `conflict` / `excluded`），并附带本机声明里的 `scopeSelfOnly` / `scopeDevices` / `enabledOverride` 供列表展示。`plugins/preferences` 修改本机声明（scope `self` 写入「仅本机」限制，`enabledOverride` 只改本机）后提交 v2 仓库文件，返回刷新后的列表。`diff` 只调用 `previewBackup` / `previewRestore` / `previewSync`。
 
 ### 3.2 备份（scan → plan → execute → baseline）
 
@@ -369,7 +369,8 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `status` | `{refresh?: boolean}` | `{ status: StatusView, logs: LogEntry[] }` |
 | `config/save` | `{config: Partial<SyncConfig>}` | `{ config: SyncConfigView }` |
 | `connection/test` | `{config?: Partial<SyncConfig>}` | `ConnectionTestResult` |
-| `plugins/list` | `{}` | `{ rows, activeProfile, availableProfiles }` |
+| `plugins/list` | `{}` | `{ rows, activeProfile, availableProfiles, repoSchemaVersion? }` |
+| `plugins/preferences` | `{ pluginId, scope?: 'all'\|'self', enabledOverride?: boolean\|null }` | `{ rows, activeProfile, availableProfiles, repoSchemaVersion? }` |
 | `skills/list` | `{}` | `{ skills: { name, files, bytes }[], warnings }` |
 | `diff` | `{direction?: 'push'\|'pull'\|'two-way', commit?: string}` | `{ direction, plan: SyncPlan }` |
 | `backup` | `{message?: string, confirmDestructive?: boolean}` | `OperationResult` |
@@ -430,4 +431,4 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `tests/integration/two-device.test.ts` | 两台模拟设备 + 真实本地 bare Git 仓库的端到端流程：备份/恢复、无变化不提交、并发新增、版本变更、配置冲突、删除确认、历史 trailer、非法 manifest、不可达仓库、本地插件排除、状态计数、设备可见性、待重启生效、设备限定插件 |
 | `tests/integration/migration-v2.test.ts` | 真实 v1 仓库首次同步：v2 manifest/policy/设备声明生成、`migratedFrom: 1`、`pre-v2-migration` 标签、`Result: migrated` trailer、v1 镜像仍可读 |
 
-集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**38 个测试文件 / 374 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。
+集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**40 个测试文件 / 379 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。

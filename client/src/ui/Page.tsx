@@ -64,6 +64,7 @@ import { HistorySection } from './HistorySection'
 import { Modal } from './Modal'
 import { PlanPreview } from './PlanPreview'
 import { PluginsSection } from './PluginsSection'
+import type { PluginPreferenceChoice } from './PluginsSection'
 import { SkillsSection } from './SkillsSection'
 import { ScopeSection } from './ScopeSection'
 import { StatusSection } from './StatusSection'
@@ -780,6 +781,27 @@ export function Page({ t }: PageProps): ReactElement {
     }
   }
 
+  // --- Per-plugin preferences -------------------------------------------
+  /**
+   * Persist one row's per-device preference. The dialog owns the busy state
+   * and shows the failure inline, so this only rethrows a readable message.
+   */
+  async function savePluginPreferences(row: PluginListRow, choice: PluginPreferenceChoice): Promise<void> {
+    clearMessages()
+    try {
+      const response = await api.savePluginPreferences({
+        pluginId: row.id,
+        scope: choice.scope,
+        enabledOverride: choice.enabledOverride,
+      })
+      setPlugins(response)
+      showFeedback('plugins', 'success', t('pluginPrefsSaved'))
+      await refreshStatus()
+    } catch (error) {
+      throw new Error(errorText(error))
+    }
+  }
+
   // --- Render ------------------------------------------------------------
   const view = status === null ? null : status.status
   const configured = view !== null && view.state !== 'not-configured' && view.config.repoUrl !== ''
@@ -950,6 +972,7 @@ export function Page({ t }: PageProps): ReactElement {
             onFilterChange={setFilter}
             onToggle={(row, next) => void toggleExclusion(row, next)}
             onRefresh={() => void refreshPlugins()}
+            onSavePreferences={(row, choice) => savePluginPreferences(row, choice)}
           />
 
           <SkillsSection
