@@ -8,7 +8,7 @@
  * browser bundle.
  * @module http/api-types
  */
-import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginPreferenceUpdate, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillSyncStatus, SyncState } from '../types.js';
+import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginPreferenceUpdate, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillPreferenceUpdate, SkillSyncStatus, SyncState } from '../types.js';
 /** Route prefix shared by every endpoint. */
 export declare const API_PREFIX = "/api/dsh-plugins-git-sync";
 /** Error body. */
@@ -86,7 +86,7 @@ export interface PluginListResponse {
     /** Repository schema version when it could be read (2 for v2 repositories). */
     repoSchemaVersion?: number | null;
 }
-export type { PluginPreferenceUpdate } from '../types.js';
+export type { PluginPreferenceUpdate, SkillPreferenceUpdate } from '../types.js';
 /** Update one plugin's per-device preferences. */
 export type PluginPreferencesRequest = PluginPreferenceUpdate | PluginPreferencesBatchRequest;
 /** Update several plugins' per-device preferences in one repository write. */
@@ -103,12 +103,28 @@ export interface SkillSummary {
     syncStatus: SkillSyncStatus;
     /** Where the skill exists; omitted by older Hosts. */
     presence?: 'both' | 'local-only' | 'remote-only';
+    /** Whether this device has the skill installed; omitted by older Hosts. */
+    installed?: boolean;
+    /** The repository marks the skill for this device only. */
+    scopeSelfOnly?: boolean;
+    /** Devices the skill is restricted to; empty means every device. */
+    scopeDevices?: string[];
+    /** This device removed the skill on purpose, so it is not restored automatically. */
+    deletedHere?: boolean;
 }
 /** Deployed-skill list response. */
 export interface SkillListResponse {
     skills: SkillSummary[];
     warnings: string[];
 }
+/** Several skill preferences applied in one repository commit. */
+export interface SkillPreferencesBatchRequest {
+    updates: SkillPreferenceUpdate[];
+}
+/** One skill preference update or a batch of them. */
+export type SkillPreferencesRequest = SkillPreferenceUpdate | SkillPreferencesBatchRequest;
+/** Skill list after the preference update (same shape as `skills/list`). */
+export type SkillPreferencesResponse = SkillListResponse;
 /** Diff/preview request. */
 export interface DiffRequest {
     /** Which operation to preview; defaults to a two-way sync. */
@@ -214,6 +230,6 @@ export interface OverviewResponse extends StatusPayload {
     pluginVersion: number | string;
 }
 /** Request handler map keyed by route name (no `/api` prefix). */
-export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'plugins/preferences' | 'skills/list' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
+export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'plugins/preferences' | 'skills/list' | 'skills/preferences' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
 /** A sync state alias for the UI. */
 export type { SyncState };

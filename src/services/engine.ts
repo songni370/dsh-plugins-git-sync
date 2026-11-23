@@ -36,6 +36,7 @@ import type {
   PluginInstaller,
   PluginPreferenceUpdate,
   PluginRecord,
+  SkillPreferenceUpdate,
   RemotePluginEntry,
   RemoteProfileState,
   RepoStore,
@@ -76,11 +77,20 @@ import {
   readV2State,
   type RepoV2Read,
 } from './repo-v2-bridge.js'
-import type { DevicePendingActivationV2 } from './repo-v2.js'
+import type { DevicePendingActivationV2, DeviceSkillEntryV2 } from './repo-v2.js'
 import { executeLocalActions, isLocalAction } from './executor.js'
 import { createSnapshotService, snapshotConfigs, type SnapshotService } from './snapshot.js'
 import { fileExists } from '../state/store.js'
-import { mergeSkills, restoreMissingSkills, scanSkills, skillBytes, skillSyncStatus } from '../skills/skills.js'
+import {
+  isSafeSkillName,
+  mergeSkills,
+  removeSkill,
+  restoreMissingSkills,
+  scanSkills,
+  skillBytes,
+  skillHash,
+  skillSyncStatus,
+} from '../skills/skills.js'
 import { join } from 'node:path'
 
 /** Everything the engine needs, injected by the plugin entry. */
@@ -511,34 +521,53 @@ export class SyncEngine {
   async listSkills(): Promise<SkillListResponse> {
     const config = await this.readConfig()
     const state = await this.readState()
-    const scanned = await scanSkills(this.dshHome)
-    let remoteSkills: readonly SkillEntry[] = []
+    const scanned = await this.scanSkillsFor(config)
+    let read: RemoteRead = EMPTY_REMOTE
     if (config.repoUrl.trim() !== '') {
       try {
         const { store, workDir } = this.repoFor(config)
         if ((await fileExists(workDir)) && store.prepared()) {
-          const read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
-          remoteSkills = read.skills?.skills ?? []
+          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
         }
       } catch {
         // A missing or malformed repository must not hide local skills.
       }
     }
+    const remoteSkills = read.skills?.skills ?? []
     const localMap = new Map(scanned.backup.skills.map(skill => [skill.name, skill]))
     const remoteMap = new Map(remoteSkills.map(skill => [skill.name, skill]))
-    const names = [...new Set([...localMap.keys(), ...remoteMap.keys()])].sort()
+    const ownSkills = read.v2?.byId[state.device.id]?.skills ?? {}
+    const restrictedElsewhere = this.skillsRestrictedElsewhere(read, state)
+    const names = [...new Set([...localMap.keys(), ...remoteMap.keys(), ...Object.keys(ownSkills)])]
+      .filter(name => {
+        // A skill restricted to other devices is not this device's business;
+        // keep it visible only when it is installed here or this device
+        // declared something about it (e.g. a local removal marker).
+        if (!restrictedElsewhere.has(name)) return true
+        // Keep reporting a skill restricted to other devices only when this
+        // device actually has it installed or removed it here on purpose.
+        return localMap.has(name) || ownSkills[name]?.deleted === true
+      })
+      .sort()
     const excluded = new Set(config.excludedSkills)
     return {
       skills: names.map(name => {
         const local = localMap.get(name)
         const remote = remoteMap.get(name)
+        const own = ownSkills[name]
         const present = local ?? remote
+        const scope = own?.scope
         return {
           name,
           files: present?.files.length ?? 0,
           bytes: present === undefined ? 0 : skillBytes(present),
           syncStatus: excluded.has(name) ? 'excluded' : skillSyncStatus(local, remote),
           presence: local !== undefined && remote !== undefined ? 'both' : local !== undefined ? 'local-only' : 'remote-only',
+          installed: local !== undefined,
+          scopeSelfOnly:
+            scope?.mode === 'devices' && scope.devices?.length === 1 && scope.devices[0] === state.device.id,
+          ...(scope?.mode === 'devices' ? { scopeDevices: [...(scope.devices ?? [])] } : {}),
+          deletedHere: own?.deleted === true && local === undefined,
         }
       }),
       warnings: scanned.warnings,
@@ -840,6 +869,242 @@ export class SyncEngine {
     })
   }
 
+  /** Read skill scope restrictions other devices wrote for this device. */
+  private skillsRestrictedElsewhere(read: RemoteRead, state: LocalState): Set<string> {
+    const restricted = new Set<string>()
+    if (read.v2 === null) return restricted
+    for (const [deviceId, manifest] of Object.entries(read.v2.byId)) {
+      if (deviceId === state.device.id) continue
+      for (const [name, entry] of Object.entries(manifest.skills)) {
+        if (entry.deleted === true) continue
+        const scope = entry.scope ?? { mode: 'all' as const }
+        if (scope.mode === 'devices' && !(scope.devices ?? []).includes(state.device.id)) restricted.add(name)
+      }
+    }
+    return restricted
+  }
+
+  /** Skills that must never be restored automatically on this device. */
+  private blockedSkills(read: RemoteRead, state: LocalState): Set<string> {
+    const blocked = this.skillsRestrictedElsewhere(read, state)
+    if (read.v2 !== null) {
+      for (const [name, entry] of Object.entries(read.v2.byId[state.device.id]?.skills ?? {})) {
+        if (entry.deleted === true) blocked.add(name)
+      }
+    }
+    return blocked
+  }
+
+  /** Device manifest skill entries for the current local inventory. */
+  private skillEntriesFor(
+    previous: Record<string, DeviceSkillEntryV2>,
+    local: SkillBackup | null,
+    now: string,
+  ): Record<string, DeviceSkillEntryV2> {
+    const entries: Record<string, DeviceSkillEntryV2> = {}
+    for (const skill of local?.skills ?? []) {
+      const old = previous[skill.name]
+      entries[skill.name] = {
+        name: skill.name,
+        hash: skillHash(skill),
+        files: skill.files.length,
+        updatedAt: now,
+        ...(old?.scope === undefined ? {} : { scope: old.scope }),
+      }
+    }
+    for (const [name, entry] of Object.entries(previous)) {
+      if (entries[name] !== undefined) continue
+      // A skill this device removed on purpose stays removed (and keeps any
+      // scope it carried) until the user installs it again here.
+      if (entry.deleted === true) entries[name] = { ...entry }
+    }
+    return entries
+  }
+
+  /**
+   * Update this device's declaration for one skill.
+   *
+   * `scope` decides whether every device should have the skill or only this
+   * device (other devices then leave it out). `action` installs or removes the
+   * skill on this device only: removing it here never propagates to other
+   * devices and is not undone by a later restore. The preference is committed
+   * to the repository (creating the v2 layout on first use) so other devices
+   * see it on their next synchronization.
+   */
+  async setSkillPreferences(update: SkillPreferenceUpdate): Promise<SkillListResponse> {
+    return await this.setSkillPreferencesBatch([update])
+  }
+
+  /** Apply several per-device skill preference updates in one repository commit. */
+  async setSkillPreferencesBatch(updates: readonly SkillPreferenceUpdate[]): Promise<SkillListResponse> {
+    return this.mutex.runExclusive(async () => {
+      this.busy = true
+      try {
+        if (updates.length === 0) {
+          throw new SyncError('invalid-config', '没有可保存的技能偏好 / no skill preference to save')
+        }
+        const seen = new Set<string>()
+        for (const update of updates) {
+          if (!isSafeSkillName(update.skillName)) {
+            throw new SyncError('invalid-config', `不安全的技能名称 / unsafe skill name: ${update.skillName}`)
+          }
+          if (seen.has(update.skillName)) {
+            throw new SyncError('invalid-config', `重复的技能名称 / duplicate skill: ${update.skillName}`)
+          }
+          seen.add(update.skillName)
+          if (update.scope === undefined && update.action === undefined) {
+            throw new SyncError('invalid-config', '没有可保存的技能偏好 / no skill preference to save')
+          }
+        }
+        const config = await this.readConfig()
+        this.ensureConfigured(config)
+        let state = await this.readState()
+        state = await this.persistDeviceIfChanged(state, config)
+        const now = new Date().toISOString()
+        const { store } = this.repoFor(config)
+        const prepared = await store.prepare()
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+        const previous = read.v2?.byId[state.device.id] ?? null
+        const scanned = await this.scanSkillsFor(config)
+        let localBackup = scanned.backup
+        const localMap = new Map(localBackup.skills.map(skill => [skill.name, skill]))
+        const remoteMap = new Map((read.skills?.skills ?? []).map(skill => [skill.name, skill]))
+        const restrictedElsewhere = this.skillsRestrictedElsewhere(read, state)
+        const entries: Record<string, DeviceSkillEntryV2> = { ...(previous?.skills ?? {}) }
+        const ensureEntry = (name: string): DeviceSkillEntryV2 => {
+          const existing = entries[name]
+          if (existing !== undefined) return existing
+          const source = localMap.get(name) ?? remoteMap.get(name)
+          if (source === undefined) throw new SyncError('install-failed', `技能不存在 / unknown skill: ${name}`)
+          const created: DeviceSkillEntryV2 = { name, hash: skillHash(source), files: source.files.length, updatedAt: now }
+          entries[name] = created
+          return created
+        }
+        const labels: string[] = []
+        for (const update of updates) {
+          const name = update.skillName
+          if (update.action === 'uninstall') {
+            if (!localMap.has(name)) {
+              throw new SyncError('install-failed', `技能未安装在本机 / skill is not installed: ${name}`)
+            }
+            await removeSkill(this.dshHome, name)
+            localBackup = { ...localBackup, skills: localBackup.skills.filter(skill => skill.name !== name) }
+            const entry = ensureEntry(name)
+            entries[name] = { ...entry, deleted: true, updatedAt: now }
+            labels.push(`${name} 本机卸载 / removed here`)
+          } else if (update.action === 'install') {
+            if (localMap.has(name)) {
+              throw new SyncError('install-failed', `技能已安装在本机 / skill is already installed: ${name}`)
+            }
+            const remote = remoteMap.get(name)
+            if (remote === undefined) {
+              throw new SyncError('install-failed', `仓库中没有该技能 / skill is not in the repository: ${name}`)
+            }
+            if (restrictedElsewhere.has(name)) {
+              throw new SyncError('install-failed', `该技能仅限其他设备使用 / this skill is restricted to other devices: ${name}`)
+            }
+            const result = await restoreMissingSkills({ schemaVersion: 1, updatedAt: now, skills: [remote] }, this.dshHome)
+            if (!result.restored.includes(name)) {
+              throw new SyncError('install-failed', result.warnings[0] ?? `无法安装技能 / cannot install skill: ${name}`)
+            }
+            localBackup = { ...localBackup, skills: [...localBackup.skills, remote] }
+            const existing = entries[name]
+            entries[name] = {
+              name,
+              hash: skillHash(remote),
+              files: remote.files.length,
+              updatedAt: now,
+              ...(existing?.scope === undefined ? {} : { scope: existing.scope }),
+            }
+            labels.push(`${name} 本机安装 / installed here`)
+          }
+          if (update.scope !== undefined) {
+            const entry = ensureEntry(name)
+            entries[name] = {
+              ...entry,
+              scope: update.scope === 'self' ? { mode: 'devices', devices: [state.device.id] } : { mode: 'all' },
+              updatedAt: now,
+            }
+            labels.push(`${name} ${update.scope === 'self' ? '仅本机 / this device only' : '所有设备 / all devices'}`)
+          }
+        }
+        const finalEntries: Record<string, DeviceSkillEntryV2> = {}
+        for (const skill of localBackup.skills) {
+          const existing = entries[skill.name]
+          finalEntries[skill.name] = {
+            name: skill.name,
+            hash: skillHash(skill),
+            files: skill.files.length,
+            updatedAt: now,
+            ...(existing?.scope === undefined ? {} : { scope: existing.scope }),
+          }
+        }
+        for (const [name, entry] of Object.entries(entries)) {
+          if (finalEntries[name] !== undefined) continue
+          if (entry.deleted === true) finalEntries[name] = { ...entry, updatedAt: now }
+        }
+        const local = await this.scanLocal(config, true)
+        const selfManifest = buildOwnDeviceManifest({
+          previous,
+          inventory: local,
+          profile: this.deps.activeProfile,
+          now,
+          skills: finalEntries,
+          pendingActivation: previousPendingActivation(previous),
+          lastResult: 'ok',
+          lastError: null,
+          baseCommit: prepared.head,
+        })
+        const relativeFiles = buildV2RepoFiles({
+          read: read.v2,
+          selfManifest,
+          profile: this.deps.activeProfile,
+          pluginVersion: this.deps.pluginVersion,
+          now,
+          legacyDevices: read.v2 === null ? read.devices : undefined,
+          commit: prepared.head,
+        })
+        const files: Record<string, string> = {}
+        for (const [relative, content] of Object.entries(relativeFiles)) {
+          files[joinRepoPath(config.backupDir, relative)] = content
+        }
+        const migrating = read.v2 === null && (read.manifest !== null || read.state !== null)
+        if (migrating) await store.ensureMigrationTag('pre-v2-migration')
+        const subject =
+          labels.length <= 3
+            ? labels.join('; ')
+            : `${labels.slice(0, 3).join('; ')} 等 ${labels.length} 个 / and ${labels.length - 3} more`
+        const write = await store.write({
+          files,
+          deletions: [],
+          executables: [],
+          message: this.commitMessage('skill preferences', subject),
+          trailers: {
+            operation: 'skill-preferences',
+            deviceId: state.device.id,
+            deviceName: state.device.name,
+            profile: this.deps.activeProfile,
+            result: migrating ? 'migrated' : 'ok',
+            pluginCount: String(local.plugins.filter(plugin => !plugin.builtIn).length),
+          },
+        })
+        state.lastCommit = write.commit ?? state.lastCommit
+        state.lastError = null
+        state.lastOperation = {
+          operation: 'skill-preferences',
+          at: now,
+          ok: true,
+          commit: write.commit,
+          changedPlugins: updates.length,
+        }
+        await this.deps.stateStore.write(state)
+        return await this.listSkills()
+      } finally {
+        this.busy = false
+      }
+    })
+  }
+
   /** Compute the plan for a direction without executing anything. */
   async diff(options: DiffOptions = {}): Promise<{ direction: 'push' | 'pull' | 'two-way'; plan: SyncPlan }> {
     const direction = options.direction ?? 'two-way'
@@ -900,6 +1165,7 @@ export class SyncEngine {
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
             previousSkills: this.filterSkillBackup(currentRead.skills, config),
+            localSkills: scannedSkills.backup,
             pendingActivation,
           })
         const firstFiles = build(read, local)
@@ -936,6 +1202,7 @@ export class SyncEngine {
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
                   previousSkills: this.filterSkillBackup(freshRead.skills, config),
+                  localSkills: scannedSkills.backup,
                   pendingActivation,
                 })
               },
@@ -1086,7 +1353,7 @@ export class SyncEngine {
           : undefined
         if (plan.actions.length === 0 && !skillsChanged) {
           const restoredSkills = config.backupScopes.skills
-            ? await this.tryRestoreSkills(read.skills, config)
+            ? await this.tryRestoreSkills(read.skills, config, this.blockedSkills(read, state))
             : { warnings: [], restored: [] }
           const now = new Date().toISOString()
           state.lastSyncAt = now
@@ -1169,6 +1436,7 @@ export class SyncEngine {
             plugins: config.backupScopes.plugins,
             skills: skillsForFiles,
             previousSkills: this.filterSkillBackup(currentRead.skills, config),
+            localSkills: scannedSkills.backup,
             pendingActivation,
           })
         const firstFiles = build(read, local)
@@ -1196,6 +1464,7 @@ export class SyncEngine {
                   plugins: config.backupScopes.plugins,
                   skills: skillsForFiles,
                   previousSkills: this.filterSkillBackup(freshRead.skills, config),
+                  localSkills: scannedSkills.backup,
                   pendingActivation,
                 })
               },
@@ -1236,7 +1505,7 @@ export class SyncEngine {
         await this.recordSuccess(state)
         this.lastError = null
         const restoredSkills = config.backupScopes.skills
-          ? await this.tryRestoreSkills(read.skills, config)
+          ? await this.tryRestoreSkills(read.skills, config, this.blockedSkills(read, state))
           : { warnings: [], restored: [] }
         return {
           ok: true,
@@ -1260,8 +1529,16 @@ export class SyncEngine {
   }
 
   /** Restore missing skills from a remote snapshot and turn problems into warnings. */
-  private async tryRestoreSkills(backup: SkillBackup | null, config: SyncConfig): Promise<{ warnings: string[]; restored: string[] }> {
-    const selected = this.filterSkillBackup(backup, config)
+  private async tryRestoreSkills(
+    backup: SkillBackup | null,
+    config: SyncConfig,
+    blocked?: ReadonlySet<string>,
+  ): Promise<{ warnings: string[]; restored: string[] }> {
+    let selected = this.filterSkillBackup(backup, config)
+    if (selected !== null && blocked !== undefined && blocked.size > 0) {
+      const skills = selected.skills.filter(skill => !blocked.has(skill.name))
+      selected = skills.length === 0 ? null : { ...selected, skills }
+    }
     if (selected === null) return { warnings: [], restored: [] }
     try {
       const result = await restoreMissingSkills(selected, this.dshHome)
@@ -1533,6 +1810,8 @@ export class SyncEngine {
     plugins?: boolean
     skills?: SkillBackup | null
     previousSkills?: SkillBackup | null
+    /** The skills actually deployed on this device (before the v1 merge). */
+    localSkills?: SkillBackup | null
     pendingActivation?: readonly DevicePendingActivationV2[]
   }): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } {
     const localMap = localStates(input.local)
@@ -1618,6 +1897,7 @@ export class SyncEngine {
       profile: this.deps.activeProfile,
       now,
       protectedIds: externalRemovals,
+      skills: this.skillEntriesFor(previousDevice?.skills ?? {}, input.localSkills ?? null, now),
       pendingActivation: input.pendingActivation ?? previousPendingActivation(previousDevice),
       lastResult: input.plan.actions.length === 0 ? 'no-changes' : 'ok',
       lastError: null,
@@ -1766,7 +2046,7 @@ export class SyncEngine {
         }
         if (plan.actions.length === 0) {
           const skillRestore = options.operation === 'restore' && config.backupScopes.skills
-            ? await this.tryRestoreSkills(read.skills, config)
+            ? await this.tryRestoreSkills(read.skills, config, this.blockedSkills(read, state))
             : { warnings: [], restored: [] }
           state.lastOperation = { operation: options.operation, at: new Date().toISOString(), ok: true, changedPlugins: 0 }
           await this.recordSuccess(state)
@@ -1790,7 +2070,7 @@ export class SyncEngine {
           )
         }
         const skillRestore = options.operation === 'restore' && config.backupScopes.skills
-          ? await this.tryRestoreSkills(read.skills, config)
+          ? await this.tryRestoreSkills(read.skills, config, this.blockedSkills(read, state))
           : { warnings: [], restored: [] }
         snapshotId = await this.snapshots.create({
           operation: options.operation,

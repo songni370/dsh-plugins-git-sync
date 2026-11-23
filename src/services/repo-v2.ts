@@ -62,6 +62,9 @@ export interface DeviceSkillEntryV2 {
   hash: string
   files: number
   updatedAt: string
+  /** Which devices should have this skill; missing means every device. */
+  scope?: PluginScopeV2
+  /** This device uninstalled the skill and does not want it restored. */
   deleted?: boolean
 }
 
@@ -344,6 +347,11 @@ function readSkill(value: unknown): DeviceSkillEntryV2 | null {
   if (deleted !== undefined) {
     if (typeof deleted !== 'boolean') return null
     entry.deleted = deleted
+  }
+  if (value['scope'] !== undefined) {
+    const scope = readScope(value['scope'])
+    if (scope === null) return null
+    entry.scope = scope
   }
   return entry
 }

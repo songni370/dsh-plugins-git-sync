@@ -454,7 +454,7 @@ export type SyncState =
 
 /** Last operation, for the status panel. */
 export interface LastOperation {
-  operation: 'backup' | 'restore' | 'sync' | 'rollback' | 'preferences'
+  operation: 'backup' | 'restore' | 'sync' | 'rollback' | 'preferences' | 'skill-preferences'
   at: string
   ok: boolean
   error?: string
@@ -480,6 +480,20 @@ export interface PluginPreferenceUpdate {
   scope?: 'all' | 'self'
   enabledOverride?: boolean | null
   sharedEnabled?: boolean
+}
+
+/**
+ * Per-device preference for one deployed skill.
+ *
+ * `scope` records in the repository whether every device should have the skill
+ * or only this device (other devices then leave it out). `action` installs or
+ * removes the skill on this device without changing the other devices' copies.
+ */
+export interface SkillPreferenceUpdate {
+  /** Skill directory name under the DSH skills directory. */
+  skillName: string
+  scope?: 'all' | 'self'
+  action?: 'install' | 'uninstall'
 }
 
 /** Everything the settings page needs for its status area. */

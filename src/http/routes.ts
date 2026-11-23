@@ -15,7 +15,7 @@ import { API_PREFIX } from './api-types.js'
 import type { ApiError } from './api-types.js'
 import type { DshConnection, DshContext, DshDisposer } from '../dsh.js'
 import type { SyncEngine } from '../services/engine.js'
-import type { ConflictResolution, JsonObject, PluginPreferenceUpdate, SyncLogger } from '../types.js'
+import type { ConflictResolution, JsonObject, PluginPreferenceUpdate, SkillPreferenceUpdate, SyncLogger } from '../types.js'
 import { isJsonValue } from '../core/json.js'
 
 /** Maximum JSON body accepted by one route. */
@@ -135,6 +135,42 @@ export function registerHttpRoutes(options: { ctx: DshContext; engine: SyncEngin
         return options.engine.setPluginPreferences(parseUpdate(body, -1))
       },
       'skills/list': async () => options.engine.listSkills(),
+      'skills/preferences': async body => {
+        const parseUpdate = (value: Record<string, unknown>, index: number): SkillPreferenceUpdate => {
+          const where = index >= 0 ? ` #${index + 1}` : ''
+          if (typeof value.skillName !== 'string' || value.skillName.trim() === '') {
+            throw new SyncError('invalid-config', `缺少技能名称 / skillName is required${where}`)
+          }
+          const scope = value.scope === 'all' || value.scope === 'self' ? value.scope : undefined
+          if (value.scope !== undefined && scope === undefined) {
+            throw new SyncError('invalid-config', `使用范围必须是 all 或 self / scope must be all or self${where}`)
+          }
+          const action = value.action === 'install' || value.action === 'uninstall' ? value.action : undefined
+          if (value.action !== undefined && action === undefined) {
+            throw new SyncError(
+              'invalid-config',
+              `本机操作必须是 install 或 uninstall / action must be install or uninstall${where}`,
+            )
+          }
+          if (scope === undefined && action === undefined) {
+            throw new SyncError('invalid-config', `没有可保存的技能偏好 / no skill preference to save${where}`)
+          }
+          return { skillName: value.skillName, scope, action }
+        }
+        if (Array.isArray(body.updates)) {
+          if (body.updates.length === 0) {
+            throw new SyncError('invalid-config', '没有可保存的技能偏好 / no skill preference to save')
+          }
+          return options.engine.setSkillPreferencesBatch(
+            body.updates.map((item, index) =>
+              item !== null && typeof item === 'object'
+                ? parseUpdate(item as Record<string, unknown>, index)
+                : parseUpdate({}, index),
+            ),
+          )
+        }
+        return options.engine.setSkillPreferences(parseUpdate(body, -1))
+      },
       diff: async body => options.engine.diff({
         direction: body.direction === 'push' || body.direction === 'pull' || body.direction === 'two-way' ? body.direction : 'two-way',
         commit: typeof body.commit === 'string' ? body.commit : undefined,

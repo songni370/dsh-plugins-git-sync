@@ -572,7 +572,16 @@ export const CSS = `
 
 
 .dgs-skillTable {
-  table-layout: auto;
+  table-layout: fixed;
+  max-width: 860px;
+}
+
+.dgs-colSkillMeta {
+  width: 96px;
+}
+
+.dgs-colSkillLocal {
+  width: 92px;
 }
 
 .dgs-skillName {
@@ -732,6 +741,7 @@ export const CSS = `
 }
 .dgs-table {
   width: 100%;
+  max-width: 860px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
@@ -745,16 +755,16 @@ export const CSS = `
   width: 30px;
 }
 .dgs-colVersion {
-  width: 56px;
+  width: 72px;
 }
 .dgs-colStatus {
-  width: 60px;
+  width: 64px;
 }
 .dgs-colScope {
-  width: 80px;
+  width: 88px;
 }
 .dgs-colEnabled {
-  width: 92px;
+  width: 100px;
 }
 .dgs-table th {
   padding: 6px 8px;

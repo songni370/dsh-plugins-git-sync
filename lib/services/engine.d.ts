@@ -10,7 +10,7 @@
  */
 import type { FileSyncLogger } from '../core/logger.js';
 import type { ConfigStore, StateStore } from '../state/store.js';
-import type { ConnectionTestResult, ConflictResolution, ConfigGateway, HistoryEntry, InventoryScanner, LocalState, OperationResult, PluginInstaller, PluginPreferenceUpdate, RepoStore, SyncConfig, SyncConfigView, SyncPlan } from '../types.js';
+import type { ConnectionTestResult, ConflictResolution, ConfigGateway, HistoryEntry, InventoryScanner, LocalState, OperationResult, PluginInstaller, PluginPreferenceUpdate, SkillPreferenceUpdate, RepoStore, SyncConfig, SyncConfigView, SyncPlan } from '../types.js';
 import type { PluginListResponse, SkillListResponse } from '../http/api-types.js';
 /** Everything the engine needs, injected by the plugin entry. */
 export interface EngineDeps {
@@ -150,6 +150,25 @@ export declare class SyncEngine {
      * enabled vote other devices follow.
      */
     setPluginPreferencesBatch(updates: readonly PluginPreferenceUpdate[]): Promise<PluginListResponse>;
+    /** Read skill scope restrictions other devices wrote for this device. */
+    private skillsRestrictedElsewhere;
+    /** Skills that must never be restored automatically on this device. */
+    private blockedSkills;
+    /** Device manifest skill entries for the current local inventory. */
+    private skillEntriesFor;
+    /**
+     * Update this device's declaration for one skill.
+     *
+     * `scope` decides whether every device should have the skill or only this
+     * device (other devices then leave it out). `action` installs or removes the
+     * skill on this device only: removing it here never propagates to other
+     * devices and is not undone by a later restore. The preference is committed
+     * to the repository (creating the v2 layout on first use) so other devices
+     * see it on their next synchronization.
+     */
+    setSkillPreferences(update: SkillPreferenceUpdate): Promise<SkillListResponse>;
+    /** Apply several per-device skill preference updates in one repository commit. */
+    setSkillPreferencesBatch(updates: readonly SkillPreferenceUpdate[]): Promise<SkillListResponse>;
     /** Compute the plan for a direction without executing anything. */
     diff(options?: DiffOptions): Promise<{
         direction: 'push' | 'pull' | 'two-way';

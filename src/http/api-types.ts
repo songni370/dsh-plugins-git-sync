@@ -26,6 +26,7 @@ import type {
   SyncConfig,
   SyncConfigView,
   SyncPlan,
+  SkillPreferenceUpdate,
   SkillSyncStatus,
   SyncState,
 } from '../types.js'
@@ -117,7 +118,7 @@ export interface PluginListResponse {
   repoSchemaVersion?: number | null
 }
 
-export type { PluginPreferenceUpdate } from '../types.js'
+export type { PluginPreferenceUpdate, SkillPreferenceUpdate } from '../types.js'
 
 /** Update one plugin's per-device preferences. */
 export type PluginPreferencesRequest = PluginPreferenceUpdate | PluginPreferencesBatchRequest
@@ -138,6 +139,14 @@ export interface SkillSummary {
   syncStatus: SkillSyncStatus
   /** Where the skill exists; omitted by older Hosts. */
   presence?: 'both' | 'local-only' | 'remote-only'
+  /** Whether this device has the skill installed; omitted by older Hosts. */
+  installed?: boolean
+  /** The repository marks the skill for this device only. */
+  scopeSelfOnly?: boolean
+  /** Devices the skill is restricted to; empty means every device. */
+  scopeDevices?: string[]
+  /** This device removed the skill on purpose, so it is not restored automatically. */
+  deletedHere?: boolean
 }
 
 /** Deployed-skill list response. */
@@ -145,6 +154,17 @@ export interface SkillListResponse {
   skills: SkillSummary[]
   warnings: string[]
 }
+
+/** Several skill preferences applied in one repository commit. */
+export interface SkillPreferencesBatchRequest {
+  updates: SkillPreferenceUpdate[]
+}
+
+/** One skill preference update or a batch of them. */
+export type SkillPreferencesRequest = SkillPreferenceUpdate | SkillPreferencesBatchRequest
+
+/** Skill list after the preference update (same shape as `skills/list`). */
+export type SkillPreferencesResponse = SkillListResponse
 
 /** Diff/preview request. */
 export interface DiffRequest {
@@ -273,6 +293,7 @@ export type ApiRouteName =
   | 'plugins/list'
   | 'plugins/preferences'
   | 'skills/list'
+  | 'skills/preferences'
   | 'diff'
   | 'backup'
   | 'restore/preview'

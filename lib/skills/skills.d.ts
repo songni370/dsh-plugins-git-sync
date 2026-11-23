@@ -26,6 +26,16 @@ export declare function scanSkills(dshHome: string, now?: string): Promise<Scann
  * not erase the copy other devices still rely on.
  */
 export declare function mergeSkills(local: SkillBackup, remote: SkillBackup | null): SkillBackup;
+/** Stable content hash of one deployed skill (paths, encodings and bytes). */
+export declare function skillHash(skill: SkillEntry): string;
+/**
+ * Remove one deployed skill from this device only.
+ *
+ * A deployed skill is often a symlink into a skills manager: removing the link
+ * must not delete the manager's copy, so symlinks are unlinked and only real
+ * directories are removed recursively. Returns false when the skill is absent.
+ */
+export declare function removeSkill(dshHome: string, name: string): Promise<boolean>;
 /** Result of restoring a skill snapshot. */
 /** Total stored bytes of one skill, decoded for base64 files. */
 export declare function skillBytes(skill: SkillEntry): number;

@@ -49,6 +49,7 @@ The plugin's own detail page also has a compact **Backup settings** card showing
 - **Sync status**: badge, plugin and skill count-tile groups (groups separated by spacing; local / repository / to upload / to download; plus conflicts for plugins and excluded for skills) and metadata, in the same card as the operations. The tile groups follow the backup-content switches, so a disabled scope hides its status.
 - **Automatic sync**: collapsed by default, shows on/off and trigger summary; expand to edit startup delay and triggers.
 - **Plugin list**: collapsed by default; filter, pagination (10 per page by default, 5/10/20/50/100) and per-plugin sync switch; deployed skills are listed below with file count, size and backup status (backed up / this device only / repository only / modified / excluded), collapsed and paginated like the plugin list. Each skill has the same leftmost sync checkbox as plugins; unchecking excludes it from uploads and restores while keeping its repository backup.
+- **Skill preferences**: each skill row also has "Install scope" (all devices / this device only) and "This device" (install / uninstall) dropdowns. Uninstalling affects only this device, other devices keep the skill, and sync never restores it automatically; "this device only" stops other devices from installing it.
 - **History**: collapsed by default and limited to the latest 10 commits; expand to restore a commit; long subjects are ellipsised.
 
 ## Install
@@ -161,7 +162,7 @@ Destructive operations use two-phase confirmation: preview first, then `confirm:
 
 - Never collects or uploads tokens, passwords, private keys or cookies; HTTPS stores only the env-var name.
 - No absolute machine paths in backups; plugin configuration, Agent presets and UI settings are never read, written or backed up.
-- Skill files are uploaded verbatim and may contain private prompts or scripts; use a private repository. Restore only adds missing skills and never overwrites an existing one.
+- Skill files are uploaded verbatim and may contain private prompts or scripts; use a private repository. Restore only adds missing skills and never overwrites an existing one; uninstalling a skill here never propagates to other devices.
 - A plugin present here but missing in the repository is backed up again, never deleted; a plugin missing here but present in the repository needs an explicit delete-or-skip choice.
 - Syncs the active profile only; other profiles install and sync separately.
 - Local-dev plugins can be recorded but cannot be installed on another device.

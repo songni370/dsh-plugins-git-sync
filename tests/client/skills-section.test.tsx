@@ -90,3 +90,37 @@ describe('skill card', () => {
     expect(html).toContain('第 1 / 2 页')
   })
 })
+
+describe('skill preference controls', () => {
+  const editableSkills: SkillListResponse = {
+    skills: [
+      {
+        name: 'alpha',
+        files: 1,
+        bytes: 10,
+        syncStatus: 'synced',
+        installed: true,
+        scopeSelfOnly: true,
+        scopeDevices: ['dev-1'],
+      },
+    ],
+    warnings: [],
+  }
+
+  it('shows a scope column and a local install state without a dialog', () => {
+    const html = renderToStaticMarkup(
+      <SkillsSection {...baseProps} skills={editableSkills} onApplyPreferences={async () => undefined} />,
+    )
+    expect(html).toContain('>安装范围<')
+    expect(html).toContain('>本机<')
+    expect(html).toContain('仅本机')
+    expect(html).toContain('已安装')
+    expect(html).not.toContain('role="menu"')
+  })
+
+  it('omits the controls when the Host does not offer them', () => {
+    const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={editableSkills} />)
+    expect(html).not.toContain('>安装范围<')
+    expect(html).not.toContain('已安装')
+  })
+})

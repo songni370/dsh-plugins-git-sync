@@ -206,6 +206,8 @@ export interface OwnDeviceManifestInput {
   lastResult?: DeviceStatusV2['lastResult']
   lastError?: string | null
   baseCommit?: string | null
+  /** Skill declarations to write; defaults to the previous manifest's entries. */
+  skills?: Record<string, import('./repo-v2.js').DeviceSkillEntryV2>
 }
 
 /** Build this device's declaration for the repository. */
@@ -284,7 +286,7 @@ export function buildOwnDeviceManifest(input: OwnDeviceManifestInput): DeviceMan
     baseCommit: input.baseCommit ?? null,
     plugins,
     removed: pruned,
-    skills: previous?.skills ?? {},
+    skills: input.skills ?? previous?.skills ?? {},
     status,
   }
 }

@@ -54,6 +54,9 @@ export interface DeviceSkillEntryV2 {
     hash: string;
     files: number;
     updatedAt: string;
+    /** Which devices should have this skill; missing means every device. */
+    scope?: PluginScopeV2;
+    /** This device uninstalled the skill and does not want it restored. */
     deleted?: boolean;
 }
 /** One plugin that is installed but not active until DSH restarts. */

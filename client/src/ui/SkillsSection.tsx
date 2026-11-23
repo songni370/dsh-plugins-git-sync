@@ -9,11 +9,12 @@
 
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
-import type { SkillListResponse, SkillSummary } from '../../../src/http/api-types'
+import type { SkillListResponse, SkillPreferenceUpdate, SkillSummary } from '../../../src/http/api-types'
 import type { Translate } from '../i18n'
 import { formatBytes } from '../format'
 import type { Tone } from './controls'
 import { Badge, Banner, Button, Card, Checkbox, LinkButton, Loading, Select } from './controls'
+import { PreferenceDropdown } from './PreferenceDropdown'
 
 /** Rows-per-page choices for the skill list. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
@@ -49,6 +50,8 @@ export interface SkillsSectionProps {
   busy: boolean
   onToggle: (skill: SkillSummary, next: boolean) => void
   onRefresh: () => void
+  /** Apply one preference update for this device's skill declaration. */
+  onApplyPreferences?: (updates: SkillPreferenceUpdate[]) => Promise<void>
 }
 
 /** Render the deployed-skill list card. */
@@ -58,6 +61,8 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(storedPageSize)
+  const [prefBusy, setPrefBusy] = useState(false)
+  const [prefError, setPrefError] = useState<string | null>(null)
 
   useEffect(() => {
     setPage(1)
@@ -67,6 +72,20 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
   const currentPage = Math.min(page, totalPages)
   const start = (currentPage - 1) * pageSize
   const pageRows = rows.slice(start, start + pageSize)
+  const editable = props.onApplyPreferences !== undefined
+
+  async function applySkillPreference(update: SkillPreferenceUpdate): Promise<void> {
+    if (props.onApplyPreferences === undefined) return
+    setPrefBusy(true)
+    setPrefError(null)
+    try {
+      await props.onApplyPreferences([update])
+    } catch (error) {
+      setPrefError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPrefBusy(false)
+    }
+  }
 
   return (
     <Card
@@ -110,20 +129,45 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
       {skills !== null && rows.length === 0 ? <p className="dgs-hint">{t('skillsEmpty')}</p> : null}
 
       <div id="dgs-skills-body" hidden={!open}>
+        {prefError === null ? null : (
+          <Banner tone="error">{t('skillPrefsFailed', { message: prefError })}</Banner>
+        )}
+        {prefBusy ? <p className="dgs-hint">{t('pluginPrefsSaving')}</p> : null}
+
         <div className="dgs-tableWrap">
           <table className="dgs-table dgs-skillTable">
+            <colgroup>
+              <col className="dgs-colCheck" />
+              <col />
+              <col className="dgs-colSkillMeta" />
+              <col className="dgs-colStatus" />
+              {editable ? <col className="dgs-colScope" /> : null}
+              {editable ? <col className="dgs-colSkillLocal" /> : null}
+            </colgroup>
             <thead>
               <tr>
                 <th className="dgs-tableCellCheck">{t('pluginsSyncable')}</th>
                 <th>{t('skillsColumnName')}</th>
                 <th>{t('skillsColumnMeta')}</th>
                 <th>{t('pluginsStatus')}</th>
+                {editable ? <th>{t('pluginPrefsScopeColumn')}</th> : null}
+                {editable ? <th>{t('skillLocalColumn')}</th> : null}
               </tr>
             </thead>
             <tbody>
               {pageRows.map(skill => {
                 const excluded = props.exclusions.has(skill.name) || skill.syncStatus === 'excluded'
                 const meta = excluded ? SKILL_SYNC_META.excluded : SKILL_SYNC_META[skill.syncStatus] ?? SKILL_SYNC_META['local-only']
+                const installed =
+                  skill.installed ??
+                  (skill.presence === 'both' || skill.presence === 'local-only' || skill.presence === undefined)
+                const canInstall =
+                  skill.presence === 'both' || skill.presence === 'remote-only' || skill.presence === undefined
+                const localOptions = installed
+                  ? [{ value: 'uninstall', label: t('skillUninstall') }]
+                  : canInstall
+                    ? [{ value: 'install', label: t('skillInstall') }]
+                    : []
                 return (
                   <tr className="dgs-skillItem" key={skill.name}>
                     <td className="dgs-tableCellCheck">
@@ -147,6 +191,39 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                     <td className="dgs-nowrap">
                       <Badge tone={meta.tone}>{t(meta.key)}</Badge>
                     </td>
+                    {editable ? (
+                      <td className="dgs-nowrap">
+                        <PreferenceDropdown
+                          label={skill.scopeSelfOnly === true ? t('pluginPrefsScopeSelf') : t('pluginPrefsScopeAll')}
+                          ariaLabel={`${t('pluginPrefsScopeColumn')}: ${skill.name}`}
+                          options={[
+                            { value: 'all', label: t('pluginPrefsScopeAll') },
+                            { value: 'self', label: t('pluginPrefsScopeSelf') },
+                          ]}
+                          current={skill.scopeSelfOnly === true ? 'self' : 'all'}
+                          disabled={prefBusy || props.busy}
+                          onSelect={value => {
+                            void applySkillPreference({ skillName: skill.name, scope: value === 'self' ? 'self' : 'all' })
+                          }}
+                        />
+                      </td>
+                    ) : null}
+                    {editable ? (
+                      <td className="dgs-nowrap">
+                        <PreferenceDropdown
+                          label={installed ? t('skillInstalledShort') : t('skillNotInstalledShort')}
+                          ariaLabel={`${t('skillLocalColumn')}: ${skill.name}`}
+                          options={localOptions}
+                          disabled={prefBusy || props.busy || localOptions.length === 0}
+                          onSelect={value => {
+                            void applySkillPreference({
+                              skillName: skill.name,
+                              action: value === 'install' ? 'install' : 'uninstall',
+                            })
+                          }}
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 )
               })}

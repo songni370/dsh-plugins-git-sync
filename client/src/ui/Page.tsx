@@ -36,6 +36,7 @@ import type {
   PluginListResponse,
   PluginListRow,
   PluginPreferenceUpdate,
+  SkillPreferenceUpdate,
   SkillListResponse,
   SkillSummary,
   StatusPayload,
@@ -88,7 +89,7 @@ export interface PageProps {
 type ConfirmKind = 'backup' | 'restore' | 'rollback' | 'sync'
 
 /** Which settings section a transient result belongs under. */
-type FeedbackArea = 'config' | 'auto' | 'actions' | 'plugins' | 'history'
+type FeedbackArea = 'config' | 'auto' | 'actions' | 'plugins' | 'skills' | 'history'
 
 /** How long a success/error message stays on screen. */
 const FEEDBACK_TTL_MS = 5_000
@@ -160,6 +161,7 @@ export function Page({ t }: PageProps): ReactElement {
     auto: null,
     actions: null,
     plugins: null,
+    skills: null,
     history: null,
   })
   const feedbackTimers = useRef<Record<FeedbackArea, number | null>>({
@@ -167,6 +169,7 @@ export function Page({ t }: PageProps): ReactElement {
     auto: null,
     actions: null,
     plugins: null,
+    skills: null,
     history: null,
   })
   const [diff, setDiff] = useState<DiffResponse | null>(null)
@@ -340,7 +343,7 @@ export function Page({ t }: PageProps): ReactElement {
 
   function clearMessages(): void {
     for (const area of Object.keys(feedbackTimers.current) as FeedbackArea[]) clearFeedbackTimer(area)
-    setFeedback({ config: null, auto: null, actions: null, plugins: null, history: null })
+    setFeedback({ config: null, auto: null, actions: null, plugins: null, skills: null, history: null })
   }
 
   /** Close one floating toast without waiting for its five-second timer. */
@@ -799,6 +802,24 @@ export function Page({ t }: PageProps): ReactElement {
     }
   }
 
+  // --- Per-skill preferences --------------------------------------------
+  /**
+   * Persist per-device preferences for one skill or a batch. The card owns the
+   * inline failure message, so this only rethrows a readable one.
+   */
+  async function applySkillPreferences(updates: SkillPreferenceUpdate[]): Promise<void> {
+    if (updates.length === 0) return
+    clearMessages()
+    try {
+      const response = await api.saveSkillPreferences({ updates })
+      setSkills(response)
+      showFeedback('skills', 'success', t('skillPrefsSaved'))
+      await refreshStatus()
+    } catch (error) {
+      throw new Error(errorText(error))
+    }
+  }
+
   // --- Render ------------------------------------------------------------
   const view = status === null ? null : status.status
   const configured = view !== null && view.state !== 'not-configured' && view.config.repoUrl !== ''
@@ -981,6 +1002,7 @@ export function Page({ t }: PageProps): ReactElement {
             busy={anyBusy}
             onToggle={(skill, next) => void toggleSkillExclusion(skill, next)}
             onRefresh={() => void refreshSkills()}
+            onApplyPreferences={updates => applySkillPreferences(updates)}
           />
 
           <HistorySection

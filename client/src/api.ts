@@ -34,6 +34,8 @@ import type {
   PluginPreferencesRequest,
   PluginPreferencesResponse,
   SkillListResponse,
+  SkillPreferencesRequest,
+  SkillPreferencesResponse,
   RestorePreviewRequest,
   RestorePreviewResponse,
   RestoreRequest,
@@ -148,6 +150,11 @@ export function getPlugins(): Promise<PluginListResponse> {
 /** Save this device's scope / enabled preference for one plugin. */
 export function savePluginPreferences(body: PluginPreferencesRequest): Promise<PluginPreferencesResponse> {
   return request<PluginPreferencesResponse>('plugins/preferences', body)
+}
+
+/** Save one skill preference or a batch of them. */
+export function saveSkillPreferences(body: SkillPreferencesRequest): Promise<SkillPreferencesResponse> {
+  return request<SkillPreferencesResponse>('skills/preferences', body)
 }
 
 /** Deployed skills shown below the plugin list. */
