@@ -750,8 +750,11 @@ export const CSS = `
 .dgs-colStatus {
   width: 60px;
 }
-.dgs-colPrefs {
-  width: 172px;
+.dgs-colScope {
+  width: 80px;
+}
+.dgs-colEnabled {
+  width: 92px;
 }
 .dgs-table th {
   padding: 6px 8px;

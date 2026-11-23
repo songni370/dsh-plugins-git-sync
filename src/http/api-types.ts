@@ -104,6 +104,8 @@ export interface PluginListRow {
   scopeDevices?: string[]
   /** This device's local enabled override; absent when it follows the shared state. */
   enabledOverride?: boolean
+  /** The enabled vote this device's declaration carries for every device. */
+  sharedEnabled?: boolean
 }
 
 /** Plugin list response. */

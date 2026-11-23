@@ -107,10 +107,20 @@ export function registerHttpRoutes(options: { ctx: DshContext; engine: SyncEngin
               `启停偏好必须是 true、false 或 null / enabledOverride must be true, false or null${where}`,
             )
           }
-          if (scope === undefined && enabledOverride === undefined) {
+          const sharedEnabled = typeof value.sharedEnabled === 'boolean' ? value.sharedEnabled : undefined
+          if (value.sharedEnabled !== undefined && sharedEnabled === undefined) {
+            throw new SyncError('invalid-config', `全局启停必须是 true 或 false / sharedEnabled must be true or false${where}`)
+          }
+          if (enabledOverride !== undefined && sharedEnabled !== undefined) {
+            throw new SyncError(
+              'invalid-config',
+              `不能同时设置本机与全局启停 / enabledOverride and sharedEnabled cannot be combined${where}`,
+            )
+          }
+          if (scope === undefined && enabledOverride === undefined && sharedEnabled === undefined) {
             throw new SyncError('invalid-config', `没有可保存的偏好 / no preference to save${where}`)
           }
-          return { pluginId: value.pluginId, scope, enabledOverride }
+          return { pluginId: value.pluginId, scope, enabledOverride, sharedEnabled }
         }
         if (Array.isArray(body.updates)) {
           if (body.updates.length === 0) {

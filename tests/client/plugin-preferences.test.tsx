@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Per-plugin preference controls: every row exposes inline availability and
- * enabled-override dropdowns (no second dialog) whose triggers show the
- * current device-local choice.
+ * Per-plugin preference controls: every row exposes an install-scope dropdown
+ * and an enabled dropdown (no second dialog) whose triggers show the current
+ * choice.
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -22,6 +22,7 @@ function row(patch: Partial<PluginListRow> = {}): PluginListRow {
     remoteVersion: '1.0.0',
     enabled: false,
     remoteEnabled: true,
+    sharedEnabled: true,
     syncStatus: 'synced',
     inSync: false,
     syncable: true,
@@ -69,12 +70,13 @@ describe('per-plugin preferences', () => {
   it('offers inline dropdown actions for every row without a dialog', () => {
     const html = render([row()])
     expect(html).not.toContain('>设置<')
-    expect(html).toContain('本机偏好')
+    expect(html).toContain('安装范围')
+    expect(html).toContain('启停')
     // Closed menus: the triggers show the current choice, menus stay hidden.
     expect(html.match(/aria-haspopup="menu"/g)?.length).toBe(2)
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('所有设备')
-    expect(html).toContain('跟随全局')
+    expect(html).toContain('全部启用')
     expect(html).not.toContain('role="menu"')
   })
 
@@ -87,7 +89,7 @@ describe('per-plugin preferences', () => {
 
   it('shows the device-local choices on the triggers', () => {
     const html = render([row({ scopeSelfOnly: true, enabledOverride: false, scopeDevices: ['dev-a'] })])
-    expect((html.split('aria-label="使用范围: alpha"')[1] ?? '').slice(0, 260)).toContain('仅本机')
-    expect((html.split('aria-label="启停范围: alpha"')[1] ?? '').slice(0, 260)).toContain('本机停用')
+    expect((html.split('aria-label="安装范围: alpha"')[1] ?? '').slice(0, 260)).toContain('仅本机')
+    expect((html.split('aria-label="启停: alpha"')[1] ?? '').slice(0, 260)).toContain('本机停用')
   })
 })

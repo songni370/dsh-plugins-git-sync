@@ -134,4 +134,31 @@ describe('per-device plugin preferences', () => {
     expect(followUp.ok).toBe(true)
     expect(ctx.mac.plugin('beta')?.enabled).toBe(true)
   }, 120_000)
+
+  it('enables and disables a plugin on every device through the shared vote', async () => {
+    ctx.mac.addPlugin({ name: 'zeta', version: '5.0.0', enabled: true, configs: {} })
+    const backup = await ctx.mac.engine.backup({ confirmDestructive: true })
+    expect(backup.ok).toBe(true)
+    const firstSync = await ctx.win.engine.sync({ confirmDestructive: true })
+    expect(firstSync.ok).toBe(true)
+    expect(ctx.win.plugin('zeta')?.enabled).toBe(true)
+
+    const disabled = await ctx.mac.engine.setPluginPreferences({ pluginId: 'zeta', sharedEnabled: false })
+    const disabledRow = disabled.rows.find(item => item.id === 'zeta')
+    expect(disabledRow?.sharedEnabled).toBe(false)
+    expect(disabledRow?.enabledOverride).toBeUndefined()
+    expect(ctx.mac.plugin('zeta')?.enabled).toBe(false)
+
+    // The shared vote makes the other device disable the plugin too.
+    const secondSync = await ctx.win.engine.sync({ confirmDestructive: true })
+    expect(secondSync.ok).toBe(true)
+    expect(ctx.win.plugin('zeta')?.enabled).toBe(false)
+
+    const enabled = await ctx.mac.engine.setPluginPreferences({ pluginId: 'zeta', sharedEnabled: true })
+    expect(enabled.rows.find(item => item.id === 'zeta')?.sharedEnabled).toBe(true)
+    expect(ctx.mac.plugin('zeta')?.enabled).toBe(true)
+    const thirdSync = await ctx.win.engine.sync({ confirmDestructive: true })
+    expect(thirdSync.ok).toBe(true)
+    expect(ctx.win.plugin('zeta')?.enabled).toBe(true)
+  }, 120_000)
 })

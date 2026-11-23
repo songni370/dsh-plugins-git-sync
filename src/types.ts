@@ -467,15 +467,19 @@ export interface LastOperation {
  *
  * `scope` writes this device's declaration into the repository: `all` means
  * every device takes part, `self` records an explicit "this device only"
- * restriction. `enabledOverride` is local to this device: `true`/`false` keep
- * using the plugin here regardless of what other devices declare, `null`
- * removes the override and follows the shared state again.
+ * restriction. `enabledOverride` is local to this device: `true`/`false`
+ * enable or disable the plugin here regardless of what other devices declare,
+ * `null` removes the override and follows the shared state again.
+ * `sharedEnabled` changes the shared state for every device: it writes this
+ * device's `enabled` vote, clears any local override, and applies the value
+ * locally.
  */
 export interface PluginPreferenceUpdate {
   /** Plugin id (module name) or npm package name. */
   pluginId: string
   scope?: 'all' | 'self'
   enabledOverride?: boolean | null
+  sharedEnabled?: boolean
 }
 
 /** Everything the settings page needs for its status area. */

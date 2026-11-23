@@ -380,13 +380,21 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
             title={t('pluginPrefsEnabledHint')}
             disabled={prefBusy || props.busy}
             options={[
-              { value: 'follow', label: t('pluginPrefsEnabledFollow') },
-              { value: 'on', label: t('pluginPrefsEnabledOn') },
-              { value: 'off', label: t('pluginPrefsEnabledOff') },
+              { value: 'all-on', label: t('pluginPrefsEnabledAllOn') },
+              { value: 'all-off', label: t('pluginPrefsEnabledAllOff') },
+              { value: 'on', label: t('pluginPrefsEnableShort') },
+              { value: 'off', label: t('pluginPrefsDisableShort') },
             ]}
             onSelect={value => {
-              const enabledOverride = value === 'follow' ? null : value === 'on'
-              void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, enabledOverride })))
+              void applyPreferences(
+                selectedRows.map(row =>
+                  value === 'on'
+                    ? { pluginId: row.id, enabledOverride: true }
+                    : value === 'off'
+                      ? { pluginId: row.id, enabledOverride: false }
+                      : { pluginId: row.id, sharedEnabled: value === 'all-on' },
+                ),
+              )
             }}
           />
           <Button small onClick={() => setSelected(new Set())} disabled={prefBusy}>
@@ -413,7 +421,12 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
               <col className="dgs-colVersion" />
               <col className="dgs-colVersion" />
               <col className="dgs-colStatus" />
-              {props.onApplyPreferences === undefined ? null : <col className="dgs-colPrefs" />}
+              {props.onApplyPreferences === undefined ? null : (
+                <>
+                  <col className="dgs-colScope" />
+                  <col className="dgs-colEnabled" />
+                </>
+              )}
             </colgroup>
             <thead>
               <tr>
@@ -434,7 +447,12 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                 <th>{t('pluginsLocalVersion')}</th>
                 <th>{t('pluginsRemoteVersion')}</th>
                 <th>{t('pluginsStatus')}</th>
-                {props.onApplyPreferences === undefined ? null : <th>{t('pluginPrefsColumn')}</th>}
+                {props.onApplyPreferences === undefined ? null : (
+                  <>
+                    <th>{t('pluginPrefsScopeColumn')}</th>
+                    <th>{t('pluginPrefsEnabledColumn')}</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -494,9 +512,9 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                       </span>
                     </td>
                     {props.onApplyPreferences === undefined ? null : (
-                      <td className="dgs-nowrap">
-                        {row.local === undefined || !row.syncable ? null : (
-                          <span className="dgs-prefCell">
+                      <>
+                        <td className="dgs-nowrap">
+                          {row.local === undefined || !row.syncable ? null : (
                             <PreferenceDropdown
                               label={row.scopeSelfOnly === true ? t('pluginPrefsScopeSelf') : t('pluginPrefsScopeAll')}
                               ariaLabel={`${t('pluginPrefsScope')}: ${row.displayName ?? row.name}`}
@@ -512,31 +530,51 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                                 void applyPreferences([{ pluginId: row.id, scope }])
                               }}
                             />
+                          )}
+                        </td>
+                        <td className="dgs-nowrap">
+                          {row.local === undefined || !row.syncable ? null : (
                             <PreferenceDropdown
                               label={
                                 row.enabledOverride === true
                                   ? t('pluginPrefsEnableShort')
                                   : row.enabledOverride === false
                                     ? t('pluginPrefsDisableShort')
-                                    : t('pluginPrefsFollowShort')
+                                    : row.sharedEnabled === false
+                                      ? t('pluginPrefsEnabledAllOff')
+                                      : t('pluginPrefsEnabledAllOn')
                               }
                               ariaLabel={`${t('pluginPrefsEnabled')}: ${row.displayName ?? row.name}`}
                               title={t('pluginPrefsEnabledHint')}
-                              current={row.enabledOverride === undefined ? 'follow' : row.enabledOverride ? 'on' : 'off'}
+                              current={
+                                row.enabledOverride === undefined
+                                  ? row.sharedEnabled === false
+                                    ? 'all-off'
+                                    : 'all-on'
+                                  : row.enabledOverride
+                                    ? 'on'
+                                    : 'off'
+                              }
                               disabled={prefBusy || props.busy}
                               options={[
-                                { value: 'follow', label: t('pluginPrefsEnabledFollow') },
-                                { value: 'on', label: t('pluginPrefsEnabledOn') },
-                                { value: 'off', label: t('pluginPrefsEnabledOff') },
+                                { value: 'all-on', label: t('pluginPrefsEnabledAllOn') },
+                                { value: 'all-off', label: t('pluginPrefsEnabledAllOff') },
+                                { value: 'on', label: t('pluginPrefsEnableShort') },
+                                { value: 'off', label: t('pluginPrefsDisableShort') },
                               ]}
                               onSelect={value => {
-                                const enabledOverride = value === 'follow' ? null : value === 'on'
-                                void applyPreferences([{ pluginId: row.id, enabledOverride }])
+                                if (value === 'on') {
+                                  void applyPreferences([{ pluginId: row.id, enabledOverride: true }])
+                                } else if (value === 'off') {
+                                  void applyPreferences([{ pluginId: row.id, enabledOverride: false }])
+                                } else {
+                                  void applyPreferences([{ pluginId: row.id, sharedEnabled: value === 'all-on' }])
+                                }
                               }}
                             />
-                          </span>
-                        )}
-                      </td>
+                          )}
+                        </td>
+                      </>
                     )}
                   </tr>
                 )

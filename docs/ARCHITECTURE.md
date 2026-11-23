@@ -91,7 +91,7 @@ status(refresh?)
   → planSync(...)  → countPlanChanges → StatusView + logs
 ```
 
-`plugins/list` 用同样的 local/remote 读取，把 `planSync` 的 `diffs` 映射成表格行（`synced` / `local-only` / `remote-only` / `version-diff` / `config-diff` / `enabled-diff` / `conflict` / `excluded`），并附带本机声明里的 `scopeSelfOnly` / `scopeDevices` / `enabledOverride` 供列表展示。`plugins/preferences` 修改本机声明（scope `self` 写入「仅本机」限制，`enabledOverride` 只改本机）后提交 v2 仓库文件，返回刷新后的列表；请求既可带单个 `pluginId`，也可带 `updates` 数组，批量偏好只写一次提交。`diff` 只调用 `previewBackup` / `previewRestore` / `previewSync`。
+`plugins/list` 用同样的 local/remote 读取，把 `planSync` 的 `diffs` 映射成表格行（`synced` / `local-only` / `remote-only` / `version-diff` / `config-diff` / `enabled-diff` / `conflict` / `excluded`），并附带本机声明里的 `scopeSelfOnly` / `scopeDevices` / `enabledOverride` / `sharedEnabled` 供列表展示。`plugins/preferences` 修改本机声明（scope `self` 写入「仅本机」限制，`enabledOverride` 只改本机，`sharedEnabled` 修改共享启停并清除本机覆盖）后提交 v2 仓库文件，返回刷新后的列表；请求既可带单个 `pluginId`，也可带 `updates` 数组，批量偏好只写一次提交。`diff` 只调用 `previewBackup` / `previewRestore` / `previewSync`。
 
 ### 3.2 备份（scan → plan → execute → baseline）
 
@@ -370,7 +370,7 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `config/save` | `{config: Partial<SyncConfig>}` | `{ config: SyncConfigView }` |
 | `connection/test` | `{config?: Partial<SyncConfig>}` | `ConnectionTestResult` |
 | `plugins/list` | `{}` | `{ rows, activeProfile, availableProfiles, repoSchemaVersion? }` |
-| `plugins/preferences` | `{ pluginId, scope?: 'all'\|'self', enabledOverride?: boolean\|null }` or `{ updates: [...] }` | `{ rows, activeProfile, availableProfiles, repoSchemaVersion? }` |
+| `plugins/preferences` | `{ pluginId, scope?: 'all'\|'self', enabledOverride?: boolean\|null, sharedEnabled?: boolean }` or `{ updates: [...] }` | `{ rows, activeProfile, availableProfiles, repoSchemaVersion? }` |
 | `skills/list` | `{}` | `{ skills: { name, files, bytes }[], warnings }` |
 | `diff` | `{direction?: 'push'\|'pull'\|'two-way', commit?: string}` | `{ direction, plan: SyncPlan }` |
 | `backup` | `{message?: string, confirmDestructive?: boolean}` | `OperationResult` |
