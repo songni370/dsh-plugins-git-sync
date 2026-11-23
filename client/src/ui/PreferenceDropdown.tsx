@@ -27,6 +27,8 @@ export interface PreferenceDropdownProps {
   /** Value marked as checked in the menu; omitted for bulk dropdowns. */
   current?: string
   disabled?: boolean
+  /** The choice is being saved; shows a spinner and blocks the menu. */
+  busy?: boolean
   onSelect: (value: string) => void
 }
 
@@ -68,7 +70,7 @@ export function PreferenceDropdown(props: PreferenceDropdownProps): ReactElement
   }, [open])
 
   function toggle(): void {
-    if (props.disabled === true) return
+    if (props.disabled === true || props.busy === true) return
     if (open) {
       setOpen(false)
       return
@@ -92,11 +94,13 @@ export function PreferenceDropdown(props: PreferenceDropdownProps): ReactElement
         className="dgs-prefBtn dgs-dropdownToggle"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-busy={props.busy === true ? true : undefined}
         aria-label={props.ariaLabel}
         title={props.title}
-        disabled={props.disabled === true}
+        disabled={props.disabled === true || props.busy === true}
         onClick={toggle}
       >
+        {props.busy === true ? <span className="dgs-spinner" aria-hidden="true" /> : null}
         <span className="dgs-dropdownLabel">{props.label}</span>
         <svg className="dgs-dropdownChevron" viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false">
           <path

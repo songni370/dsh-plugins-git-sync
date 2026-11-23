@@ -802,6 +802,18 @@ export function Page({ t }: PageProps): ReactElement {
     }
   }
 
+  /**
+   * Resolve one plugin conflict from its row. The card shows the row options,
+   * so a rejected choice surfaces there as an inline error.
+   */
+  async function resolvePluginConflict(pluginId: string, choice: 'local' | 'remote'): Promise<void> {
+    clearMessages()
+    const response = await api.resolveConflict({ pluginId, choice })
+    setPlugins(response)
+    showFeedback('plugins', 'success', t('conflictResolved'))
+    await refreshStatus()
+  }
+
   // --- Per-skill preferences --------------------------------------------
   /**
    * Persist per-device preferences for one skill or a batch. The card owns the
@@ -924,8 +936,8 @@ export function Page({ t }: PageProps): ReactElement {
               open={configOpen ?? true}
               onToggle={() => setConfigOpen(current => !(current ?? true))}
               onChange={changeConfig}
-              onTest={() => void testRepository()}
-              onSave={() => void saveRepository()}
+              onTest={testRepository}
+              onSave={saveRepository}
             />
           )}
 
@@ -934,10 +946,10 @@ export function Page({ t }: PageProps): ReactElement {
             busy={busy}
             hostBusy={hostBusy}
             enabled={configured}
-            onBackup={() => void runBackup()}
-            onRestore={() => void previewRestore('restore')}
-            onSync={() => void previewSync()}
-            onDiff={() => void runDiff()}
+            onBackup={runBackup}
+            onRestore={() => previewRestore('restore')}
+            onSync={previewSync}
+            onDiff={runDiff}
             statusPanel={<StatusSection t={t} status={view} skills={skills} embedded />}
             notices={
               <>
@@ -973,7 +985,7 @@ export function Page({ t }: PageProps): ReactElement {
                     setAutoForm(current => (current === null ? current : { ...current, ...patch }))
                     markAutoDirty(true)
                   }}
-                  onSave={() => void saveAutoSync()}
+                  onSave={saveAutoSync}
                 />
               )
             }
@@ -989,8 +1001,9 @@ export function Page({ t }: PageProps): ReactElement {
             busy={anyBusy}
             onFilterChange={setFilter}
             onToggle={(row, next) => void toggleExclusion(row, next)}
-            onRefresh={() => void refreshPlugins()}
+            onRefresh={refreshPlugins}
             onApplyPreferences={updates => applyPluginPreferences(updates)}
+            onResolveConflict={(pluginId, choice) => resolvePluginConflict(pluginId, choice)}
           />
 
           <SkillsSection
@@ -1001,7 +1014,7 @@ export function Page({ t }: PageProps): ReactElement {
             exclusions={skillExclusions}
             busy={anyBusy}
             onToggle={(skill, next) => void toggleSkillExclusion(skill, next)}
-            onRefresh={() => void refreshSkills()}
+            onRefresh={refreshSkills}
             onApplyPreferences={updates => applySkillPreferences(updates)}
           />
 
@@ -1011,8 +1024,8 @@ export function Page({ t }: PageProps): ReactElement {
             loading={historyLoading}
             error={historyError}
             busy={anyBusy}
-            onRestoreCommit={commit => void previewRestore('rollback', commit)}
-            onRefresh={() => void refreshHistory()}
+            onRestoreCommit={commit => previewRestore('rollback', commit)}
+            onRefresh={refreshHistory}
           />
         </>
       )}
@@ -1038,7 +1051,7 @@ export function Page({ t }: PageProps): ReactElement {
           description={modal.description}
           confirmLabel={modal.plan.conflicts.length > 0 ? t('confirmConflictRun') : t('confirmRun')}
           busy={modalBusy}
-          onConfirm={() => void confirmModal()}
+          onConfirm={confirmModal}
           onClose={() => {
             if (!modalBusy) setModal(null)
           }}

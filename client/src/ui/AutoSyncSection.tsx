@@ -51,7 +51,7 @@ export interface AutoSyncSectionProps {
   dirty: boolean
   saving: boolean
   onChange: (patch: Partial<AutoForm>) => void
-  onSave: () => void
+  onSave: () => void | Promise<unknown>
 }
 
 /** Localized label of one auto-sync behavior. */

@@ -8,7 +8,7 @@
  * browser bundle.
  * @module http/api-types
  */
-import type { ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginPreferenceUpdate, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillPreferenceUpdate, SkillSyncStatus, SyncState } from '../types.js';
+import type { ConflictInfo, ConflictResolution, ConnectionTestResult, DeviceInfo, HistoryEntry, JsonValue, LastOperation, LogEntry, OperationResult, PluginDiff, PluginPreferenceUpdate, PluginRecord, RemotePluginEntry, StatusView, SyncConfig, SyncConfigView, SyncPlan, SkillPreferenceUpdate, SkillSyncStatus, SyncState } from '../types.js';
 /** Route prefix shared by every endpoint. */
 export declare const API_PREFIX = "/api/dsh-plugins-git-sync";
 /** Error body. */
@@ -68,6 +68,8 @@ export interface PluginListRow {
     syncable: boolean;
     selected: boolean;
     conflict?: boolean;
+    /** Full conflict record when this row needs a decision. */
+    conflictInfo?: ConflictInfo;
     diff?: PluginDiff;
     /** True when this device's declaration restricts the plugin to itself. */
     scopeSelfOnly?: boolean;
@@ -213,6 +215,13 @@ export interface AutoSyncRequest {
 export interface AutoSyncResponse {
     status: StatusView;
 }
+/** Resolve one plugin's conflict from the settings list. */
+export interface ConflictResolveRequest {
+    pluginId: string;
+    choice: 'local' | 'remote';
+}
+/** Conflict resolution returns the refreshed plugin list. */
+export type ConflictResolveResponse = PluginListResponse;
 /** Logs request. */
 export interface LogsRequest {
     limit?: number;
@@ -230,6 +239,6 @@ export interface OverviewResponse extends StatusPayload {
     pluginVersion: number | string;
 }
 /** Request handler map keyed by route name (no `/api` prefix). */
-export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'plugins/preferences' | 'skills/list' | 'skills/preferences' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
+export type ApiRouteName = 'status' | 'config/save' | 'connection/test' | 'plugins/list' | 'plugins/preferences' | 'conflicts/resolve' | 'skills/list' | 'skills/preferences' | 'diff' | 'backup' | 'restore/preview' | 'restore' | 'sync/preview' | 'sync' | 'history' | 'rollback' | 'auto-sync' | 'logs';
 /** A sync state alias for the UI. */
 export type { SyncState };

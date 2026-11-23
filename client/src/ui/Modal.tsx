@@ -32,7 +32,7 @@ export interface ModalProps {
   hideCancel?: boolean
   cancelLabel?: string
   busy?: boolean
-  onConfirm: () => void
+  onConfirm: () => void | Promise<unknown>
   onClose: () => void
   children?: ReactNode
 }

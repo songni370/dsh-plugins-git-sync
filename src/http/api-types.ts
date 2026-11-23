@@ -10,6 +10,7 @@
  */
 
 import type {
+  ConflictInfo,
   ConflictResolution,
   ConnectionTestResult,
   DeviceInfo,
@@ -98,6 +99,8 @@ export interface PluginListRow {
   syncable: boolean
   selected: boolean
   conflict?: boolean
+  /** Full conflict record when this row needs a decision. */
+  conflictInfo?: ConflictInfo
   diff?: PluginDiff
   /** True when this device's declaration restricts the plugin to itself. */
   scopeSelfOnly?: boolean
@@ -266,6 +269,15 @@ export interface AutoSyncResponse {
   status: StatusView
 }
 
+/** Resolve one plugin's conflict from the settings list. */
+export interface ConflictResolveRequest {
+  pluginId: string
+  choice: 'local' | 'remote'
+}
+
+/** Conflict resolution returns the refreshed plugin list. */
+export type ConflictResolveResponse = PluginListResponse
+
 /** Logs request. */
 export interface LogsRequest {
   limit?: number
@@ -292,6 +304,7 @@ export type ApiRouteName =
   | 'connection/test'
   | 'plugins/list'
   | 'plugins/preferences'
+  | 'conflicts/resolve'
   | 'skills/list'
   | 'skills/preferences'
   | 'diff'

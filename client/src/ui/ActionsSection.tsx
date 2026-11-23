@@ -24,10 +24,10 @@ export interface ActionsSectionProps {
   hostBusy: boolean
   /** Actions need a saved repository URL. */
   enabled: boolean
-  onBackup: () => void
-  onRestore: () => void
-  onSync: () => void
-  onDiff: () => void
+  onBackup: () => void | Promise<unknown>
+  onRestore: () => void | Promise<unknown>
+  onSync: () => void | Promise<unknown>
+  onDiff: () => void | Promise<unknown>
   /** Automatic-sync panel, merged into this card below the manual actions. */
   autoPanel?: ReactNode
   /** Result of a manual operation, shown inside this card. */

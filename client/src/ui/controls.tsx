@@ -9,6 +9,7 @@
  * @module ui/controls
  */
 
+import { useState } from 'react'
 import type { ChangeEvent, ReactElement, ReactNode } from 'react'
 
 /** Visual tone of a badge or banner. */
@@ -52,10 +53,17 @@ export function Card(props: {
 /** Button variants. `primary` is the section's one call to action. */
 export type ButtonVariant = 'default' | 'primary' | 'danger'
 
-/** A plain button; disabled state greys it out and blocks activation. */
+/**
+ * A plain button; disabled state greys it out and blocks activation.
+ *
+ * Async handlers get a global pending state: when `onClick` returns a promise
+ * the button shows a spinner and blocks further clicks until it settles. This
+ * gives every action immediate feedback without each card wiring its own
+ * "busy" flag (the explicit `loading` prop still wins for shared operations).
+ */
 export function Button(props: {
   children: ReactNode
-  onClick?: () => void
+  onClick?: () => void | Promise<unknown>
   variant?: ButtonVariant
   disabled?: boolean
   small?: boolean
@@ -65,6 +73,8 @@ export function Button(props: {
   /** Show a spinner because this button's action is in flight. */
   loading?: boolean
 }): ReactElement {
+  const [pending, setPending] = useState(false)
+  const busy = props.loading === true || pending
   const classes = ['dgs-btn']
   if (props.variant === 'primary') classes.push('dgs-btnPrimary')
   if (props.variant === 'danger') classes.push('dgs-btnDanger')
@@ -73,13 +83,24 @@ export function Button(props: {
     <button
       type={props.type ?? 'button'}
       className={classes.join(' ')}
-      onClick={props.onClick}
-      disabled={props.disabled === true}
+      onClick={() => {
+        if (props.disabled === true || busy || props.onClick === undefined) return
+        const result = props.onClick()
+        if (result !== undefined && typeof (result as PromiseLike<unknown>).then === 'function') {
+          setPending(true)
+          void Promise.resolve(result)
+            .catch(() => undefined)
+            .finally(() => {
+              setPending(false)
+            })
+        }
+      }}
+      disabled={props.disabled === true || busy}
       aria-label={props.ariaLabel}
       title={props.title}
-      aria-busy={props.loading === true ? true : undefined}
+      aria-busy={busy ? true : undefined}
     >
-      {props.loading === true ? <span className="dgs-spinner" aria-hidden="true" /> : null}
+      {busy ? <span className="dgs-spinner" aria-hidden="true" /> : null}
       {props.children}
     </button>
   )
@@ -88,21 +109,36 @@ export function Button(props: {
 /** Inline text button (retry links). */
 export function LinkButton(props: {
   children: ReactNode
-  onClick: () => void
+  onClick: () => void | Promise<unknown>
   disabled?: boolean
   /** Optional disclosure semantics for cards whose body this button toggles. */
   ariaExpanded?: boolean
   controls?: string
 }): ReactElement {
+  const [pending, setPending] = useState(false)
+  const busy = pending
   return (
     <button
       type="button"
       className="dgs-linkBtn"
-      onClick={props.onClick}
-      disabled={props.disabled === true}
+      onClick={() => {
+        if (props.disabled === true || busy) return
+        const result = props.onClick()
+        if (result !== undefined && typeof (result as PromiseLike<unknown>).then === 'function') {
+          setPending(true)
+          void Promise.resolve(result)
+            .catch(() => undefined)
+            .finally(() => {
+              setPending(false)
+            })
+        }
+      }}
+      disabled={props.disabled === true || busy}
+      aria-busy={busy ? true : undefined}
       {...(props.ariaExpanded === undefined ? {} : { 'aria-expanded': props.ariaExpanded })}
       {...(props.controls === undefined ? {} : { 'aria-controls': props.controls })}
     >
+      {busy ? <span className="dgs-spinner" aria-hidden="true" /> : null}
       {props.children}
     </button>
   )

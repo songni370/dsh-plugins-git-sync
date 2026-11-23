@@ -29,8 +29,8 @@ export interface HistorySectionProps {
   error: string | null
   /** Any operation that changes history is in flight. */
   busy: boolean
-  onRestoreCommit: (commit: string) => void
-  onRefresh: () => void
+  onRestoreCommit: (commit: string) => void | Promise<unknown>
+  onRefresh: () => void | Promise<unknown>
   /** Result of a rollback, shown inside this card. */
 }
 
@@ -118,9 +118,7 @@ export function HistorySection(props: HistorySectionProps): ReactElement {
                   small
                   disabled={props.busy}
                   ariaLabel={t('historyRestoreAria', { commit: shortCommit(entry.commit) })}
-                  onClick={() => {
-                    props.onRestoreCommit(entry.commit)
-                  }}
+                  onClick={() => props.onRestoreCommit(entry.commit)}
                 >
                   {t('historyRestore')}
                 </Button>

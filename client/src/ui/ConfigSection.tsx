@@ -71,8 +71,8 @@ export interface ConfigSectionProps {
   testing: boolean
   /** Result of the last test from this card. */
   onChange: (patch: Partial<ConfigForm>) => void
-  onTest: () => void
-  onSave: () => void
+  onTest: () => void | Promise<unknown>
+  onSave: () => void | Promise<unknown>
   /** Whether the form body is expanded. */
   open: boolean
   /** Expand/collapse the card body. */

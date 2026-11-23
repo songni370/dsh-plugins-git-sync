@@ -660,7 +660,10 @@ export class SyncEngine {
       else if (entry?.displayName !== undefined) row.displayName = entry.displayName
       if (record !== undefined) row.local = record
       if (entry !== undefined) row.remote = entry
-      if (conflict !== undefined) row.conflict = true
+      if (conflict !== undefined) {
+        row.conflict = true
+        row.conflictInfo = conflict
+      }
       if (diff !== undefined) row.diff = diff
       return row
     })
@@ -1519,6 +1522,172 @@ export class SyncEngine {
           warnings: [...plan.warnings, ...scannedSkills.warnings, ...restoredSkills.warnings],
           snapshot: snapshotId,
         }
+      } catch (error) {
+        await this.recordFailure('sync', error)
+        throw error
+      } finally {
+        this.busy = false
+      }
+    }, { wait: true })
+  }
+
+  /**
+   * Resolve one plugin's conflict from the settings list.
+   *
+   * Only the actions planned for that plugin run. Other conflicts stay
+   * unresolved, are persisted again, and come back with the refreshed list so
+   * the user can handle them one row at a time. The choice is the user's
+   * explicit decision, so a destructive resolution needs no extra round trip.
+   */
+  async resolveConflict(pluginId: string, choice: 'local' | 'remote'): Promise<PluginListResponse> {
+    return this.mutex.runExclusive(async () => {
+      this.busy = true
+      try {
+        const config = await this.readConfig()
+        this.ensureConfigured(config)
+        let state = await this.readState()
+        state = await this.persistDeviceIfChanged(state, config)
+        const { store } = this.repoFor(config)
+        const prepared = await store.prepare()
+        const local = await this.scanLocal(config, true)
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+        const plan = this.scopedPlan(
+          config,
+          planSync({ ...this.planInput(config, local, read, state), resolutions: [{ pluginId, choice }] }),
+        )
+        // The planner drops a conflict once the supplied resolution handled it;
+        // if it is still here the choice does not apply (e.g. a reason we do
+        // not know how to resolve from the list).
+        if (plan.conflicts.some(conflict => conflict.pluginId === pluginId)) {
+          throw new SyncError(
+            'invalid-config',
+            `这个冲突不能使用该处理方式 / this conflict does not support that choice: ${pluginId}`,
+          )
+        }
+        const actions = plan.actions.filter(action => action.pluginId === pluginId)
+        const localActions = actions.filter(isLocalAction)
+        const snapshotId = localActions.length === 0
+          ? undefined
+          : await this.snapshots.create({
+              operation: 'sync',
+              profile: this.deps.activeProfile,
+              device: state.device,
+              inventory: local,
+              configs: snapshotConfigs(local, config.excludedConfigPlugins),
+            })
+        const outcomes = await executeLocalActions(actions, {
+          installer: this.deps.installer,
+          configGateway: this.deps.configGateway,
+          logger: this.deps.logger,
+          profile: this.deps.activeProfile,
+          resolveInstallSpec: async spec => this.resolveTarballSpec(spec, store),
+        })
+        const failed = outcomes.filter(outcome => !outcome.ok && outcome.skipped !== true)
+        if (failed.length > 0) {
+          if (snapshotId !== undefined) await this.tryRollback(snapshotId, config, state.device)
+          throw new SyncError(
+            'install-failed',
+            failed.map(outcome => `${outcome.action.pluginName}: ${outcome.error ?? 'failed'}`).join('; '),
+          )
+        }
+        const scannedSkills = await this.scanSkillsFor(config)
+        const remoteSkills = this.filterSkillBackup(read.skills, config)
+        const pendingActivation = this.pendingActivations(outcomes, state.pendingActivation ?? [], local)
+        state.pendingActivation = pendingActivation
+        const resolvedPlan: SyncPlan = { ...plan, actions, conflicts: [], warnings: plan.warnings }
+        const build = (
+          currentRead: RemoteRead,
+          inventory: DeviceInventory,
+        ): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } =>
+          this.buildRemoteFiles({
+            config,
+            plan: resolvedPlan,
+            local: inventory,
+            read: currentRead,
+            device: state.device,
+            baselineRead: read,
+            plugins: config.backupScopes.plugins,
+            skills: undefined,
+            previousSkills: remoteSkills,
+            localSkills: scannedSkills.backup,
+            pendingActivation,
+          })
+        const needsWrite = actions.some(action => !isLocalAction(action))
+        const migrating = read.v2 === null && (read.manifest !== null || read.state !== null)
+        if (needsWrite && migrating) await store.ensureMigrationTag('pre-v2-migration')
+        const firstFiles = needsWrite ? build(read, local) : null
+        const write = firstFiles === null
+          ? { changed: false, pushed: false, commit: prepared.head }
+          : await store.write({
+              files: firstFiles.files,
+              deletions: firstFiles.deletions,
+              executables: firstFiles.executables,
+              rebuild: async () => {
+                const freshRead = await this.readRemote(store, config, null, this.selfRef(state))
+                const freshPlan = this.scopedPlan(
+                  config,
+                  planSync({
+                    ...this.planInput(config, await this.scanLocal(config, true), freshRead, state),
+                    resolutions: [{ pluginId, choice }],
+                  }),
+                )
+                const freshActions = freshPlan.actions.filter(action => action.pluginId === pluginId)
+                return this.buildRemoteFiles({
+                  config,
+                  plan: { ...freshPlan, actions: freshActions, conflicts: [] },
+                  local: await this.scanLocal(config),
+                  read: freshRead,
+                  device: state.device,
+                  baselineRead: freshRead,
+                  plugins: config.backupScopes.plugins,
+                  skills: undefined,
+                  previousSkills: this.filterSkillBackup(freshRead.skills, config),
+                  localSkills: scannedSkills.backup,
+                  pendingActivation,
+                })
+              },
+              message: this.commitMessage('sync', `resolve conflict: ${pluginId}`),
+              trailers: {
+                operation: 'sync',
+                deviceId: state.device.id,
+                deviceName: state.device.name,
+                profile: this.deps.activeProfile,
+                result: migrating ? 'migrated' : 'ok',
+                pluginCount: String(local.plugins.filter(plugin => !plugin.builtIn).length),
+              },
+            })
+        const localAfter = await this.scanLocal(config, true)
+        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state))
+        const now = new Date().toISOString()
+        state.baselines[this.deps.activeProfile] = buildBaseline({
+          profile: this.deps.activeProfile,
+          commit: write.commit ?? prepared.head,
+          now,
+          local: localStates(localAfter),
+          remote: remoteStates(remoteAfter),
+          previous: state.baselines[this.deps.activeProfile],
+        })
+        // Re-plan fresh and keep only the conflicts that are still open, so the
+        // list and the status banner agree after resolving one row.
+        const remaining = this.scopedPlan(config, planSync(this.planInput(config, localAfter, remoteAfter, state)))
+        state.conflicts = remaining.conflicts.map(conflict => ({
+          pluginId: conflict.pluginId,
+          conflict,
+          detectedAt: now,
+        }))
+        state.lastSyncAt = now
+        state.lastCommit = write.commit ?? prepared.head
+        state.lastError = null
+        state.lastOperation = {
+          operation: 'sync',
+          at: now,
+          ok: true,
+          commit: write.commit,
+          changedPlugins: actions.length,
+        }
+        await this.recordSuccess(state)
+        this.lastError = null
+        return await this.listPlugins()
       } catch (error) {
         await this.recordFailure('sync', error)
         throw error

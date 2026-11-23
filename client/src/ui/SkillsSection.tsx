@@ -49,7 +49,7 @@ export interface SkillsSectionProps {
   exclusions: ReadonlySet<string>
   busy: boolean
   onToggle: (skill: SkillSummary, next: boolean) => void
-  onRefresh: () => void
+  onRefresh: () => void | Promise<unknown>
   /** Apply one preference update for this device's skill declaration. */
   onApplyPreferences?: (updates: SkillPreferenceUpdate[]) => Promise<void>
 }
@@ -202,6 +202,7 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                           ]}
                           current={skill.scopeSelfOnly === true ? 'self' : 'all'}
                           disabled={prefBusy || props.busy}
+                          busy={prefBusy}
                           onSelect={value => {
                             void applySkillPreference({ skillName: skill.name, scope: value === 'self' ? 'self' : 'all' })
                           }}
@@ -215,6 +216,7 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                           ariaLabel={`${t('skillLocalColumn')}: ${skill.name}`}
                           options={localOptions}
                           disabled={prefBusy || props.busy || localOptions.length === 0}
+                          busy={prefBusy}
                           onSelect={value => {
                             void applySkillPreference({
                               skillName: skill.name,

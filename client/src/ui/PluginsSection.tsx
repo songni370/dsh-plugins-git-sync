@@ -69,9 +69,38 @@ export interface PluginsSectionProps {
   busy: boolean
   onFilterChange: (value: string) => void
   onToggle: (row: PluginListRow, next: boolean) => void
-  onRefresh: () => void
+  onRefresh: () => void | Promise<unknown>
   /** Apply preference updates for one row or a multi-row selection. */
   onApplyPreferences?: (updates: PluginPreferenceUpdate[]) => Promise<void>
+  /** Resolve one conflicting plugin from its row. */
+  onResolveConflict?: (pluginId: string, choice: 'local' | 'remote') => Promise<void>
+}
+
+/** Map a conflict reason to the i18n key used as the row action's title. */
+function conflictReasonKey(reason: string): string {
+  if (reason === 'local-deleted') return 'conflictReasonLocalDeleted'
+  if (reason === 'remote-deleted') return 'conflictReasonRemoteDeleted'
+  return 'conflictReasonGeneric'
+}
+
+/** Choices a row's conflict dropdown offers for the given reason. */
+function conflictOptions(t: Translate, reason: string): { value: string; label: string }[] {
+  if (reason === 'local-deleted') {
+    return [
+      { value: 'remote', label: t('conflictResolveUseRemote') },
+      { value: 'local', label: t('conflictResolveDeleteRemote') },
+    ]
+  }
+  if (reason === 'remote-deleted') {
+    return [
+      { value: 'local', label: t('conflictResolveRestoreLocal') },
+      { value: 'remote', label: t('conflictResolveRemoveLocal') },
+    ]
+  }
+  return [
+    { value: 'local', label: t('conflictResolveUseLocal') },
+    { value: 'remote', label: t('conflictResolveUseRemote') },
+  ]
 }
 
 /** Render the plugin list card. */
@@ -148,6 +177,20 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
     try {
       await props.onApplyPreferences(updates)
       setSelected(new Set())
+    } catch (error) {
+      setPrefError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPrefBusy(false)
+    }
+  }
+
+  /** Resolve one conflict; the row keeps its options visible until the call ends. */
+  async function resolveConflict(pluginId: string, choice: 'local' | 'remote'): Promise<void> {
+    if (props.onResolveConflict === undefined) return
+    setPrefBusy(true)
+    setPrefError(null)
+    try {
+      await props.onResolveConflict(pluginId, choice)
     } catch (error) {
       setPrefError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -233,6 +276,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
             ariaLabel={t('pluginPrefsBulkScope')}
             title={t('pluginPrefsScopeHint')}
             disabled={prefBusy || props.busy}
+            busy={prefBusy}
             options={[
               { value: 'all', label: t('pluginPrefsScopeAll') },
               { value: 'self', label: t('pluginPrefsScopeSelf') },
@@ -247,6 +291,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
             ariaLabel={t('pluginPrefsBulkEnabled')}
             title={t('pluginPrefsEnabledHint')}
             disabled={prefBusy || props.busy}
+            busy={prefBusy}
             options={[
               { value: 'all-on', label: t('pluginPrefsEnabledAllOn') },
               { value: 'all-off', label: t('pluginPrefsEnabledAllOff') },
@@ -295,6 +340,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                   <col className="dgs-colEnabled" />
                 </>
               )}
+              {props.onResolveConflict === undefined ? null : <col className="dgs-colResolve" />}
             </colgroup>
             <thead>
               <tr>
@@ -321,6 +367,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                     <th>{t('pluginPrefsEnabledColumn')}</th>
                   </>
                 )}
+                {props.onResolveConflict === undefined ? null : <th>{t('conflictColumn')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -389,6 +436,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                               title={t('pluginPrefsScopeHint')}
                               current={row.scopeSelfOnly === true ? 'self' : 'all'}
                               disabled={prefBusy || props.busy}
+                              busy={prefBusy}
                               options={[
                                 { value: 'all', label: t('pluginPrefsScopeAll') },
                                 { value: 'self', label: t('pluginPrefsScopeSelf') },
@@ -413,6 +461,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                                       : t('pluginPrefsEnabledAllOn')
                               }
                               ariaLabel={`${t('pluginPrefsEnabled')}: ${row.displayName ?? row.name}`}
+                              busy={prefBusy}
                               title={t('pluginPrefsEnabledHint')}
                               current={
                                 row.enabledOverride === undefined
@@ -443,6 +492,23 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                           )}
                         </td>
                       </>
+                    )}
+                    {props.onResolveConflict === undefined ? null : (
+                      <td className="dgs-nowrap">
+                        {row.conflictInfo === undefined ? null : (
+                          <PreferenceDropdown
+                            label={t('conflictResolve')}
+                            ariaLabel={`${t('conflictColumn')}: ${row.displayName ?? row.name}`}
+                            title={t(conflictReasonKey(row.conflictInfo.reason))}
+                            disabled={prefBusy || props.busy}
+                            busy={prefBusy}
+                            options={conflictOptions(t, row.conflictInfo.reason)}
+                            onSelect={value => {
+                              void resolveConflict(row.id, value === 'local' ? 'local' : 'remote')
+                            }}
+                          />
+                        )}
+                      </td>
                     )}
                   </tr>
                 )

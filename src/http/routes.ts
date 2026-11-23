@@ -134,6 +134,15 @@ export function registerHttpRoutes(options: { ctx: DshContext; engine: SyncEngin
         }
         return options.engine.setPluginPreferences(parseUpdate(body, -1))
       },
+      'conflicts/resolve': async body => {
+        if (typeof body.pluginId !== 'string' || body.pluginId.trim() === '') {
+          throw new SyncError('invalid-config', '缺少插件标识 / pluginId is required')
+        }
+        if (body.choice !== 'local' && body.choice !== 'remote') {
+          throw new SyncError('invalid-config', '处理方式必须是 local 或 remote / choice must be local or remote')
+        }
+        return options.engine.resolveConflict(body.pluginId, body.choice)
+      },
       'skills/list': async () => options.engine.listSkills(),
       'skills/preferences': async body => {
         const parseUpdate = (value: Record<string, unknown>, index: number): SkillPreferenceUpdate => {

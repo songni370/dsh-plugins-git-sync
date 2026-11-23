@@ -48,7 +48,10 @@ function row(patch: Partial<PluginListRow> = {}): PluginListRow {
   }
 }
 
-function render(rows: PluginListRow[]): string {
+function render(
+  rows: PluginListRow[],
+  onResolveConflict?: (pluginId: string, choice: 'local' | 'remote') => Promise<void>,
+): string {
   return renderToStaticMarkup(
     <PluginsSection
       t={t}
@@ -62,6 +65,7 @@ function render(rows: PluginListRow[]): string {
       onToggle={() => undefined}
       onRefresh={() => undefined}
       onApplyPreferences={async () => undefined}
+      {...(onResolveConflict === undefined ? {} : { onResolveConflict })}
     />,
   )
 }
@@ -91,5 +95,26 @@ describe('per-plugin preferences', () => {
     const html = render([row({ scopeSelfOnly: true, enabledOverride: false, scopeDevices: ['dev-a'] })])
     expect((html.split('aria-label="安装范围: alpha"')[1] ?? '').slice(0, 260)).toContain('仅本机')
     expect((html.split('aria-label="启停: alpha"')[1] ?? '').slice(0, 260)).toContain('本机停用')
+  })
+
+  it('offers a per-row resolution dropdown for a conflicting plugin', () => {
+    const conflicted = row({
+      conflictInfo: {
+        id: 'conflict:alpha',
+        pluginId: 'alpha',
+        pluginName: 'alpha',
+        reason: 'local-deleted',
+        fields: ['presence'],
+        localVersion: null,
+        remoteVersion: '1.0.0',
+        localEnabled: null,
+        remoteEnabled: true,
+        hadBaseline: true,
+      },
+    })
+    const html = render([conflicted], async () => undefined)
+    expect(html).toContain('冲突处理')
+    expect(html).toContain('aria-label="冲突处理: alpha"')
+    expect(html).toContain('本机已卸载')
   })
 })

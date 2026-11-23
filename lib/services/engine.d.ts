@@ -200,6 +200,15 @@ export declare class SyncEngine {
     }>;
     /** Perform a two-way synchronization. */
     sync(options?: SyncOptions): Promise<OperationResult>;
+    /**
+     * Resolve one plugin's conflict from the settings list.
+     *
+     * Only the actions planned for that plugin run. Other conflicts stay
+     * unresolved, are persisted again, and come back with the refreshed list so
+     * the user can handle them one row at a time. The choice is the user's
+     * explicit decision, so a destructive resolution needs no extra round trip.
+     */
+    resolveConflict(pluginId: string, choice: 'local' | 'remote'): Promise<PluginListResponse>;
     /** Restore missing skills from a remote snapshot and turn problems into warnings. */
     private tryRestoreSkills;
     /** Read backup history from Git. */

@@ -741,7 +741,7 @@ export const CSS = `
 }
 .dgs-table {
   width: 100%;
-  max-width: 860px;
+  max-width: 940px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
@@ -765,6 +765,9 @@ export const CSS = `
 }
 .dgs-colEnabled {
   width: 100px;
+}
+.dgs-colResolve {
+  width: 96px;
 }
 .dgs-table th {
   padding: 6px 8px;
