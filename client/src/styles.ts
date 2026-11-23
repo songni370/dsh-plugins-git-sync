@@ -739,19 +739,19 @@ export const CSS = `
 }
 /* Fixed column budget keeps long plugin names/versions from reflowing the row. */
 .dgs-colCheck {
-  width: 30px;
+  width: 26px;
 }
 .dgs-colSync {
-  width: 34px;
+  width: 30px;
 }
 .dgs-colVersion {
   width: 56px;
 }
 .dgs-colStatus {
-  width: 64px;
+  width: 60px;
 }
 .dgs-colPrefs {
-  width: 148px;
+  width: 172px;
 }
 .dgs-table th {
   padding: 6px 8px;
@@ -797,9 +797,10 @@ export const CSS = `
 /* Inline per-device preference actions: compact buttons, no dialog. */
 .dgs-prefCell {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 .dgs-prefGroup {
   display: inline-flex;
@@ -838,11 +839,13 @@ export const CSS = `
 }
 .dgs-dropdownToggle {
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
+  padding: 0 3px;
 }
 .dgs-dropdownLabel {
-  max-width: 96px;
+  max-width: 72px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
