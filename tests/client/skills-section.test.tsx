@@ -49,6 +49,8 @@ describe('skill card', () => {
       <SkillsSection {...baseProps} skills={skills} onApplyPreferences={async () => undefined} />,
     )
     expect(editableHtml).toContain('>操作<')
+    expect(editableHtml).toContain('保存更改（0）')
+    expect(editableHtml).toContain('勾选后点击保存')
   })
 
   it('shows the backup status for every skill', () => {
@@ -122,6 +124,7 @@ describe('skill preference controls', () => {
     expect(html).toContain('aria-label="公共: alpha"')
     expect(html).toContain('aria-label="本设备: alpha"')
     expect(html).toMatch(/checked=""[^>]*aria-label="本设备: alpha"|aria-label="本设备: alpha"[^>]*checked=""/)
+    expect(html).toContain('保存更改（0）')
     expect(html).not.toContain('role="menu"')
   })
 

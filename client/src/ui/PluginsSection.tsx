@@ -1,11 +1,11 @@
 /**
  * "Plugins" card: this device's plugins joined with the repository state.
  *
- * The list starts expanded. Each row has one selection checkbox for bulk
- * actions plus two destination checkboxes in the 操作 column: 公共 (the public
- * pool; the default) and 本设备 (backed up only from this device). Conflict
- * rows swap the checkboxes for the conflict resolution control in the status
- * cell. A multi-selection can switch the whole selection in one commit.
+ * The list starts expanded. Each row has two destination checkboxes in the 操作
+ * column: 公共 (the public pool; the default) and 本设备 (backed up only from
+ * this device). Edits stay pending until the user presses the single save
+ * button, which writes them in one repository commit. Conflict rows keep the
+ * conflict resolution control in the status cell instead.
  * @module ui/PluginsSection
  */
 
@@ -121,8 +121,10 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
   const start = (currentPage - 1) * pageSize
   const pageRows = visible.slice(start, start + pageSize)
 
-  // Multi-row selection for "apply this preference to everything selected".
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  // Pending destination changes, keyed by plugin id. Nothing is written to the
+  // repository until the user presses the single save button.
+  const editable = props.onApplyPreferences !== undefined
+  const [draft, setDraft] = useState<ReadonlyMap<string, 'all' | 'self'>>(() => new Map())
   const [prefBusy, setPrefBusy] = useState(false)
   const [prefError, setPrefError] = useState<string | null>(null)
 
@@ -130,48 +132,43 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
     return row.local !== undefined && row.syncable && !props.busy
   }
 
-  // Selections only exist for actionable rows; pruning keeps a bulk action
-  // from touching rows that became remote-only or busy in the meantime.
+  // Drop drafts whose row vanished or stopped being actionable in a refresh.
   useEffect(() => {
-    setSelected(current => {
+    setDraft(current => {
       if (current.size === 0) return current
       const applicable = new Set(rows.filter(row => row.local !== undefined && row.syncable).map(row => row.id))
-      const next = new Set([...current].filter(id => applicable.has(id)))
+      const next = new Map([...current].filter(([id]) => applicable.has(id)))
       return next.size === current.size ? current : next
     })
   }, [rows])
 
-  const selectedRows = rows.filter(row => selected.has(row.id) && eligibleRow(row))
+  /** Scope currently shown by the row's checkboxes (pending edit wins). */
+  function effectiveScope(row: PluginListRow): 'all' | 'self' {
+    const pending = draft.get(row.id)
+    if (pending !== undefined) return pending
+    return row.scopeSelfOnly === true ? 'self' : 'all'
+  }
 
-  function toggleSelected(id: string): void {
-    setSelected(current => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+  function chooseScope(row: PluginListRow, scope: 'all' | 'self'): void {
+    const stored: 'all' | 'self' = row.scopeSelfOnly === true ? 'self' : 'all'
+    setDraft(current => {
+      const next = new Map(current)
+      if (stored === scope) next.delete(row.id)
+      else next.set(row.id, scope)
       return next
     })
   }
 
-  function toggleSelectPage(): void {
-    const pageEligible = pageRows.filter(eligibleRow)
-    setSelected(current => {
-      const allSelected = pageEligible.length > 0 && pageEligible.every(row => current.has(row.id))
-      const next = new Set(current)
-      for (const row of pageEligible) {
-        if (allSelected) next.delete(row.id)
-        else next.add(row.id)
-      }
-      return next
-    })
-  }
-
-  async function applyPreferences(updates: PluginPreferenceUpdate[]): Promise<void> {
-    if (updates.length === 0 || props.onApplyPreferences === undefined) return
+  async function savePreferences(): Promise<void> {
+    if (draft.size === 0 || props.onApplyPreferences === undefined) return
+    const updates: PluginPreferenceUpdate[] = [...draft.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([pluginId, scope]) => ({ pluginId, scope }))
     setPrefBusy(true)
     setPrefError(null)
     try {
       await props.onApplyPreferences(updates)
-      setSelected(new Set())
+      setDraft(new Map())
     } catch (error) {
       setPrefError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -263,32 +260,21 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
 
       {prefBusy ? <p className="dgs-hint">{t('pluginPrefsSaving')}</p> : null}
 
-      {props.onApplyPreferences === undefined || selectedRows.length === 0 ? null : (
-        <div className="dgs-bulkBar">
-          <span className="dgs-hint">{t('pluginPrefsBulkSelected', { count: selectedRows.length })}</span>
+      {props.onApplyPreferences === undefined ? null : (
+        <div className="dgs-prefActions">
           <Button
             small
-            disabled={prefBusy || props.busy}
+            disabled={prefBusy || props.busy || draft.size === 0}
             loading={prefBusy}
             onClick={() => {
-              void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope: 'self' })))
+              void savePreferences()
             }}
           >
-            {t('pluginBulkPrivate')}
+            {t('pluginPrefsSaveChanges', { count: draft.size })}
           </Button>
-          <Button
-            small
-            disabled={prefBusy || props.busy}
-            loading={prefBusy}
-            onClick={() => {
-              void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope: 'all' })))
-            }}
-          >
-            {t('pluginBulkPublic')}
-          </Button>
-          <Button small onClick={() => setSelected(new Set())} disabled={prefBusy}>
-            {t('pluginPrefsBulkClear')}
-          </Button>
+          <span className="dgs-hint">
+            {draft.size === 0 ? t('pluginPrefsNoChanges') : t('pluginPrefsPendingHint', { count: draft.size })}
+          </span>
         </div>
       )}
 
@@ -304,32 +290,19 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
         <div className="dgs-tableWrap">
           <table className="dgs-table">
             <colgroup>
-              <col className="dgs-colCheck" />
               <col />
               <col className="dgs-colVersion" />
               <col className="dgs-colVersion" />
               <col className="dgs-colStatus" />
-              <col className="dgs-colActions" />
+              {editable ? <col className="dgs-colActions" /> : null}
             </colgroup>
             <thead>
               <tr>
-                <th className="dgs-tableCellCheck">
-                  <Checkbox
-                    checked={
-                      pageRows.length > 0 &&
-                      pageRows.filter(eligibleRow).length > 0 &&
-                      pageRows.filter(eligibleRow).every(row => selected.has(row.id))
-                    }
-                    disabled={props.busy || pageRows.filter(eligibleRow).length === 0}
-                    label={t('pluginPrefsSelectAll')}
-                    onChange={toggleSelectPage}
-                  />
-                </th>
                 <th>{t('pluginsName')}</th>
                 <th>{t('pluginsLocalVersion')}</th>
                 <th>{t('pluginsRemoteVersion')}</th>
                 <th>{t('pluginsStatus')}</th>
-                <th>{t('pluginsActions')}</th>
+                {editable ? <th>{t('pluginsActions')}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -342,16 +315,6 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                 const actionsDisabled = prefBusy || props.busy
                 return (
                   <tr key={row.id}>
-                    <td className="dgs-tableCellCheck">
-                      <Checkbox
-                        checked={selected.has(row.id)}
-                        disabled={!eligibleRow(row)}
-                        label={t('pluginPrefsSelectRow', { name: row.displayName ?? row.name })}
-                        onChange={() => {
-                          toggleSelected(row.id)
-                        }}
-                      />
-                    </td>
                     <td>
                       <span className="dgs-pluginCell">
                         <span className="dgs-pluginLine">
@@ -393,36 +356,34 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                         />
                       )}
                     </td>
+                    {editable ? (
                     <td className="dgs-nowrap">
                       <span className="dgs-scopeChecks">
                         <label className="dgs-scopeCheck">
                           <Checkbox
-                            checked={row.scopeSelfOnly !== true}
+                            checked={effectiveScope(row) === 'all'}
                             disabled={actionsDisabled || conflict !== undefined || !eligibleRow(row)}
                             label={`${t('pluginScopePublicCheck')}: ${row.displayName ?? row.name}`}
                             onChange={() => {
-                              if (row.scopeSelfOnly === true) {
-                                void applyPreferences([{ pluginId: row.id, scope: 'all' }])
-                              }
+                              chooseScope(row, 'all')
                             }}
                           />
                           <span>{t('pluginScopePublicCheck')}</span>
                         </label>
                         <label className="dgs-scopeCheck">
                           <Checkbox
-                            checked={row.scopeSelfOnly === true}
+                            checked={effectiveScope(row) === 'self'}
                             disabled={actionsDisabled || conflict !== undefined || !eligibleRow(row)}
                             label={`${t('pluginScopePrivateCheck')}: ${row.displayName ?? row.name}`}
                             onChange={() => {
-                              if (row.scopeSelfOnly !== true) {
-                                void applyPreferences([{ pluginId: row.id, scope: 'self' }])
-                              }
+                              chooseScope(row, 'self')
                             }}
                           />
                           <span>{t('pluginScopePrivateCheck')}</span>
                         </label>
                       </span>
                     </td>
+                    ) : null}
                   </tr>
                 )
               })}

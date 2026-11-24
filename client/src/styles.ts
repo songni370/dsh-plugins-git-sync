@@ -398,6 +398,13 @@ export const CSS = `
 .dgs-inlineRow > .dgs-btn {
   flex: none;
 }
+.dgs-prefActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 10px;
+}
+
 .dgs-scopeChecks {
   display: inline-flex;
   align-items: center;

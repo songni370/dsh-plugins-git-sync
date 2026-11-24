@@ -4,7 +4,8 @@
  * The Host sends names, sizes and backup status only; skill file contents never
  * reach the settings page. The card sits below the plugin list, starts expanded,
  * and paginates like the plugin list. Each row's 操作 column has two destination
- * checkboxes (公共 by default, 本设备 for a device-private backup).
+ * checkboxes (公共 by default, 本设备 for a device-private backup); edits stay
+ * pending until the user presses that card's save button.
  * @module ui/SkillsSection
  */
 
@@ -61,6 +62,9 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
   const [open, setOpen] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(storedPageSize)
+  // Pending destination changes, keyed by skill name. Nothing is written to
+  // the repository until the user presses the single save button.
+  const [draft, setDraft] = useState<ReadonlyMap<string, 'all' | 'self'>>(() => new Map())
   const [prefBusy, setPrefBusy] = useState(false)
   const [prefError, setPrefError] = useState<string | null>(null)
 
@@ -68,18 +72,49 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
     setPage(1)
   }, [pageSize])
 
+  // Drop drafts whose skill vanished in a refresh.
+  useEffect(() => {
+    setDraft(current => {
+      if (current.size === 0) return current
+      const applicable = new Set(rows.map(skill => skill.name))
+      const next = new Map([...current].filter(([name]) => applicable.has(name)))
+      return next.size === current.size ? current : next
+    })
+  }, [rows])
+
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const currentPage = Math.min(page, totalPages)
   const start = (currentPage - 1) * pageSize
   const pageRows = rows.slice(start, start + pageSize)
   const editable = props.onApplyPreferences !== undefined
 
-  async function applySkillPreference(update: SkillPreferenceUpdate): Promise<void> {
-    if (props.onApplyPreferences === undefined) return
+  /** Scope currently shown by the row's checkboxes (pending edit wins). */
+  function effectiveSkillScope(skill: SkillSummary): 'all' | 'self' {
+    const pending = draft.get(skill.name)
+    if (pending !== undefined) return pending
+    return skill.scopeSelfOnly === true ? 'self' : 'all'
+  }
+
+  function chooseSkillScope(skill: SkillSummary, scope: 'all' | 'self'): void {
+    const stored: 'all' | 'self' = skill.scopeSelfOnly === true ? 'self' : 'all'
+    setDraft(current => {
+      const next = new Map(current)
+      if (stored === scope) next.delete(skill.name)
+      else next.set(skill.name, scope)
+      return next
+    })
+  }
+
+  async function saveSkillPreferences(): Promise<void> {
+    if (draft.size === 0 || props.onApplyPreferences === undefined) return
+    const updates: SkillPreferenceUpdate[] = [...draft.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([skillName, scope]) => ({ skillName, scope }))
     setPrefBusy(true)
     setPrefError(null)
     try {
-      await props.onApplyPreferences([update])
+      await props.onApplyPreferences(updates)
+      setDraft(new Map())
     } catch (error) {
       setPrefError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -134,6 +169,24 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
         )}
         {prefBusy ? <p className="dgs-hint">{t('pluginPrefsSaving')}</p> : null}
 
+        {editable ? (
+          <div className="dgs-prefActions">
+            <Button
+              small
+              disabled={prefBusy || props.busy || draft.size === 0}
+              loading={prefBusy}
+              onClick={() => {
+                void saveSkillPreferences()
+              }}
+            >
+              {t('pluginPrefsSaveChanges', { count: draft.size })}
+            </Button>
+            <span className="dgs-hint">
+              {draft.size === 0 ? t('pluginPrefsNoChanges') : t('pluginPrefsPendingHint', { count: draft.size })}
+            </span>
+          </div>
+        ) : null}
+
         <div className="dgs-tableWrap">
           <table className="dgs-table dgs-skillTable">
             <colgroup>
@@ -181,26 +234,22 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                         <span className="dgs-scopeChecks">
                           <label className="dgs-scopeCheck">
                             <Checkbox
-                              checked={skill.scopeSelfOnly !== true}
+                              checked={effectiveSkillScope(skill) === 'all'}
                               disabled={prefBusy || props.busy || !installed}
                               label={`${t('pluginScopePublicCheck')}: ${skill.name}`}
                               onChange={() => {
-                                if (skill.scopeSelfOnly === true) {
-                                  void applySkillPreference({ skillName: skill.name, scope: 'all' })
-                                }
+                                chooseSkillScope(skill, 'all')
                               }}
                             />
                             <span>{t('pluginScopePublicCheck')}</span>
                           </label>
                           <label className="dgs-scopeCheck">
                             <Checkbox
-                              checked={skill.scopeSelfOnly === true}
+                              checked={effectiveSkillScope(skill) === 'self'}
                               disabled={prefBusy || props.busy || !installed}
                               label={`${t('pluginScopePrivateCheck')}: ${skill.name}`}
                               onChange={() => {
-                                if (skill.scopeSelfOnly !== true) {
-                                  void applySkillPreference({ skillName: skill.name, scope: 'self' })
-                                }
+                                chooseSkillScope(skill, 'self')
                               }}
                             />
                             <span>{t('pluginScopePrivateCheck')}</span>
