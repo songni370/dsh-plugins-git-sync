@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Per-plugin preference controls: each row shows a compact version pair and a
- * single action menu; a multi-selection can be switched between the public
- * pool and this device in one request (no second dialog).
+ * Per-plugin preference controls: each row shows a compact version pair and two
+ * destination checkboxes (公共 / 本设备); a multi-selection can be switched
+ * between the public pool and this device in one request (no second dialog).
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -71,7 +71,7 @@ function render(
 }
 
 describe('per-plugin preferences', () => {
-  it('shows separate local and remote version columns plus one action menu', () => {
+  it('shows separate local and remote version columns plus two destination checkboxes', () => {
     const html = render([row()])
     expect(html).not.toContain('>设置<')
     expect(html).not.toContain('安装范围')
@@ -79,8 +79,9 @@ describe('per-plugin preferences', () => {
     expect(html).toContain('>本机版本<')
     expect(html).toContain('>仓库版本<')
     expect(html).toContain('>操作<')
-    expect(html).toContain('aria-label="操作: alpha"')
-    expect(html).not.toContain('aria-label="仅本设备')
+    expect(html).toContain('aria-label="公共: alpha"')
+    expect(html).toContain('aria-label="本设备: alpha"')
+    expect(html).not.toContain('aria-haspopup="menu"')
   })
 
   it('hides a repeated id line but keeps a distinct display name', () => {
@@ -90,13 +91,14 @@ describe('per-plugin preferences', () => {
     expect(distinct).toContain('Better Sidebar')
   })
 
-  it('shows a 仅本机 badge when the plugin is private to this device', () => {
+  it('checks 本设备 when the plugin is private to this device', () => {
     const html = render([row({ scopeSelfOnly: true, scopeDevices: ['dev-a'] })])
-    expect(html).toContain('仅本机')
-    expect(html).toContain('aria-label="操作: alpha"')
+    expect(html).toMatch(/checked=""[^>]*aria-label="本设备: alpha"|aria-label="本设备: alpha"[^>]*checked=""/)
+    const shared = render([row()])
+    expect(shared).toMatch(/checked=""[^>]*aria-label="公共: alpha"|aria-label="公共: alpha"[^>]*checked=""/)
   })
 
-  it('offers a per-row resolution dropdown for a conflicting plugin', () => {
+  it('moves the conflict resolution into the status cell', () => {
     const conflicted = row({
       conflictInfo: {
         id: 'conflict:alpha',
@@ -113,7 +115,8 @@ describe('per-plugin preferences', () => {
     })
     const html = render([conflicted], async () => undefined)
     expect(html).toContain('>处理<')
-    expect(html).toContain('aria-label="操作: alpha"')
+    expect(html).toContain('aria-label="处理: alpha"')
+    expect(html).not.toContain('aria-label="操作: alpha"')
     expect(html).toContain('本机已卸载')
   })
 })

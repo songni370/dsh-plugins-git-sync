@@ -398,6 +398,25 @@ export const CSS = `
 .dgs-inlineRow > .dgs-btn {
   flex: none;
 }
+.dgs-scopeChecks {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.dgs-scopeCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-text-secondary, #5b6069);
+  cursor: pointer;
+}
+.dgs-scopeCheck:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .dgs-hintLines {
   white-space: pre-line;
 }

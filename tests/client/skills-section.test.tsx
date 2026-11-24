@@ -72,7 +72,7 @@ describe('skill card', () => {
     expect(html).toContain('已排除')
   })
 
-  it('moves backup exclusions into the row action menu', () => {
+  it('keeps excluded skills visible with destination checkboxes', () => {
     const html = renderToStaticMarkup(
       <SkillsSection
         {...baseProps}
@@ -81,10 +81,10 @@ describe('skill card', () => {
         onApplyPreferences={async () => undefined}
       />,
     )
-    expect(html.match(/type="checkbox"/g)).toBeNull()
     expect(html).toContain('已排除')
-    expect(html).toContain('aria-label="操作: skill-1"')
-    expect(html).not.toContain('aria-label="操作: skill-10"')
+    expect(html).toContain('aria-label="公共: skill-1"')
+    expect(html).toContain('aria-label="本设备: skill-1"')
+    expect(html).not.toContain('aria-label="公共: skill-10"')
   })
 
   it('shows only the first ten skills on the default page', () => {
@@ -115,19 +115,19 @@ describe('skill preference controls', () => {
     warnings: [],
   }
 
-  it('shows a 仅本机 badge and one action menu per row', () => {
+  it('shows two destination checkboxes and checks 本设备 for a private skill', () => {
     const html = renderToStaticMarkup(
       <SkillsSection {...baseProps} skills={editableSkills} onApplyPreferences={async () => undefined} />,
     )
-    expect(html).toContain('仅本机')
-    expect(html).toContain('aria-label="操作: alpha"')
-    expect(html).not.toContain('aria-label="仅本设备')
+    expect(html).toContain('aria-label="公共: alpha"')
+    expect(html).toContain('aria-label="本设备: alpha"')
+    expect(html).toMatch(/checked=""[^>]*aria-label="本设备: alpha"|aria-label="本设备: alpha"[^>]*checked=""/)
     expect(html).not.toContain('role="menu"')
   })
 
   it('omits the action column when the Host does not offer preferences', () => {
     const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={editableSkills} />)
-    expect(html).not.toContain('aria-label="操作: alpha"')
+    expect(html).not.toContain('aria-label="公共: alpha"')
     expect(html).not.toContain('>操作<')
   })
 })

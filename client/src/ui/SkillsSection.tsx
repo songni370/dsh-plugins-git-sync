@@ -3,18 +3,18 @@
  *
  * The Host sends names, sizes and backup status only; skill file contents never
  * reach the settings page. The card sits below the plugin list, starts expanded,
- * and paginates like the plugin list so a large skill library stays manageable.
+ * and paginates like the plugin list. Each row's 操作 column has two destination
+ * checkboxes (公共 by default, 本设备 for a device-private backup).
  * @module ui/SkillsSection
  */
 
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { SkillListResponse, SkillPreferenceUpdate, SkillSummary } from '../../../src/http/api-types'
-import { PreferenceDropdown } from './PreferenceDropdown'
 import type { Translate } from '../i18n'
 import { formatBytes } from '../format'
 import type { Tone } from './controls'
-import { Badge, Banner, Button, Card, LinkButton, Loading, Select } from './controls'
+import { Badge, Banner, Button, Card, Checkbox, LinkButton, Loading, Select } from './controls'
 
 /** Rows-per-page choices for the skill list. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
@@ -52,23 +52,6 @@ export interface SkillsSectionProps {
   onRefresh: () => void | Promise<unknown>
   /** Apply one preference update for this device's skill declaration. */
   onApplyPreferences?: (updates: SkillPreferenceUpdate[]) => Promise<void>
-}
-
-/** Row actions offered by the single "操作" menu. */
-function skillActionOptions(
-  t: Translate,
-  skill: SkillSummary,
-  excluded: boolean,
-  installed: boolean,
-  canInstall: boolean,
-): { value: string; label: string }[] {
-  const options: { value: string; label: string }[] = []
-  if (skill.scopeSelfOnly === true) options.push({ value: 'scope-all', label: t('pluginScopeAllAction') })
-  else options.push({ value: 'scope-self', label: t('pluginScopeSelfAction') })
-  if (installed) options.push({ value: 'uninstall', label: t('skillUninstall') })
-  else if (canInstall) options.push({ value: 'install', label: t('skillInstall') })
-  options.push(excluded ? { value: 'resume', label: t('pluginResumeBackup') } : { value: 'pause', label: t('pluginPauseBackup') })
-  return options
 }
 
 /** Render the deployed-skill list card. */
@@ -174,8 +157,6 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                 const installed =
                   skill.installed ??
                   (skill.presence === 'both' || skill.presence === 'local-only' || skill.presence === undefined)
-                const canInstall =
-                  skill.presence === 'both' || skill.presence === 'remote-only' || skill.presence === undefined
                 return (
                   <tr className="dgs-skillItem" key={skill.name}>
                     <td>
@@ -184,7 +165,6 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                           <span className="dgs-skillName" title={skill.name}>
                             {skill.name}
                           </span>
-                          {skill.scopeSelfOnly === true ? <Badge tone="idle">{t('pluginPrivateBadge')}</Badge> : null}
                         </span>
                       </span>
                     </td>
@@ -198,26 +178,34 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                     </td>
                     {editable ? (
                       <td className="dgs-nowrap">
-                        <PreferenceDropdown
-                          label={t('pluginsActions')}
-                          ariaLabel={`${t('pluginsActions')}: ${skill.name}`}
-                          title={t('pluginActionsHint')}
-                          disabled={prefBusy || props.busy}
-                          busy={prefBusy}
-                          options={skillActionOptions(t, skill, excluded, installed, canInstall)}
-                          onSelect={value => {
-                            if (value === 'scope-self' || value === 'scope-all') {
-                              void applySkillPreference({
-                                skillName: skill.name,
-                                scope: value === 'scope-self' ? 'self' : 'all',
-                              })
-                            } else if (value === 'install' || value === 'uninstall') {
-                              void applySkillPreference({ skillName: skill.name, action: value })
-                            } else {
-                              props.onToggle(skill, value === 'resume')
-                            }
-                          }}
-                        />
+                        <span className="dgs-scopeChecks">
+                          <label className="dgs-scopeCheck">
+                            <Checkbox
+                              checked={skill.scopeSelfOnly !== true}
+                              disabled={prefBusy || props.busy || !installed}
+                              label={`${t('pluginScopePublicCheck')}: ${skill.name}`}
+                              onChange={() => {
+                                if (skill.scopeSelfOnly === true) {
+                                  void applySkillPreference({ skillName: skill.name, scope: 'all' })
+                                }
+                              }}
+                            />
+                            <span>{t('pluginScopePublicCheck')}</span>
+                          </label>
+                          <label className="dgs-scopeCheck">
+                            <Checkbox
+                              checked={skill.scopeSelfOnly === true}
+                              disabled={prefBusy || props.busy || !installed}
+                              label={`${t('pluginScopePrivateCheck')}: ${skill.name}`}
+                              onChange={() => {
+                                if (skill.scopeSelfOnly !== true) {
+                                  void applySkillPreference({ skillName: skill.name, scope: 'self' })
+                                }
+                              }}
+                            />
+                            <span>{t('pluginScopePrivateCheck')}</span>
+                          </label>
+                        </span>
                       </td>
                     ) : null}
                   </tr>

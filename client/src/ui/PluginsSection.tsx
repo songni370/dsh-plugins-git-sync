@@ -2,14 +2,10 @@
  * "Plugins" card: this device's plugins joined with the repository state.
  *
  * The list starts expanded. Each row has one selection checkbox for bulk
- * actions and one action menu for its sharing scope, backup switch and
- * conflict resolution; the menu writes through the preference endpoints
- * (or `config/save`'s `excludedPlugins` for the backup switch). Disabling a
- * plugin never uninstalls it — it stops future syncs.
- * The per-row control is one 「仅本设备」 checkbox: unchecked means the plugin
- * stays in the public pool (every device gets it), checked means only this
- * device keeps it. Rows can be multi-selected so one choice applies to a whole
- * selection in a single repository commit.
+ * actions plus two destination checkboxes in the 操作 column: 公共 (the public
+ * pool; the default) and 本设备 (backed up only from this device). Conflict
+ * rows swap the checkboxes for the conflict resolution control in the status
+ * cell. A multi-selection can switch the whole selection in one commit.
  * @module ui/PluginsSection
  */
 
@@ -100,19 +96,6 @@ function conflictOptions(t: Translate, reason: string): { value: string; label: 
     { value: 'local', label: t('conflictResolveUseLocal') },
     { value: 'remote', label: t('conflictResolveUseRemote') },
   ]
-}
-
-/** Row actions offered by the single "操作" menu. */
-function rowActionOptions(t: Translate, row: PluginListRow, excluded: boolean): { value: string; label: string }[] {
-  if (row.conflictInfo !== undefined) return []
-  const scope =
-    row.scopeSelfOnly === true
-      ? { value: 'scope-all', label: t('pluginScopeAllAction') }
-      : { value: 'scope-self', label: t('pluginScopeSelfAction') }
-  const backup = excluded
-    ? { value: 'resume', label: t('pluginResumeBackup') }
-    : { value: 'pause', label: t('pluginPauseBackup') }
-  return [scope, backup]
 }
 
 /** Render the plugin list card. */
@@ -375,9 +358,6 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                           <span className="dgs-pluginName" title={row.displayName ?? row.name}>
                             {row.displayName ?? row.name}
                           </span>
-                          {row.scopeSelfOnly === true ? (
-                            <Badge tone="idle">{t('pluginPrivateBadge')}</Badge>
-                          ) : null}
                         </span>
                         {row.id === (row.displayName ?? row.name) ? null : (
                           <span className="dgs-pluginId dgs-mono" title={row.id}>
@@ -393,38 +373,55 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                       {remoteVersion === null || remoteVersion === '' ? t('notAvailable') : remoteVersion}
                     </td>
                     <td className="dgs-nowrap">
-                      <span className="dgs-pluginBadges">
-                        <Badge tone={excluded ? 'idle' : meta.tone}>{excluded ? t('statusExcluded') : t(meta.key)}</Badge>
-                      </span>
+                      {conflict === undefined ? (
+                        <Badge tone={excluded ? 'idle' : meta.tone}>
+                          {excluded ? t('statusExcluded') : t(meta.key)}
+                        </Badge>
+                      ) : (
+                        <PreferenceDropdown
+                          label={t('conflictResolve')}
+                          ariaLabel={`${t('conflictResolve')}: ${row.displayName ?? row.name}`}
+                          title={t(conflictReasonKey(conflict.reason))}
+                          disabled={actionsDisabled}
+                          busy={prefBusy}
+                          options={conflictOptions(t, conflict.reason)}
+                          onSelect={value => {
+                            if (value === 'local' || value === 'remote') {
+                              void resolveConflict(row.id, value)
+                            }
+                          }}
+                        />
+                      )}
                     </td>
                     <td className="dgs-nowrap">
-                      <PreferenceDropdown
-                        label={conflict === undefined ? t('pluginsActions') : t('conflictResolve')}
-                        ariaLabel={`${t('pluginsActions')}: ${row.displayName ?? row.name}`}
-                        title={
-                          conflict === undefined
-                            ? t('pluginActionsHint')
-                            : t(conflictReasonKey(conflict.reason))
-                        }
-                        disabled={actionsDisabled}
-                        busy={prefBusy}
-                        options={
-                          conflict === undefined
-                            ? rowActionOptions(t, row, excluded)
-                            : conflictOptions(t, conflict.reason)
-                        }
-                        onSelect={value => {
-                          if (value === 'local' || value === 'remote') {
-                            void resolveConflict(row.id, value)
-                          } else if (value === 'scope-self') {
-                            void applyPreferences([{ pluginId: row.id, scope: 'self' }])
-                          } else if (value === 'scope-all') {
-                            void applyPreferences([{ pluginId: row.id, scope: 'all' }])
-                          } else {
-                            props.onToggle(row, value === 'resume')
-                          }
-                        }}
-                      />
+                      <span className="dgs-scopeChecks">
+                        <label className="dgs-scopeCheck">
+                          <Checkbox
+                            checked={row.scopeSelfOnly !== true}
+                            disabled={actionsDisabled || conflict !== undefined || !eligibleRow(row)}
+                            label={`${t('pluginScopePublicCheck')}: ${row.displayName ?? row.name}`}
+                            onChange={() => {
+                              if (row.scopeSelfOnly === true) {
+                                void applyPreferences([{ pluginId: row.id, scope: 'all' }])
+                              }
+                            }}
+                          />
+                          <span>{t('pluginScopePublicCheck')}</span>
+                        </label>
+                        <label className="dgs-scopeCheck">
+                          <Checkbox
+                            checked={row.scopeSelfOnly === true}
+                            disabled={actionsDisabled || conflict !== undefined || !eligibleRow(row)}
+                            label={`${t('pluginScopePrivateCheck')}: ${row.displayName ?? row.name}`}
+                            onChange={() => {
+                              if (row.scopeSelfOnly !== true) {
+                                void applyPreferences([{ pluginId: row.id, scope: 'self' }])
+                              }
+                            }}
+                          />
+                          <span>{t('pluginScopePrivateCheck')}</span>
+                        </label>
+                      </span>
                     </td>
                   </tr>
                 )
