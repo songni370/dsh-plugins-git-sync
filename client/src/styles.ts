@@ -760,6 +760,10 @@ export const CSS = `
 .dgs-colStatus {
   width: 64px;
 }
+.dgs-colPrivate {
+  width: 92px;
+}
+
 .dgs-colScope {
   width: 88px;
 }

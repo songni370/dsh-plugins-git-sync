@@ -254,7 +254,15 @@ export declare class SyncEngine {
     /** Read everything needed from the repository. */
     private readRemote;
     /** Identity used when reading the v2 repository model. */
+    /** The configured device name, used as the repository-side device identity. */
+    private deviceName;
     private selfRef;
+    /** The repository-side device id: the existing record with this name, else the machine id. */
+    private resolvedSelfId;
+    /** Resolve the repository-side id from v1 device snapshots (before the first v2 write). */
+    private resolveLegacySelfId;
+    /** This device's own v2 declaration, when the repository uses the v2 model. */
+    private ownManifest;
     /** Read a repository state at one commit. */
     private readAtCommit;
     /** Execute a restore (or history rollback) with a safety snapshot. */

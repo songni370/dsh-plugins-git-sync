@@ -6,11 +6,10 @@
  * `syncable`/`syncStatus` from `/plugins/list` and persists a change through
  * `config/save`'s `excludedPlugins` (the only exclusion endpoint the contract
  * has). Turning it off never uninstalls anything — it stops future syncs.
- * The per-row controls edit this device's declaration directly, without a
- * second dialog: availability (all devices vs this device only) and a local
- * enabled override. Each control is a dropdown button that shows the active
- * choice and opens its options on click. Rows can be multi-selected so one
- * preference applies to a whole selection in a single repository commit.
+ * The per-row control is one 「仅本设备」 checkbox: unchecked means the plugin
+ * stays in the public pool (every device gets it), checked means only this
+ * device keeps it. Rows can be multi-selected so one choice applies to a whole
+ * selection in a single repository commit.
  * @module ui/PluginsSection
  */
 
@@ -271,45 +270,26 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
       {props.onApplyPreferences === undefined || selectedRows.length === 0 ? null : (
         <div className="dgs-bulkBar">
           <span className="dgs-hint">{t('pluginPrefsBulkSelected', { count: selectedRows.length })}</span>
-          <PreferenceDropdown
-            label={t('pluginPrefsBulkScope')}
-            ariaLabel={t('pluginPrefsBulkScope')}
-            title={t('pluginPrefsScopeHint')}
+          <Button
+            small
             disabled={prefBusy || props.busy}
-            busy={prefBusy}
-            options={[
-              { value: 'all', label: t('pluginPrefsScopeAll') },
-              { value: 'self', label: t('pluginPrefsScopeSelf') },
-            ]}
-            onSelect={value => {
-              const scope = value === 'self' ? ('self' as const) : ('all' as const)
-              void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope })))
+            loading={prefBusy}
+            onClick={() => {
+              void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope: 'self' })))
             }}
-          />
-          <PreferenceDropdown
-            label={t('pluginPrefsBulkEnabled')}
-            ariaLabel={t('pluginPrefsBulkEnabled')}
-            title={t('pluginPrefsEnabledHint')}
+          >
+            {t('pluginBulkPrivate')}
+          </Button>
+          <Button
+            small
             disabled={prefBusy || props.busy}
-            busy={prefBusy}
-            options={[
-              { value: 'all-on', label: t('pluginPrefsEnabledAllOn') },
-              { value: 'all-off', label: t('pluginPrefsEnabledAllOff') },
-              { value: 'on', label: t('pluginPrefsEnableShort') },
-              { value: 'off', label: t('pluginPrefsDisableShort') },
-            ]}
-            onSelect={value => {
-              void applyPreferences(
-                selectedRows.map(row =>
-                  value === 'on'
-                    ? { pluginId: row.id, enabledOverride: true }
-                    : value === 'off'
-                      ? { pluginId: row.id, enabledOverride: false }
-                      : { pluginId: row.id, sharedEnabled: value === 'all-on' },
-                ),
-              )
+            loading={prefBusy}
+            onClick={() => {
+              void applyPreferences(selectedRows.map(row => ({ pluginId: row.id, scope: 'all' })))
             }}
-          />
+          >
+            {t('pluginBulkPublic')}
+          </Button>
           <Button small onClick={() => setSelected(new Set())} disabled={prefBusy}>
             {t('pluginPrefsBulkClear')}
           </Button>
@@ -334,12 +314,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
               <col className="dgs-colVersion" />
               <col className="dgs-colVersion" />
               <col className="dgs-colStatus" />
-              {props.onApplyPreferences === undefined ? null : (
-                <>
-                  <col className="dgs-colScope" />
-                  <col className="dgs-colEnabled" />
-                </>
-              )}
+              {props.onApplyPreferences === undefined ? null : <col className="dgs-colPrivate" />}
               {props.onResolveConflict === undefined ? null : <col className="dgs-colResolve" />}
             </colgroup>
             <thead>
@@ -361,12 +336,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                 <th>{t('pluginsLocalVersion')}</th>
                 <th>{t('pluginsRemoteVersion')}</th>
                 <th>{t('pluginsStatus')}</th>
-                {props.onApplyPreferences === undefined ? null : (
-                  <>
-                    <th>{t('pluginPrefsScopeColumn')}</th>
-                    <th>{t('pluginPrefsEnabledColumn')}</th>
-                  </>
-                )}
+                {props.onApplyPreferences === undefined ? null : <th>{t('pluginPrivateColumn')}</th>}
                 {props.onResolveConflict === undefined ? null : <th>{t('conflictColumn')}</th>}
               </tr>
             </thead>
@@ -427,71 +397,16 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                       </span>
                     </td>
                     {props.onApplyPreferences === undefined ? null : (
-                      <>
-                        <td className="dgs-nowrap">
-                          {row.local === undefined || !row.syncable ? null : (
-                            <PreferenceDropdown
-                              label={row.scopeSelfOnly === true ? t('pluginPrefsScopeSelf') : t('pluginPrefsScopeAll')}
-                              ariaLabel={`${t('pluginPrefsScope')}: ${row.displayName ?? row.name}`}
-                              title={t('pluginPrefsScopeHint')}
-                              current={row.scopeSelfOnly === true ? 'self' : 'all'}
-                              disabled={prefBusy || props.busy}
-                              busy={prefBusy}
-                              options={[
-                                { value: 'all', label: t('pluginPrefsScopeAll') },
-                                { value: 'self', label: t('pluginPrefsScopeSelf') },
-                              ]}
-                              onSelect={value => {
-                                const scope = value === 'self' ? ('self' as const) : ('all' as const)
-                                void applyPreferences([{ pluginId: row.id, scope }])
-                              }}
-                            />
-                          )}
-                        </td>
-                        <td className="dgs-nowrap">
-                          {row.local === undefined || !row.syncable ? null : (
-                            <PreferenceDropdown
-                              label={
-                                row.enabledOverride === true
-                                  ? t('pluginPrefsEnableShort')
-                                  : row.enabledOverride === false
-                                    ? t('pluginPrefsDisableShort')
-                                    : row.sharedEnabled === false
-                                      ? t('pluginPrefsEnabledAllOff')
-                                      : t('pluginPrefsEnabledAllOn')
-                              }
-                              ariaLabel={`${t('pluginPrefsEnabled')}: ${row.displayName ?? row.name}`}
-                              busy={prefBusy}
-                              title={t('pluginPrefsEnabledHint')}
-                              current={
-                                row.enabledOverride === undefined
-                                  ? row.sharedEnabled === false
-                                    ? 'all-off'
-                                    : 'all-on'
-                                  : row.enabledOverride
-                                    ? 'on'
-                                    : 'off'
-                              }
-                              disabled={prefBusy || props.busy}
-                              options={[
-                                { value: 'all-on', label: t('pluginPrefsEnabledAllOn') },
-                                { value: 'all-off', label: t('pluginPrefsEnabledAllOff') },
-                                { value: 'on', label: t('pluginPrefsEnableShort') },
-                                { value: 'off', label: t('pluginPrefsDisableShort') },
-                              ]}
-                              onSelect={value => {
-                                if (value === 'on') {
-                                  void applyPreferences([{ pluginId: row.id, enabledOverride: true }])
-                                } else if (value === 'off') {
-                                  void applyPreferences([{ pluginId: row.id, enabledOverride: false }])
-                                } else {
-                                  void applyPreferences([{ pluginId: row.id, sharedEnabled: value === 'all-on' }])
-                                }
-                              }}
-                            />
-                          )}
-                        </td>
-                      </>
+                      <td className="dgs-tableCellCheck">
+                        <Checkbox
+                          checked={row.scopeSelfOnly === true}
+                          disabled={!eligibleRow(row) || prefBusy}
+                          label={t('pluginPrivateLabel', { name: row.displayName ?? row.name })}
+                          onChange={next => {
+                            void applyPreferences([{ pluginId: row.id, scope: next ? 'self' : 'all' }])
+                          }}
+                        />
+                      </td>
                     )}
                     {props.onResolveConflict === undefined ? null : (
                       <td className="dgs-nowrap">

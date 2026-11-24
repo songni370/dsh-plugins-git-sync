@@ -75,9 +75,10 @@ import {
   desiredRemoteState,
   previousPendingActivation,
   readV2State,
+  resolveDeviceId,
   type RepoV2Read,
 } from './repo-v2-bridge.js'
-import type { DevicePendingActivationV2, DeviceSkillEntryV2 } from './repo-v2.js'
+import type { DeviceManifestV2, DevicePendingActivationV2, DeviceSkillEntryV2 } from './repo-v2.js'
 import { executeLocalActions, isLocalAction } from './executor.js'
 import { createSnapshotService, snapshotConfigs, type SnapshotService } from './snapshot.js'
 import { fileExists } from '../state/store.js'
@@ -359,7 +360,7 @@ export class SyncEngine {
       if (options.refresh === true) {
         try {
           const prepared = await store.prepare()
-          read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+          read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
           connection = {
             ok: true,
             at: new Date().toISOString(),
@@ -381,7 +382,7 @@ export class SyncEngine {
         }
       } else if (hasLocalCopy && store.prepared()) {
         try {
-          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
+          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state, config))
         } catch {
           read = EMPTY_REMOTE
         }
@@ -436,7 +437,7 @@ export class SyncEngine {
             updatedAt: snapshot.updatedAt,
           }))
     devices.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    const ownManifest = read.v2?.byId[device.id] ?? null
+    const ownManifest = this.ownManifest(read)
     const repoSchemaVersion =
       read.v2 !== null ? 2 : read.manifest !== null || read.state !== null ? 1 : null
 
@@ -527,7 +528,7 @@ export class SyncEngine {
       try {
         const { store, workDir } = this.repoFor(config)
         if ((await fileExists(workDir)) && store.prepared()) {
-          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
+          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state, config))
         }
       } catch {
         // A missing or malformed repository must not hide local skills.
@@ -536,7 +537,8 @@ export class SyncEngine {
     const remoteSkills = read.skills?.skills ?? []
     const localMap = new Map(scanned.backup.skills.map(skill => [skill.name, skill]))
     const remoteMap = new Map(remoteSkills.map(skill => [skill.name, skill]))
-    const ownSkills = read.v2?.byId[state.device.id]?.skills ?? {}
+    const selfId = read.v2 === null ? state.device.id : read.v2.selfId
+    const ownSkills = read.v2?.byId[selfId]?.skills ?? {}
     const restrictedElsewhere = this.skillsRestrictedElsewhere(read, state)
     const names = [...new Set([...localMap.keys(), ...remoteMap.keys(), ...Object.keys(ownSkills)])]
       .filter(name => {
@@ -565,7 +567,7 @@ export class SyncEngine {
           presence: local !== undefined && remote !== undefined ? 'both' : local !== undefined ? 'local-only' : 'remote-only',
           installed: local !== undefined,
           scopeSelfOnly:
-            scope?.mode === 'devices' && scope.devices?.length === 1 && scope.devices[0] === state.device.id,
+            scope?.mode === 'devices' && scope.devices?.length === 1 && scope.devices[0] === selfId,
           ...(scope?.mode === 'devices' ? { scopeDevices: [...(scope.devices ?? [])] } : {}),
           deletedHere: own?.deleted === true && local === undefined,
         }
@@ -584,7 +586,7 @@ export class SyncEngine {
       try {
         const { store, workDir } = this.repoFor(config)
         if ((await fileExists(workDir)) && store.prepared()) {
-          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state))
+          read = await this.readRemote(store, config, state.lastCommit, this.selfRef(state, config))
         }
       } catch {
         read = EMPTY_REMOTE
@@ -610,7 +612,8 @@ export class SyncEngine {
         return isListedPlugin(local?.name ?? remote?.name ?? id, local?.builtIn === true || remote?.builtIn === true)
       })
       .sort()
-    const ownManifest = read.v2?.byId[state.device.id]
+    const selfId = read.v2 === null ? state.device.id : read.v2.selfId
+    const ownManifest = this.ownManifest(read)
     const repoSchemaVersion = read.v2 !== null ? 2 : read.manifest !== null || read.state !== null ? 1 : null
     const rows: PluginListRow[] = ids.map(id => {
       const localState = localMap[id]
@@ -651,7 +654,7 @@ export class SyncEngine {
         if (ownEntry.scope.mode === 'devices') {
           const scopeDevices = [...(ownEntry.scope.devices ?? [])].sort()
           row.scopeDevices = scopeDevices
-          row.scopeSelfOnly = scopeDevices.length === 1 && scopeDevices[0] === state.device.id
+          row.scopeSelfOnly = scopeDevices.length === 1 && scopeDevices[0] === selfId
         }
         row.sharedEnabled = ownEntry.enabled
         if (ownEntry.enabledOverride !== undefined) row.enabledOverride = ownEntry.enabledOverride
@@ -722,8 +725,9 @@ export class SyncEngine {
         const now = new Date().toISOString()
         const { store } = this.repoFor(config)
         const prepared = await store.prepare()
-        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
-        const previous = read.v2?.byId[state.device.id] ?? null
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
+        const selfId = read.v2 === null ? state.device.id : read.v2.selfId
+        const previous = read.v2?.byId[selfId] ?? null
         const resolved = updates.map(update => {
           const record = local.plugins.find(plugin => plugin.id === update.pluginId || plugin.name === update.pluginId)
           if (record === undefined) {
@@ -790,7 +794,7 @@ export class SyncEngine {
           }
           if (item.update.scope !== undefined) {
             entry.scope =
-              item.update.scope === 'self' ? { mode: 'devices', devices: [state.device.id] } : { mode: 'all' }
+              item.update.scope === 'self' ? { mode: 'devices', devices: [selfId] } : { mode: 'all' }
           }
           if (item.update.sharedEnabled !== undefined) {
             // Changing the shared state also clears any device-local override so
@@ -805,7 +809,7 @@ export class SyncEngine {
             entry.enabled = item.sharedVote
           }
           entry.updatedAt = now
-          entry.updatedBy = state.device.id
+          entry.updatedBy = selfId
           const scopeLabel =
             item.update.scope === 'self' ? ' 仅本机 / this device only' : item.update.scope === 'all' ? ' 所有设备 / all devices' : ''
           const enabledLabel =
@@ -876,12 +880,13 @@ export class SyncEngine {
   private skillsRestrictedElsewhere(read: RemoteRead, state: LocalState): Set<string> {
     const restricted = new Set<string>()
     if (read.v2 === null) return restricted
+    const selfId = read.v2.selfId
     for (const [deviceId, manifest] of Object.entries(read.v2.byId)) {
-      if (deviceId === state.device.id) continue
+      if (deviceId === selfId) continue
       for (const [name, entry] of Object.entries(manifest.skills)) {
         if (entry.deleted === true) continue
         const scope = entry.scope ?? { mode: 'all' as const }
-        if (scope.mode === 'devices' && !(scope.devices ?? []).includes(state.device.id)) restricted.add(name)
+        if (scope.mode === 'devices' && !(scope.devices ?? []).includes(selfId)) restricted.add(name)
       }
     }
     return restricted
@@ -891,7 +896,7 @@ export class SyncEngine {
   private blockedSkills(read: RemoteRead, state: LocalState): Set<string> {
     const blocked = this.skillsRestrictedElsewhere(read, state)
     if (read.v2 !== null) {
-      for (const [name, entry] of Object.entries(read.v2.byId[state.device.id]?.skills ?? {})) {
+      for (const [name, entry] of Object.entries(read.v2.byId[read.v2.selfId]?.skills ?? {})) {
         if (entry.deleted === true) blocked.add(name)
       }
     }
@@ -966,8 +971,9 @@ export class SyncEngine {
         const now = new Date().toISOString()
         const { store } = this.repoFor(config)
         const prepared = await store.prepare()
-        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
-        const previous = read.v2?.byId[state.device.id] ?? null
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
+        const selfId = read.v2 === null ? state.device.id : read.v2.selfId
+        const previous = read.v2?.byId[selfId] ?? null
         const scanned = await this.scanSkillsFor(config)
         let localBackup = scanned.backup
         const localMap = new Map(localBackup.skills.map(skill => [skill.name, skill]))
@@ -1025,7 +1031,7 @@ export class SyncEngine {
             const entry = ensureEntry(name)
             entries[name] = {
               ...entry,
-              scope: update.scope === 'self' ? { mode: 'devices', devices: [state.device.id] } : { mode: 'all' },
+              scope: update.scope === 'self' ? { mode: 'devices', devices: [selfId] } : { mode: 'all' },
               updatedAt: now,
             }
             labels.push(`${name} ${update.scope === 'self' ? '仅本机 / this device only' : '所有设备 / all devices'}`)
@@ -1136,7 +1142,7 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare({ signal: options.signal })
         const local = await this.scanLocal(config, true)
-        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
         const plan = this.scopedPlan(config, planBackup(this.planInput(config, local, read, state)))
         this.appendMultiDeviceBackupWarning(read, plan)
         if (plan.requiresConfirmation && options.confirmDestructive !== true) {
@@ -1193,7 +1199,7 @@ export class SyncEngine {
               deletions: firstFiles.deletions,
               executables: firstFiles.executables,
               rebuild: async () => {
-                const freshRead = await this.readRemote(store, config, null, this.selfRef(state))
+                const freshRead = await this.readRemote(store, config, null, this.selfRef(state, config))
                 const freshPlan = this.scopedPlan(config, planBackup(this.planInput(config, local, freshRead, await this.readState())))
                 return this.buildRemoteFiles({
                   config,
@@ -1214,7 +1220,7 @@ export class SyncEngine {
               signal: options.signal,
             })
         const localAfter = await this.scanLocal(config, true)
-        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state))
+        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state, config))
         const baseline = buildBaseline({
           profile: this.deps.activeProfile,
           commit: write.commit ?? prepared.head,
@@ -1280,7 +1286,7 @@ export class SyncEngine {
       const { store } = this.repoFor(config)
       const prepared = await store.prepare({ signal: options.signal })
       const read = options.commit === undefined || options.commit === ''
-        ? await this.readRemote(store, config, prepared.head, this.selfRef(state))
+        ? await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
         : await this.readAtCommit(store, config, options.commit)
       const local = await this.scanLocal(config)
       const plan = this.scopedPlan(config, planRestore(this.planInput(config, local, read, state)))
@@ -1314,7 +1320,7 @@ export class SyncEngine {
       const state = await this.readState()
       const { store } = this.repoFor(config)
       const prepared = await store.prepare({ signal })
-      const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+      const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
       const local = await this.scanLocal(config)
       return { plan: this.scopedPlan(config, planSync(this.planInput(config, local, read, state))) }
     }, { wait: true })
@@ -1334,7 +1340,7 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare({ signal: options.signal })
         const local = await this.scanLocal(config, true)
-        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
         const base = this.planInput(config, local, read, state)
         const plan = this.scopedPlan(config, planSync({ ...base, resolutions: options.resolutions }))
         const pending = blockingConflicts(plan, options.resolutions)
@@ -1455,7 +1461,7 @@ export class SyncEngine {
               deletions: firstFiles.deletions,
               executables: firstFiles.executables,
               rebuild: async () => {
-                const freshRead = await this.readRemote(store, config, null, this.selfRef(state))
+                const freshRead = await this.readRemote(store, config, null, this.selfRef(state, config))
                 const freshPlan = this.scopedPlan(config, planSync({ ...this.planInput(config, await this.scanLocal(config, true), freshRead, state), resolutions: options.resolutions }))
                 return this.buildRemoteFiles({
                   config,
@@ -1484,7 +1490,7 @@ export class SyncEngine {
             })
           : { changed: false, pushed: false, commit: prepared.head, changedFiles: [], retried: false }
         const localAfter = await this.scanLocal(config, true)
-        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state))
+        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state, config))
         const now = new Date().toISOString()
         state.baselines[this.deps.activeProfile] = buildBaseline({
           profile: this.deps.activeProfile,
@@ -1550,7 +1556,7 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare()
         const local = await this.scanLocal(config, true)
-        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+        const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
         const plan = this.scopedPlan(
           config,
           planSync({ ...this.planInput(config, local, read, state), resolutions: [{ pluginId, choice }] }),
@@ -1623,7 +1629,7 @@ export class SyncEngine {
               deletions: firstFiles.deletions,
               executables: firstFiles.executables,
               rebuild: async () => {
-                const freshRead = await this.readRemote(store, config, null, this.selfRef(state))
+                const freshRead = await this.readRemote(store, config, null, this.selfRef(state, config))
                 const freshPlan = this.scopedPlan(
                   config,
                   planSync({
@@ -1657,7 +1663,7 @@ export class SyncEngine {
               },
             })
         const localAfter = await this.scanLocal(config, true)
-        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state))
+        const remoteAfter = await this.readRemote(store, config, write.commit, this.selfRef(state, config))
         const now = new Date().toISOString()
         state.baselines[this.deps.activeProfile] = buildBaseline({
           profile: this.deps.activeProfile,
@@ -1824,6 +1830,7 @@ export class SyncEngine {
     }
     if (read.v2 !== null) {
       for (const removal of read.v2.desired.removals) tombstones.add(removal)
+      for (const removal of read.v2.poolRemovals) tombstones.add(removal.id)
       for (const conflict of read.v2.desired.conflicts) {
         if (conflict.reason === 'deleted-while-declared') tombstones.add(conflict.pluginId)
       }
@@ -1983,6 +1990,9 @@ export class SyncEngine {
     localSkills?: SkillBackup | null
     pendingActivation?: readonly DevicePendingActivationV2[]
   }): { files: Record<string, string | Uint8Array>; deletions: string[]; executables: string[] } {
+    const deviceName =
+      input.config.deviceName.trim() === '' ? input.device.name : input.config.deviceName.trim()
+    const selfId = input.read.v2?.selfId ?? this.resolveLegacySelfId(input.read, input.config, input.device)
     const localMap = localStates(input.local)
     const upserts = new Map<string, { entry: RemotePluginEntry; configs?: JsonObject }>()
     const removals = new Set<string>()
@@ -1992,7 +2002,7 @@ export class SyncEngine {
       if (action.kind === 'push-plugin') {
         const state = localMap[action.pluginId]
         if (state === undefined) continue
-        upserts.set(action.pluginId, { entry: toRemoteEntry(state, { deviceId: input.device.id, now: new Date().toISOString() }) })
+        upserts.set(action.pluginId, { entry: toRemoteEntry(state, { deviceId: selfId, now: new Date().toISOString() }) })
       } else if (action.kind === 'push-config') {
         const existing = upserts.get(action.pluginId)
         if (existing !== undefined) {
@@ -2001,7 +2011,7 @@ export class SyncEngine {
           const state = localMap[action.pluginId]
           if (state === undefined) continue
           upserts.set(action.pluginId, {
-            entry: toRemoteEntry(state, { deviceId: input.device.id, now: new Date().toISOString() }),
+            entry: toRemoteEntry(state, { deviceId: selfId, now: new Date().toISOString() }),
             configs: action.configs ?? {},
           })
         }
@@ -2028,7 +2038,7 @@ export class SyncEngine {
     const now = new Date().toISOString()
     const afterInventory = this.inventoryAfterPlan(input.local, input.plan, input.read)
     const deviceSnapshot = toDeviceSnapshot({
-      device: input.device,
+      device: { ...input.device, id: selfId, name: deviceName },
       profile: this.deps.activeProfile,
       now,
       plugins: afterInventory.plugins,
@@ -2038,7 +2048,7 @@ export class SyncEngine {
       backupDir: input.config.backupDir,
       generatorVersion: this.deps.pluginVersion,
       profile: this.deps.activeProfile,
-      deviceId: input.device.id,
+      deviceId: selfId,
       now,
       previousManifest: input.read.manifest,
       previousState: input.read.state,
@@ -2051,7 +2061,7 @@ export class SyncEngine {
       deviceSnapshot,
       knownDevices,
     })
-    const previousDevice = input.read.v2?.byId[input.device.id] ?? null
+    const previousDevice = input.read.v2?.byId[selfId] ?? null
     // A remove-local never expresses this device's deletion intent: it either
     // follows another device's restriction or a deletion chosen elsewhere.
     // Recording it as "removed" here would later look like a conflicting
@@ -2061,6 +2071,7 @@ export class SyncEngine {
     )
     const selfManifest = buildOwnDeviceManifest({
       previous: previousDevice,
+      self: { id: selfId, name: deviceName },
       inventory: input.local,
       after: afterInventory,
       profile: this.deps.activeProfile,
@@ -2084,6 +2095,15 @@ export class SyncEngine {
       now,
       legacyDevices,
       commit: input.read.head,
+      poolRemovals: {
+        add: new Set(
+          input.plan.actions.filter(action => action.kind === 'remove-remote').map(action => action.pluginId),
+        ),
+        clear: new Set(
+          input.plan.actions.filter(action => action.kind === 'push-plugin').map(action => action.pluginId),
+        ),
+        names: Object.fromEntries(Object.entries(localMap).map(([id, state]) => [id, state.name])),
+      },
     })
     const files: Record<string, string | Uint8Array> = { ...base.files }
     if (input.config.backupScopes.plugins) {
@@ -2115,7 +2135,7 @@ export class SyncEngine {
     store: RepoStore,
     config: SyncConfig,
     head: string | null,
-    self?: { id: string; dshVersion: string },
+    self?: { id: string; name: string; dshVersion: string },
   ): Promise<RemoteRead> {
     let manifest: Manifest | null = null
     let state: RemoteProfileState | null = null
@@ -2125,7 +2145,7 @@ export class SyncEngine {
     let v2: RepoV2Read | null = null
     const schemaVersion = await detectRepoSchemaVersion(store).catch(() => null)
     if (schemaVersion === 2 && self !== undefined) {
-      v2 = await readV2State(store, this.deps.activeProfile, self.id, self.dshVersion)
+      v2 = await readV2State(store, this.deps.activeProfile, self)
       if (v2 !== null) {
         // The v2 model is authoritative; the v1 view is derived from it.
         state = desiredRemoteState(v2, this.deps.activeProfile, new Date().toISOString())
@@ -2162,8 +2182,41 @@ export class SyncEngine {
   }
 
   /** Identity used when reading the v2 repository model. */
-  private selfRef(state: LocalState): { id: string; dshVersion: string } {
-    return { id: state.device.id, dshVersion: state.device.dshVersion }
+  /** The configured device name, used as the repository-side device identity. */
+  private deviceName(config: SyncConfig, state: LocalState): string {
+    const name = config.deviceName.trim()
+    return name === '' ? state.device.name : name
+  }
+
+  private selfRef(state: LocalState, config: SyncConfig): { id: string; name: string; dshVersion: string } {
+    return { id: state.device.id, name: this.deviceName(config, state), dshVersion: state.device.dshVersion }
+  }
+
+  /** The repository-side device id: the existing record with this name, else the machine id. */
+  private resolvedSelfId(read: RemoteRead, config: SyncConfig, state: LocalState): string {
+    if (read.v2 !== null) return read.v2.selfId
+    const records = Object.entries(read.devices).map(([id, snapshot]) => ({
+      id,
+      name: snapshot.device.name,
+      updatedAt: snapshot.updatedAt,
+    }))
+    return resolveDeviceId(records, { id: state.device.id, name: this.deviceName(config, state) })
+  }
+
+  /** Resolve the repository-side id from v1 device snapshots (before the first v2 write). */
+  private resolveLegacySelfId(read: RemoteRead, config: SyncConfig, device: DeviceInfo): string {
+    const name = config.deviceName.trim() === '' ? device.name : config.deviceName.trim()
+    const records = Object.entries(read.devices).map(([id, snapshot]) => ({
+      id,
+      name: snapshot.device.name,
+      updatedAt: snapshot.updatedAt,
+    }))
+    return resolveDeviceId(records, { id: device.id, name })
+  }
+
+  /** This device's own v2 declaration, when the repository uses the v2 model. */
+  private ownManifest(read: RemoteRead): DeviceManifestV2 | null {
+    return read.v2 === null ? null : (read.v2.byId[read.v2.selfId] ?? null)
   }
 
   /** Read a repository state at one commit. */
@@ -2196,7 +2249,7 @@ export class SyncEngine {
         const { store } = this.repoFor(config)
         const prepared = await store.prepare({ signal: options.signal })
         const read = options.commit === undefined || options.commit === ''
-          ? await this.readRemote(store, config, prepared.head, this.selfRef(state))
+          ? await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
           : await this.readAtCommit(store, config, options.commit)
         const local = await this.scanLocal(config, true)
         let plan = this.scopedPlan(config, planRestore(this.planInput(config, local, read, state, options.resolutions)))
@@ -2392,7 +2445,7 @@ export class SyncEngine {
     const state = await this.readState()
     const { store } = this.repoFor(config)
     const prepared = await store.prepare({ signal })
-    const read = await this.readRemote(store, config, prepared.head, this.selfRef(state))
+    const read = await this.readRemote(store, config, prepared.head, this.selfRef(state, config))
     const local = await this.scanLocal(config)
     const plan = planBackup(this.planInput(config, local, read, state))
     this.appendMultiDeviceBackupWarning(read, plan)

@@ -91,7 +91,7 @@ status(refresh?)
   → planSync(...)  → countPlanChanges → StatusView + logs
 ```
 
-`plugins/list` 用同样的 local/remote 读取，把 `planSync` 的 `diffs` 映射成表格行（`synced` / `local-only` / `remote-only` / `version-diff` / `config-diff` / `enabled-diff` / `conflict` / `excluded`），并附带本机声明里的 `scopeSelfOnly` / `scopeDevices` / `enabledOverride` / `sharedEnabled` 供列表展示；冲突行还会带 `conflictInfo`，页面据此在行内给出处理选项。`conflicts/resolve` 只处理一个插件的冲突：按本机选择重新规划，仅执行该插件的动作，提交后把剩余冲突重新写回 state 并返回刷新后的列表，其他冲突不受影响。`plugins/preferences` 修改本机声明（scope `self` 写入「仅本机」限制，`enabledOverride` 只改本机，`sharedEnabled` 修改共享启停并清除本机覆盖）后提交 v2 仓库文件，返回刷新后的列表；请求既可带单个 `pluginId`，也可带 `updates` 数组，批量偏好只写一次提交。`skills/list` 返回技能的文件数、大小与同步状态，并附带本机安装状态（`installed`）、本机限制（`scopeSelfOnly` / `scopeDevices`）与本机已删除标记（`deletedHere`）。`skills/preferences` 按同样方式修改本机技能声明：`scope` 写「所有设备 / 仅本机」，`action install` 从仓库补回缺失技能，`action uninstall` 只卸载本机并记录删除标记（不传播到其他设备、同步也不会自动装回）；同样支持单条与 `updates` 批量形式，一次提交。`diff` 只调用 `previewBackup` / `previewRestore` / `previewSync`。
+`plugins/list` 用同样的 local/remote 读取，把 `planSync` 的 `diffs` 映射成表格行（`synced` / `local-only` / `remote-only` / `version-diff` / `config-diff` / `enabled-diff` / `conflict` / `excluded`），并附带本机声明里的 `scopeSelfOnly` / `scopeDevices` / `enabledOverride` / `sharedEnabled` 供列表展示；冲突行还会带 `conflictInfo`，页面据此在行内给出处理选项。`conflicts/resolve` 只处理一个插件的冲突：按本机选择重新规划，仅执行该插件的动作，提交后把剩余冲突重新写回 state 并返回刷新后的列表，其他冲突不受影响。`plugins/preferences` 修改本机声明（scope `self` 写入「仅本设备」限制，`all` 放回公共池；`enabledOverride` / `sharedEnabled` 仍被后端接受以兼容旧客户端，但设置页只暴露一个「仅本设备」勾选框）后提交 v2 仓库文件，返回刷新后的列表；请求既可带单个 `pluginId`，也可带 `updates` 数组，批量偏好只写一次提交。本机明确卸载公共池插件时，同一次提交会在 `pool/removed.json` 写入公共池删除意图，其他设备同步时被询问后才卸载。`skills/list` 返回技能的文件数、大小与同步状态，并附带本机安装状态（`installed`）、本机限制（`scopeSelfOnly` / `scopeDevices`）与本机已删除标记（`deletedHere`）。`skills/preferences` 按同样方式修改本机技能声明：`scope` 写「仅本设备 / 公共池」，`action install` 从仓库补回缺失技能，`action uninstall` 只卸载本机并记录删除标记（不传播到其他设备、同步也不会自动装回）；设置页同样只暴露「仅本设备」勾选框与「本机安装 / 本机卸载」按钮；支持单条与 `updates` 批量形式，一次提交。`diff` 只调用 `previewBackup` / `previewRestore` / `previewSync`。
 
 ### 3.2 备份（scan → plan → execute → baseline）
 
@@ -188,9 +188,9 @@ devices/<deviceId>/<profile>.json     该设备声明的期望状态 + removed �
 profiles/<profile>/plugins.json       仍作为 v1 只读镜像写入，供旧版客户端读取
 ```
 
-读取（`engine.readRemote`）：先探测 `manifest.json` 的 `schemaVersion`。为 2 时读取 manifest、policy 与全部设备声明，调用 `mergeDesired({ selfId, policy, devices, localDshVersion })` 得到本机期望状态，再用 `desiredRemoteState()` 投影成 `RemoteProfileState`，后续 `planSync`/`planBackup`/`planRestore` 无需知道 v2 的存在。删除目标 = v1 tombstone ∪ v2 `removed` ∪ `deleted-while-declared` 冲突，统一交给 planner 处理。为 1 或仓库为空时按旧路径读取，下次写入自动迁移。
+读取（`engine.readRemote`）：先探测 `manifest.json` 的 `schemaVersion`。为 2 时读取 manifest、policy 与全部设备声明，调用 `mergeDesired({ selfId, policy, devices, localDshVersion })` 得到本机期望状态，再用 `desiredRemoteState()` 投影成 `RemoteProfileState`，后续 `planSync`/`planBackup`/`planRestore` 无需知道 v2 的存在。删除目标 = v1 tombstone ∪ v2 `removed` ∪ `deleted-while-declared` 冲突 ∪ `pool/removed.json` 的公共池删除意图，统一交给 planner 处理。设备身份按配置中的设备名称解析：若仓库已有同名设备记录，沿用该记录（从而恢复它的独立插件）；否则使用配置设备名派生的稳定 id（新设备只拿到公共池）。为 1 或仓库为空时按旧路径读取，下次写入自动迁移。
 
-写入（`buildRemoteFiles`）：在 v1 文件集合之上合并 `buildV2RepoFiles()` 产出的 `manifest.json`、`policies/<profile>.json`、`devices/<self>/<profile>.json`；设备声明由 `buildOwnDeviceManifest()` 基于「扫描 + 计划动作后的库存」生成：保留旧声明的 scope/pin，只有明确的本机删除才写入 `removed`，失败的安装或临时缺失不会写成删除；`status.pendingActivation` 记录等待重启生效的插件。本机状态 `state.json` 同样保存 `pendingActivation`，没有提交时状态页也能显示。首次写入时 `migratedFrom: 1` 并把仓库里已有的 v1 设备快照并入 manifest；写入前给当前 HEAD 打 `pre-v2-migration` 标签（尽力推送）便于用 Git 回滚，提交 trailer 记为 `Result: migrated`。设备声明的 `enabled` 默认全局合并，本机可用可选字段 `enabledOverride` 覆盖自己的期望启停状态。
+写入（`buildRemoteFiles`）：在 v1 文件集合之上合并 `buildV2RepoFiles()` 产出的 `manifest.json`、`policies/<profile>.json`、`devices/<self>/<profile>.json`；公共池删除意图写入 `pool/removed.json`（`remove-remote` 动作追加，`push-plugin` 恢复动作清除）；设备声明由 `buildOwnDeviceManifest()` 基于「扫描 + 计划动作后的库存」生成：保留旧声明的 scope/pin，只有明确的本机删除才写入 `removed`，失败的安装或临时缺失不会写成删除；`status.pendingActivation` 记录等待重启生效的插件。本机状态 `state.json` 同样保存 `pendingActivation`，没有提交时状态页也能显示。首次写入时 `migratedFrom: 1` 并把仓库里已有的 v1 设备快照并入 manifest；写入前给当前 HEAD 打 `pre-v2-migration` 标签（尽力推送）便于用 Git 回滚，提交 trailer 记为 `Result: migrated`。设备声明的 `enabled` 默认全局合并，本机可用可选字段 `enabledOverride` 覆盖自己的期望启停状态。
 
 ## 4. 本机状态文件
 
@@ -433,4 +433,4 @@ Windows: 同理（它会把 A 从 1.2.0 与本机推不上去）→ 冲突
 | `tests/integration/two-device.test.ts` | 两台模拟设备 + 真实本地 bare Git 仓库的端到端流程：备份/恢复、无变化不提交、并发新增、版本变更、配置冲突、删除确认、历史 trailer、非法 manifest、不可达仓库、本地插件排除、状态计数、设备可见性、待重启生效、设备限定插件 |
 | `tests/integration/migration-v2.test.ts` | 真实 v1 仓库首次同步：v2 manifest/policy/设备声明生成、`migratedFrom: 1`、`pre-v2-migration` 标签、`Result: migrated` trailer、v1 镜像仍可读 |
 
-集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**42 个测试文件 / 391 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。
+集成测试只模拟宿主服务（plugin manager、config editor），扫描器、安装器适配、Git runner、repo store、manifest 校验、引擎、快照、历史都是真实代码。最终一次验证：`npm run typecheck`、`npm run build`、`node --check lib/client.js` 与 `npx vitest run`（**43 个测试文件 / 393 个测试**）全部通过；jsdom 渲染测试只证明页面能挂载与交互，不能替代真实 Harness 页面的人工验证。

@@ -686,6 +686,67 @@ export function serializeDeviceManifestV2(value: DeviceManifestV2): string {
 }
 
 // ---------------------------------------------------------------------------
+// Public pool deletion intents
+// ---------------------------------------------------------------------------
+
+/**
+ * Path of the public-pool deletion intents. A deletion recorded here applies to
+ * every device: devices that still have the plugin are asked before removing
+ * it, and a device that re-adds the plugin clears the intent.
+ */
+export const POOL_REMOVALS_PATH = 'pool/removed.json'
+
+/** One public-pool deletion intent. */
+export interface PoolRemovalV2 {
+  id: string
+  name?: string
+  at: string
+  by: string
+}
+
+/** `pool/removed.json` — public-pool deletions shared by every device. */
+export interface PoolRemovalsV2 {
+  schemaVersion: number
+  updatedAt: string
+  removed: PoolRemovalV2[]
+}
+
+/** Validate `pool/removed.json`; returns null for anything implausible. */
+export function parsePoolRemovalsV2(value: unknown): PoolRemovalsV2 | null {
+  try {
+    if (!isRecord(value)) return null
+    if (value['schemaVersion'] !== REPO_SCHEMA_VERSION) return null
+    const updatedAt = value['updatedAt']
+    if (typeof updatedAt !== 'string') return null
+    const raw = value['removed']
+    if (!Array.isArray(raw)) return null
+    const removed: PoolRemovalV2[] = []
+    for (const item of raw) {
+      if (!isRecord(item)) return null
+      const id = item['id']
+      const at = item['at']
+      const by = item['by']
+      if (typeof id !== 'string' || id.trim() === '') return null
+      if (typeof at !== 'string' || typeof by !== 'string') return null
+      const name = item['name']
+      if (name !== undefined && typeof name !== 'string') return null
+      removed.push({ id, ...(name === undefined ? {} : { name }), at, by })
+    }
+    const seen = new Set<string>()
+    const unique = removed.filter(item => (seen.has(item.id) ? false : (seen.add(item.id), true)))
+    unique.sort((left, right) => compareStrings(left.id, right.id))
+    return { schemaVersion: REPO_SCHEMA_VERSION, updatedAt, removed: unique }
+  } catch {
+    return null
+  }
+}
+
+/** Serialize `pool/removed.json`. */
+export function serializePoolRemovalsV2(value: PoolRemovalsV2): string {
+  return stringifyDocument(value)
+}
+
+// ---------------------------------------------------------------------------
 // Desired-state merge
 // ---------------------------------------------------------------------------
 

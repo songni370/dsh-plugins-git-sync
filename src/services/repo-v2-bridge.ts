@@ -13,6 +13,7 @@
  * The module is pure apart from the small store interface passed in.
  */
 
+import { createHash } from 'node:crypto'
 import {
   defaultPolicy,
   deviceManifestPath,
@@ -21,10 +22,13 @@ import {
   parseDeviceManifestV2,
   parseManifestV2,
   parsePolicyV2,
+  parsePoolRemovalsV2,
+  POOL_REMOVALS_PATH,
   policyPath,
   serializeDeviceManifestV2,
   serializeManifestV2,
   serializePolicyV2,
+  serializePoolRemovalsV2,
   type DesiredMergeV2,
   type DeviceManifestV2,
   type DevicePendingActivationV2,
@@ -33,6 +37,8 @@ import {
   type RepoDeviceRecordV2,
   type RepoManifestV2,
   type RepoPolicyV2,
+  type PoolRemovalV2,
+  type PoolRemovalsV2,
 } from './repo-v2.js'
 import type {
   ConflictInfo,
@@ -57,6 +63,12 @@ export interface RepoV2Read {
   devices: DeviceManifestV2[]
   byId: Record<string, DeviceManifestV2>
   desired: DesiredMergeV2
+  /** Device id used for this device, resolved from the configured device name. */
+  selfId: string
+  /** This device's previous declaration, when it exists. */
+  selfDevice: DeviceManifestV2 | null
+  /** Public-pool deletion intents shared by every device. */
+  poolRemovals: PoolRemovalV2[]
 }
 
 /** Parse one JSON document without throwing. */
@@ -78,12 +90,36 @@ export async function detectRepoSchemaVersion(store: RepoV2Store): Promise<numbe
   return typeof value === 'number' ? value : null
 }
 
+/** Stable fallback id for a device name that has no repository record yet. */
+export function deviceIdForName(name: string): string {
+  return `dev-${createHash('sha256').update(`dsh-git-plugin-sync\u0000${name}`).digest('hex').slice(0, 16)}`
+}
+
+/**
+ * Resolve which repository device record belongs to this machine. The configured
+ * device name is the identity: typing an existing name on a new machine adopts
+ * that device's declaration (and therefore its private plugins); a name with no
+ * record keeps the machine id; renaming a known machine to a brand-new name
+ * starts a fresh record so private plugins are not silently carried over.
+ */
+export function resolveDeviceId(
+  devices: ReadonlyArray<{ id: string; name: string; updatedAt: string }>,
+  self: { id: string; name: string },
+): string {
+  const matches = devices
+    .filter(entry => entry.name === self.name)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  if (matches.length > 0) return matches[0]!.id
+  const byId = devices.find(entry => entry.id === self.id)
+  if (byId !== undefined && byId.name !== self.name) return deviceIdForName(self.name)
+  return self.id
+}
+
 /** Read and merge the v2 repository. Returns null when it is not a v2 repository. */
 export async function readV2State(
   store: RepoV2Store,
   profile: string,
-  selfId: string,
-  localDshVersion: string,
+  self: { id: string; name: string; dshVersion: string },
 ): Promise<RepoV2Read | null> {
   const text = await store.readRepoText(manifestPath)
   if (text === null) return null
@@ -106,11 +142,26 @@ export async function readV2State(
     }
   }
 
+  const selfId = resolveDeviceId(
+    devices.map(device => ({ id: device.device.id, name: device.device.name, updatedAt: device.updatedAt })),
+    self,
+  )
   const effectivePolicy = policy ?? defaultPolicy(profile)
-  const desired = mergeDesired({ selfId, policy: effectivePolicy, devices, localDshVersion })
+  const desired = mergeDesired({ selfId, policy: effectivePolicy, devices, localDshVersion: self.dshVersion })
   const byId: Record<string, DeviceManifestV2> = {}
   for (const device of devices) byId[device.device.id] = device
-  return { manifest, policy: effectivePolicy, devices, byId, desired }
+  const poolText = await store.readRepoText(POOL_REMOVALS_PATH)
+  const pool = poolText === null ? null : parsePoolRemovalsV2(parseJson(poolText))
+  return {
+    manifest,
+    policy: effectivePolicy,
+    devices,
+    byId,
+    desired,
+    selfId,
+    selfDevice: byId[selfId] ?? null,
+    poolRemovals: pool?.removed ?? [],
+  }
 }
 
 /** Project the merged desired state onto the v1 `RemoteProfileState` shape. */
@@ -140,6 +191,7 @@ export function desiredRemoteState(
   // it out of the v1 mirror's tombstone view, which has no per-device notion.
   const restricted = new Set(read.desired.scopeExcluded)
   const deletionIntents = new Set(read.desired.removals)
+  for (const removal of read.poolRemovals) deletionIntents.add(removal.id)
   for (const conflict of read.desired.conflicts) {
     if (conflict.reason === 'deleted-while-declared') deletionIntents.add(conflict.pluginId)
   }
@@ -208,11 +260,14 @@ export interface OwnDeviceManifestInput {
   baseCommit?: string | null
   /** Skill declarations to write; defaults to the previous manifest's entries. */
   skills?: Record<string, import('./repo-v2.js').DeviceSkillEntryV2>
+  /** Repository identity for this run (configured device name may adopt an existing record). */
+  self?: { id: string; name: string }
 }
 
 /** Build this device's declaration for the repository. */
 export function buildOwnDeviceManifest(input: OwnDeviceManifestInput): DeviceManifestV2 {
-  const device = input.inventory.device
+  const identity = input.self
+  const device = identity === undefined ? input.inventory.device : { ...input.inventory.device, ...identity }
   const after = input.after ?? input.inventory
   const previous = input.previous
   const current = new Map<string, PluginRecord>()
@@ -313,6 +368,13 @@ export interface LegacyDeviceRecord {
   updatedAt: string
 }
 
+/** Public-pool deletion intents to add or clear in this commit. */
+export interface PoolRemovalUpdate {
+  add?: ReadonlySet<string>
+  clear?: ReadonlySet<string>
+  names?: Readonly<Record<string, string>>
+}
+
 /** Input for building the v2 files of one commit. */
 export interface BuildV2FilesInput {
   /** Existing v2 state; null when creating or migrating the repository. */
@@ -323,6 +385,8 @@ export interface BuildV2FilesInput {
   now: string
   legacyDevices?: Readonly<Record<string, LegacyDeviceRecord>>
   commit?: string | null
+  /** Public-pool deletion intents changed by this run. */
+  poolRemovals?: PoolRemovalUpdate
 }
 
 /** Files to add to the next backup commit, keyed by repository-relative path. */
@@ -367,12 +431,32 @@ export function buildV2RepoFiles(input: BuildV2FilesInput): Record<string, strin
     updatedAt: now,
   }
   const policy = input.read?.policy ?? defaultPolicy(profile)
-
-  return {
+  const pool = new Map<string, PoolRemovalV2>()
+  for (const entry of input.read?.poolRemovals ?? []) pool.set(entry.id, entry)
+  for (const id of input.poolRemovals?.clear ?? []) pool.delete(id)
+  const by = selfManifest.device.id
+  for (const id of input.poolRemovals?.add ?? []) {
+    pool.set(id, {
+      id,
+      ...(input.poolRemovals?.names?.[id] === undefined ? {} : { name: input.poolRemovals.names[id] }),
+      at: now,
+      by,
+    })
+  }
+  const files: Record<string, string> = {
     [manifestPath]: serializeManifestV2(manifest),
     [policyPath(profile)]: serializePolicyV2(policy),
     [deviceManifestPath(selfId, profile)]: serializeDeviceManifestV2(selfManifest),
   }
+  if (pool.size > 0) {
+    const document: PoolRemovalsV2 = {
+      schemaVersion: 2,
+      updatedAt: now,
+      removed: [...pool.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    }
+    files[POOL_REMOVALS_PATH] = serializePoolRemovalsV2(document)
+  }
+  return files
 }
 
 /** Read the pending activations recorded in this device's previous manifest. */

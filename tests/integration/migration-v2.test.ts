@@ -31,7 +31,7 @@ function git(bareRepo: string, args: string[]): string {
 }
 
 /** Seed a v1 repository with one remote plugin (`beta`) and one device snapshot. */
-async function seedV1Repository(bareRepo: string, deviceId: string): Promise<void> {
+async function seedV1Repository(bareRepo: string, deviceId: string, deviceName: string): Promise<void> {
   const work = join(bareRepo, '..', 'seed-work')
   execFileSync('git', ['clone', '-q', bareRepo, work], { stdio: 'pipe' })
   execFileSync('git', ['-C', work, 'config', 'user.email', 'test@example.com'], { stdio: 'pipe' })
@@ -81,7 +81,7 @@ async function seedV1Repository(bareRepo: string, deviceId: string): Promise<voi
       schemaVersion: 1,
       device: {
         id: deviceId,
-        name: 'mac',
+        name: deviceName,
         platform: 'darwin',
         arch: 'arm64',
         dshVersion: '0.2.2-rc.5',
@@ -104,7 +104,7 @@ beforeAll(async () => {
   const bareRepo = createBareRepo(root)
   const device = await createFakeDevice({ root, name: 'migrator', repoUrl: bareRepo })
   device.addPlugin({ name: 'alpha', version: '1.0.0', enabled: true, configs: {} })
-  await seedV1Repository(bareRepo, device.device.id)
+  await seedV1Repository(bareRepo, device.device.id, 'migrator')
   ctx = { root, bareRepo, device }
 }, 120_000)
 

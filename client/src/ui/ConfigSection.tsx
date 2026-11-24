@@ -21,7 +21,7 @@ import {
   detectRepoTransport,
   type RepoTransport,
 } from '../repo-transport'
-import { Badge, Button, Card, TextInput } from './controls'
+import { Badge, Button, Card, Select, TextInput } from './controls'
 
 /** The editable subset of the Host configuration. */
 export interface ConfigForm {
@@ -69,6 +69,8 @@ export interface ConfigSectionProps {
   dirty: boolean
   saving: boolean
   testing: boolean
+  /** Known device names in the repository, for the identity selector. */
+  deviceNames?: readonly string[]
   /** Result of the last test from this card. */
   onChange: (patch: Partial<ConfigForm>) => void
   onTest: () => void | Promise<unknown>
@@ -327,6 +329,19 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
                 <span className="dgs-formRowHint">{t('configBackupDirHint')}</span>
               </FormRow>
               <FormRow label={t('configDeviceName')}>
+                {props.deviceNames === undefined || props.deviceNames.length === 0 ? null : (
+                  <Select
+                    id="dgs-config-device-existing"
+                    value={props.deviceNames.includes(form.deviceName) ? form.deviceName : ''}
+                    options={[
+                      { value: '', label: t('configDeviceExisting') },
+                      ...props.deviceNames.map(name => ({ value: name, label: name })),
+                    ]}
+                    onChange={value => {
+                      if (value !== '') props.onChange({ deviceName: value })
+                    }}
+                  />
+                )}
                 <TextInput
                   id="dgs-config-device"
                   value={form.deviceName}
@@ -335,7 +350,7 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
                     props.onChange({ deviceName: value })
                   }}
                 />
-                <span className="dgs-formRowHint">{t('configDeviceNameHint')}</span>
+                <span className="dgs-formRowHint">{t('configDeviceExistingHint')}</span>
               </FormRow>
               <FormRow label={t('configClient')}>
                 <div className="dgs-btnRow">

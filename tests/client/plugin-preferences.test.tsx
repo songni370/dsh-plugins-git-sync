@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Per-plugin preference controls: every row exposes an install-scope dropdown
- * and an enabled dropdown (no second dialog) whose triggers show the current
- * choice.
+ * Per-plugin preference controls: every row exposes one 「仅本设备」 checkbox,
+ * and a multi-selection can be switched between the public pool and this
+ * device in a single request (no second dialog).
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -71,17 +71,13 @@ function render(
 }
 
 describe('per-plugin preferences', () => {
-  it('offers inline dropdown actions for every row without a dialog', () => {
+  it('exposes one 仅本设备 checkbox per row instead of dropdowns', () => {
     const html = render([row()])
     expect(html).not.toContain('>设置<')
-    expect(html).toContain('安装范围')
-    expect(html).toContain('启停')
-    // Closed menus: the triggers show the current choice, menus stay hidden.
-    expect(html.match(/aria-haspopup="menu"/g)?.length).toBe(2)
-    expect(html).toContain('aria-expanded="false"')
-    expect(html).toContain('所有设备')
-    expect(html).toContain('全部启用')
-    expect(html).not.toContain('role="menu"')
+    expect(html).toContain('>仅本设备<')
+    expect(html).not.toContain('安装范围')
+    expect(html).not.toContain('启停')
+    expect(html).toContain('aria-label="仅本设备：alpha"')
   })
 
   it('hides a repeated id line but keeps a distinct display name', () => {
@@ -91,10 +87,10 @@ describe('per-plugin preferences', () => {
     expect(distinct).toContain('Better Sidebar')
   })
 
-  it('shows the device-local choices on the triggers', () => {
-    const html = render([row({ scopeSelfOnly: true, enabledOverride: false, scopeDevices: ['dev-a'] })])
-    expect((html.split('aria-label="安装范围: alpha"')[1] ?? '').slice(0, 260)).toContain('仅本机')
-    expect((html.split('aria-label="启停: alpha"')[1] ?? '').slice(0, 260)).toContain('本机停用')
+  it('checks the row checkbox when the plugin is private to this device', () => {
+    const html = render([row({ scopeSelfOnly: true, scopeDevices: ['dev-a'] })])
+    const checkbox = html.split('aria-label="仅本设备：alpha"')[0] ?? ''
+    expect(checkbox).toContain('checked=""')
   })
 
   it('offers a per-row resolution dropdown for a conflicting plugin', () => {

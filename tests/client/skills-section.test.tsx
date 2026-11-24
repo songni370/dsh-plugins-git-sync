@@ -107,20 +107,20 @@ describe('skill preference controls', () => {
     warnings: [],
   }
 
-  it('shows a scope column and a local install state without a dialog', () => {
+  it('shows a 仅本设备 checkbox and a local install button without a dialog', () => {
     const html = renderToStaticMarkup(
       <SkillsSection {...baseProps} skills={editableSkills} onApplyPreferences={async () => undefined} />,
     )
-    expect(html).toContain('>安装范围<')
+    expect(html).toContain('>仅本设备<')
     expect(html).toContain('>本机<')
-    expect(html).toContain('仅本机')
-    expect(html).toContain('已安装')
+    expect(html).toContain('aria-label="仅本设备: alpha"')
+    expect(html).toContain('本机卸载')
     expect(html).not.toContain('role="menu"')
   })
 
   it('omits the controls when the Host does not offer them', () => {
     const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={editableSkills} />)
-    expect(html).not.toContain('>安装范围<')
-    expect(html).not.toContain('已安装')
+    expect(html).not.toContain('>仅本设备<')
+    expect(html).not.toContain('本机卸载')
   })
 })

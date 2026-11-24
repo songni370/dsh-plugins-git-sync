@@ -14,7 +14,6 @@ import type { Translate } from '../i18n'
 import { formatBytes } from '../format'
 import type { Tone } from './controls'
 import { Badge, Banner, Button, Card, Checkbox, LinkButton, Loading, Select } from './controls'
-import { PreferenceDropdown } from './PreferenceDropdown'
 
 /** Rows-per-page choices for the skill list. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
@@ -141,7 +140,7 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
               <col />
               <col className="dgs-colSkillMeta" />
               <col className="dgs-colStatus" />
-              {editable ? <col className="dgs-colScope" /> : null}
+              {editable ? <col className="dgs-colPrivate" /> : null}
               {editable ? <col className="dgs-colSkillLocal" /> : null}
             </colgroup>
             <thead>
@@ -150,7 +149,7 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                 <th>{t('skillsColumnName')}</th>
                 <th>{t('skillsColumnMeta')}</th>
                 <th>{t('pluginsStatus')}</th>
-                {editable ? <th>{t('pluginPrefsScopeColumn')}</th> : null}
+                {editable ? <th>{t('pluginPrivateColumn')}</th> : null}
                 {editable ? <th>{t('skillLocalColumn')}</th> : null}
               </tr>
             </thead>
@@ -192,38 +191,32 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                       <Badge tone={meta.tone}>{t(meta.key)}</Badge>
                     </td>
                     {editable ? (
-                      <td className="dgs-nowrap">
-                        <PreferenceDropdown
-                          label={skill.scopeSelfOnly === true ? t('pluginPrefsScopeSelf') : t('pluginPrefsScopeAll')}
-                          ariaLabel={`${t('pluginPrefsScopeColumn')}: ${skill.name}`}
-                          options={[
-                            { value: 'all', label: t('pluginPrefsScopeAll') },
-                            { value: 'self', label: t('pluginPrefsScopeSelf') },
-                          ]}
-                          current={skill.scopeSelfOnly === true ? 'self' : 'all'}
+                      <td className="dgs-tableCellCheck">
+                        <Checkbox
+                          checked={skill.scopeSelfOnly === true}
                           disabled={prefBusy || props.busy}
-                          busy={prefBusy}
-                          onSelect={value => {
-                            void applySkillPreference({ skillName: skill.name, scope: value === 'self' ? 'self' : 'all' })
+                          label={`${t('pluginPrivateColumn')}: ${skill.name}`}
+                          onChange={next => {
+                            void applySkillPreference({ skillName: skill.name, scope: next ? 'self' : 'all' })
                           }}
                         />
                       </td>
                     ) : null}
                     {editable ? (
                       <td className="dgs-nowrap">
-                        <PreferenceDropdown
-                          label={installed ? t('skillInstalledShort') : t('skillNotInstalledShort')}
-                          ariaLabel={`${t('skillLocalColumn')}: ${skill.name}`}
-                          options={localOptions}
-                          disabled={prefBusy || props.busy || localOptions.length === 0}
-                          busy={prefBusy}
-                          onSelect={value => {
+                        <Button
+                          small
+                          disabled={prefBusy || props.busy || (!installed && !canInstall)}
+                          loading={prefBusy}
+                          onClick={() => {
                             void applySkillPreference({
                               skillName: skill.name,
-                              action: value === 'install' ? 'install' : 'uninstall',
+                              action: installed ? 'uninstall' : 'install',
                             })
                           }}
-                        />
+                        >
+                          {installed ? t('skillUninstall') : t('skillInstall')}
+                        </Button>
                       </td>
                     ) : null}
                   </tr>

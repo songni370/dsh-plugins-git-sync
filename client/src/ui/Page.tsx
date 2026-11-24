@@ -930,6 +930,7 @@ export function Page({ t }: PageProps): ReactElement {
               t={t}
               form={form}
               view={view.config}
+              deviceNames={view.devices?.map(device => device.name)}
               dirty={configDirty}
               saving={savingConfig}
               testing={testing}

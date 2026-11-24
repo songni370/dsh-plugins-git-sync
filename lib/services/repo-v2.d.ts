@@ -167,6 +167,29 @@ export declare function serializeManifestV2(value: RepoManifestV2): string;
 export declare function serializePolicyV2(value: RepoPolicyV2): string;
 /** Serialize a device manifest. */
 export declare function serializeDeviceManifestV2(value: DeviceManifestV2): string;
+/**
+ * Path of the public-pool deletion intents. A deletion recorded here applies to
+ * every device: devices that still have the plugin are asked before removing
+ * it, and a device that re-adds the plugin clears the intent.
+ */
+export declare const POOL_REMOVALS_PATH = "pool/removed.json";
+/** One public-pool deletion intent. */
+export interface PoolRemovalV2 {
+    id: string;
+    name?: string;
+    at: string;
+    by: string;
+}
+/** `pool/removed.json` — public-pool deletions shared by every device. */
+export interface PoolRemovalsV2 {
+    schemaVersion: number;
+    updatedAt: string;
+    removed: PoolRemovalV2[];
+}
+/** Validate `pool/removed.json`; returns null for anything implausible. */
+export declare function parsePoolRemovalsV2(value: unknown): PoolRemovalsV2 | null;
+/** Serialize `pool/removed.json`. */
+export declare function serializePoolRemovalsV2(value: PoolRemovalsV2): string;
 /** Plugin to be installed after merging every applicable device declaration. */
 export interface DesiredPluginV2 {
     id: string;
