@@ -813,12 +813,11 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
         if (await pathExists(workTreePath(workDir, deletion.repo))) changed.add(deletion.repo)
       }
       for (const executable of executables) {
-        try {
-          const info = await lstat(workTreePath(workDir, executable.repo))
-          if ((info.mode & 0o111) === 0) changed.add(executable.repo)
-        } catch {
-          // Missing files are already covered by the file-content comparison.
-        }
+        const staged = await runGit(['ls-files', '--stage', '--', executable.repo], {
+          signal: writeOptions.signal,
+        })
+        const mode = staged.code === 0 ? (/^(\d+)/.exec(staged.stdout)?.[1] ?? '') : ''
+        if (mode !== '100755') changed.add(executable.repo)
       }
       const changedFiles = [...changed].sort()
       return { changed: changedFiles.length > 0, changedFiles, commit: await readHead() }
@@ -829,6 +828,14 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
       await chmod(workTreePath(workDir, executable.repo), 0o755).catch(() => undefined)
     }
     await runGit(['add', '-A'], { signal: writeOptions.signal })
+    // Windows cannot store the executable bit on disk, so record it in the
+    // index explicitly; this keeps skill scripts executable for every device.
+    for (const executable of executables) {
+      const chmodResult = await runGit(['update-index', '--chmod=+x', '--', executable.repo], {
+        signal: writeOptions.signal,
+      })
+      if (chmodResult.code !== 0) throw gitFailure(chmodResult)
+    }
     const status = await runGit(['status', '--porcelain', '-z'], { signal: writeOptions.signal })
     const changedFiles = parsePorcelainZ(status.stdout)
     if (changedFiles.length === 0) {
