@@ -6,8 +6,8 @@
 
 import { describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
 import {
   dataDirFor,
   expandHomePath,
@@ -68,7 +68,7 @@ describe('path safety', () => {
   })
 
   it('joins inside a root and refuses escapes', () => {
-    expect(safeJoin('/data/work', 'profiles/desktop/plugins.json')).toBe('/data/work/profiles/desktop/plugins.json')
+    expect(safeJoin('/data/work', 'profiles/desktop/plugins.json')).toBe(join('/data/work', 'profiles/desktop/plugins.json'))
     expect(() => safeJoin('/data/work', '../escape')).toThrow()
     expect(() => safeJoin('/data/work', '/etc/passwd')).toThrow()
   })
@@ -93,8 +93,8 @@ describe('path safety', () => {
 
   it('expands and displays home paths', () => {
     expect(expandHomePath('~').length).toBeGreaterThan(1)
-    expect(expandHomePath('~/x').endsWith('/x')).toBe(true)
-    expect(displayPath(join(process.env.HOME ?? '/home/u', 'x'))).toBe('~/x')
+    expect(expandHomePath('~/x')).toBe(join(expandHomePath('~'), 'x'))
+    expect(displayPath(join(homedir(), 'x'))).toBe(`~${sep}x`)
   })
 })
 

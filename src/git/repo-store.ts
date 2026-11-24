@@ -556,6 +556,13 @@ export function createRepoStore(options: RepoStoreOptions): RepoStore {
         throw gitFailure(clone)
       }
     }
+    // Keep checked-out bytes identical to the committed blobs. Windows Git
+    // installations default to core.autocrlf=true, which would rewrite text
+    // files (skills, README) to CRLF and make repository reads platform-dependent.
+    for (const [key, value] of [['core.autocrlf', 'false'], ['core.eol', 'lf']] as const) {
+      const config = await options.run.run(['config', key, value], { cwd: workDir, signal })
+      if (config.code !== 0) throw gitFailure(config)
+    }
     const setUrl = await options.run.run(['remote', 'set-url', 'origin', repoUrl], { cwd: workDir, signal })
     if (setUrl.code !== 0) {
       const addRemote = await options.run.run(['remote', 'add', 'origin', repoUrl], { cwd: workDir, signal })

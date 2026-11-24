@@ -9,7 +9,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SyncError } from '../../src/core/errors.js'
@@ -236,20 +236,21 @@ describe('two-device synchronization', () => {
     expect(record?.origin).toBe('local-path')
     expect(record?.pathOnly).toBe(true)
     expect(record?.syncable).toBe(false)
-    expect(record?.localPath).toContain(local.path)
+    const canonicalLocalPath = await realpath(local.path)
+    expect((record?.localPath ?? '').toLowerCase()).toContain(canonicalLocalPath.toLowerCase())
 
     const backup = await ctx.mac.engine.backup({ confirmDestructive: true })
     expect(backup.ok).toBe(true)
     const files = listRepoFiles(ctx.bareRepo)
     const backupText = files.map(file => readRepoFile(ctx.bareRepo, file)).join('\n')
-    expect(backupText).not.toContain(local.path)
+    expect(backupText.toLowerCase()).not.toContain(canonicalLocalPath.toLowerCase())
     expect(files.some(file => file.includes('dev-plugin'))).toBe(false)
 
     await ctx.mac.saveConfig({ includeLocalPlugins: true })
     const optedIn = await ctx.mac.engine.backup({ confirmDestructive: true })
     expect(optedIn.ok).toBe(true)
     const optedText = listRepoFiles(ctx.bareRepo).map(file => readRepoFile(ctx.bareRepo, file)).join('\n')
-    expect(optedText).not.toContain(local.path)
+    expect(optedText.toLowerCase()).not.toContain(canonicalLocalPath.toLowerCase())
   }, 120_000)
 
   it('produces history entries with device and operation trailers', async () => {
@@ -263,6 +264,7 @@ describe('two-device synchronization', () => {
   }, 120_000)
 
   it('counts only listable plugins in the status card', async () => {
+    ctx.mac.engine.invalidateScan()
     const before = await ctx.mac.engine.status()
     ctx.mac.addPlugin({ name: 'cordis:include', version: '0.0.0', enabled: true, configs: {} })
     ctx.mac.engine.invalidateScan()

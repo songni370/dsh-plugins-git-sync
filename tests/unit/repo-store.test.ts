@@ -151,6 +151,10 @@ async function cloneRemote(remote: string): Promise<string> {
   const clone = await tempDir()
   const result = await runner.run(['clone', '--quiet', '--branch', 'main', remote, clone])
   expect(result.code).toBe(0)
+  for (const [key, value] of [['core.autocrlf', 'false'], ['core.eol', 'lf']] as const) {
+    const config = await runner.run(['config', key, value], { cwd: clone })
+    expect(config.code).toBe(0)
+  }
   return clone
 }
 
