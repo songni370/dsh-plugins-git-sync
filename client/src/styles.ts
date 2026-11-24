@@ -398,6 +398,9 @@ export const CSS = `
 .dgs-inlineRow > .dgs-btn {
   flex: none;
 }
+.dgs-hintLines {
+  white-space: pre-line;
+}
 .dgs-rowMeta {
   display: flex;
   flex-wrap: wrap;

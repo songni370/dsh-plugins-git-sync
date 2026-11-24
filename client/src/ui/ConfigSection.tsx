@@ -410,7 +410,7 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
                 props.onChange({ deviceName: value })
               }}
             />
-            <span className="dgs-formRowHint">
+            <span className="dgs-formRowHint dgs-hintLines">
               {(props.deviceNames ?? []).length === 0
                 ? t('configDeviceEmptyHint')
                 : t('configDeviceExistingHint')}
@@ -430,7 +430,7 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
             <span className="dgs-formRowHint">{t('configBackupDirHint')}</span>
           </FormRow>
 
-          {form.repoUrl.trim() === '' || form.backupDir.trim() === '' ? null : (
+          {form.repoUrl.trim() === '' ? null : (
             <FormRow label={t('configLocation')} className="dgs-repoLocationForm">
               <div className="dgs-repoLocation">
                 <div className="dgs-repoLocationRow">

@@ -326,7 +326,7 @@ export const zh: Record<string, string> = {
   configTestFirstHint: '先测试连接，确认仓库可访问，并载入仓库里已有的设备。',
   configDeviceEmptyHint: '先测试连接；仓库里已有的设备会出现在下拉列表里。',
   configDeviceExistingHint:
-    '选择已有的设备名称：会拉取公共插件，并恢复这台设备原来的独立插件。输入新名称：只拉取公共插件。',
+    '选择已有的设备名称：会拉取公共插件，并恢复这台设备原来的独立插件。\n输入新名称：只拉取公共插件。',
   skillsTitle: '技能',
   skillsDesc: '本机与仓库中的 DSH 技能；备份开启时会随插件一起同步。',
   skillsCount: '共 {count} 个技能',
@@ -717,7 +717,7 @@ export const en: Record<string, string> = {
   configTestFirstHint: 'Test the connection first to verify the repository and load its existing devices.',
   configDeviceEmptyHint: 'Test the connection first; devices already in the repository will appear here.',
   configDeviceExistingHint:
-    'Pick an existing device name to get the public pool plus that device’s private plugins; enter a new name to get the public pool only.',
+    'Pick an existing device name to get the public pool plus that device’s private plugins.\nEnter a new name to get the public pool only.',
   skillsTitle: 'Skills',
   skillsDesc: 'DSH skills on this device and in the repository; synced with plugins when skill backup is on.',
   skillsCount: '{count} skills',

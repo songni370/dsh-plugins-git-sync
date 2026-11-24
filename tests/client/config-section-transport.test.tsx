@@ -235,9 +235,10 @@ describe('device name field', () => {
 })
 
 describe('repository field order', () => {
-  it('shows the in-repository location only after a backup directory is entered', () => {
+  it('shows the in-repository location at the repository root when the backup directory is empty', () => {
     const withoutDir = render('git@github.com:owner/repo.git', 'ssh', { backupDir: '' })
-    expect(withoutDir).not.toContain('仓库内位置')
+    expect(withoutDir).toContain('仓库内位置')
+    expect(withoutDir).toContain('profiles/desktop/plugins.json')
     const withDir = render('git@github.com:owner/repo.git', 'ssh', { backupDir: 'dsh-plugins' })
     expect(withDir).toContain('仓库内位置')
     expect(withDir).toContain('dsh-plugins/profiles/desktop/plugins.json')
