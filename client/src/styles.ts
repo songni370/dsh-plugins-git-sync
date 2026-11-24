@@ -734,6 +734,87 @@ export const CSS = `
   padding-top: 10px;
   border-top: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
 }
+.dgs-combo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.dgs-comboInput {
+  width: 100%;
+  padding-right: 30px;
+}
+
+.dgs-comboToggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-text-tertiary);
+  cursor: pointer;
+}
+
+.dgs-comboToggle:hover:not(:disabled) {
+  background: var(--dsw-alias-bg-layer-2, #f3f4f6);
+  color: var(--dsw-alias-text-primary);
+}
+
+.dgs-comboToggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.dgs-comboMenu {
+  position: fixed;
+  z-index: 80;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--dsw-alias-bg-layer-1, #ffffff);
+  border: 1px solid var(--dsw-alias-border-l1, #e5e7eb);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.dgs-comboItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dgs-comboItem:hover {
+  background: var(--dsw-alias-bg-layer-2, #f3f4f6);
+}
+
+.dgs-comboItem[aria-selected='true'] {
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 600;
+}
+
+.dgs-comboCheck {
+  font-size: 12px;
+}
+
 .dgs-tableWrap {
   width: 100%;
   min-width: 0;

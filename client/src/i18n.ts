@@ -322,7 +322,7 @@ export const zh: Record<string, string> = {
   pluginResumeBackup: '恢复备份',
   pluginBulkPrivate: '设为仅本设备',
   pluginBulkPublic: '设为所有设备',
-  configDeviceExisting: '选择已有设备',
+  configDeviceExisting: '选择已有设备或输入新名称',
   configDeviceExistingHint:
     '选择已有的设备名称：会拉取公共插件，并恢复这台设备原来的独立插件。输入新名称：只拉取公共插件。',
   skillsTitle: '技能',
@@ -711,7 +711,7 @@ export const en: Record<string, string> = {
   pluginResumeBackup: 'Resume backup',
   pluginBulkPrivate: 'Only this device',
   pluginBulkPublic: 'All devices',
-  configDeviceExisting: 'Use an existing device',
+  configDeviceExisting: 'Pick a device or type a new name',
   configDeviceExistingHint:
     'Pick an existing device name to get the public pool plus that device’s private plugins; enter a new name to get the public pool only.',
   skillsTitle: 'Skills',

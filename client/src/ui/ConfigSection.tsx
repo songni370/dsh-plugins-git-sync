@@ -12,7 +12,7 @@
  * @module ui/ConfigSection
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 import type { GitAuthMode, SyncConfig, SyncConfigView } from '../../../src/types'
 import type { Translate } from '../i18n'
@@ -57,6 +57,128 @@ export function configFormFromView(view: SyncConfigView): ConfigForm {
 export function configPayloadFromForm(form: ConfigForm): Partial<SyncConfig> {
   const { backupPlugins, backupSkills, ...rest } = form
   return { ...rest, backupScopes: { plugins: backupPlugins, skills: backupSkills } }
+}
+
+/** One device-name control: type a new name or pick an existing one. */
+function DeviceNameInput(props: {
+  t: Translate
+  value: string
+  options: readonly string[]
+  disabled: boolean
+  onChange: (value: string) => void
+}): ReactElement {
+  const { t } = props
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const hasOptions = props.options.length > 0
+
+  useEffect(() => {
+    if (!open) return undefined
+    function close(): void {
+      setOpen(false)
+    }
+    function onPointerDown(event: MouseEvent): void {
+      const target = event.target as Node
+      if (wrapperRef.current?.contains(target) === true) return
+      if (menuRef.current?.contains(target) === true) return
+      close()
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') close()
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [open])
+
+  function toggle(): void {
+    if (props.disabled) return
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = wrapperRef.current?.getBoundingClientRect()
+    if (rect === undefined) return
+    const width = Math.max(rect.width, 200)
+    setPosition({
+      top: rect.bottom + 4,
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+      width,
+    })
+    setOpen(true)
+  }
+
+  return (
+    <div className="dgs-combo" ref={wrapperRef}>
+      <input
+        id="dgs-config-device"
+        className="dgs-input dgs-comboInput"
+        type="text"
+        value={props.value}
+        disabled={props.disabled}
+        placeholder={t('configDeviceExisting')}
+        onChange={event => {
+          props.onChange(event.target.value)
+        }}
+      />
+      {hasOptions ? (
+        <button
+          type="button"
+          className="dgs-comboToggle"
+          aria-label={t('configDeviceExisting')}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          disabled={props.disabled}
+          onClick={toggle}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+            <path
+              d="M4 6.5 8 10.5 12 6.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      ) : null}
+      {open && position !== null ? (
+        <div
+          className="dgs-comboMenu"
+          role="listbox"
+          ref={menuRef}
+          style={{ top: position.top, left: position.left, width: position.width }}
+        >
+          {props.options.map(name => (
+            <button
+              key={name}
+              type="button"
+              role="option"
+              aria-selected={name === props.value}
+              className="dgs-comboItem"
+              onClick={() => {
+                props.onChange(name)
+                setOpen(false)
+              }}
+            >
+              <span>{name}</span>
+              {name === props.value ? <span className="dgs-comboCheck">✓</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 /** Props for {@link ConfigSection}. */
@@ -329,22 +451,10 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
                 <span className="dgs-formRowHint">{t('configBackupDirHint')}</span>
               </FormRow>
               <FormRow label={t('configDeviceName')}>
-                {props.deviceNames === undefined || props.deviceNames.length === 0 ? null : (
-                  <Select
-                    id="dgs-config-device-existing"
-                    value={props.deviceNames.includes(form.deviceName) ? form.deviceName : ''}
-                    options={[
-                      { value: '', label: t('configDeviceExisting') },
-                      ...props.deviceNames.map(name => ({ value: name, label: name })),
-                    ]}
-                    onChange={value => {
-                      if (value !== '') props.onChange({ deviceName: value })
-                    }}
-                  />
-                )}
-                <TextInput
-                  id="dgs-config-device"
+                <DeviceNameInput
+                  t={t}
                   value={form.deviceName}
+                  options={props.deviceNames ?? []}
                   disabled={busy}
                   onChange={value => {
                     props.onChange({ deviceName: value })

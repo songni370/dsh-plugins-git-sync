@@ -205,3 +205,31 @@ describe('repository card transport fields', () => {
     expect(html).not.toContain('id="dgs-config-token-env"')
   })
 })
+
+describe('device name field', () => {
+  it('renders one combobox that can pick an existing device or accept a new name', () => {
+    const view = viewFor('git@github.com:songni370/dsh-plugin-backup.git', 'ssh')
+    const form = configFormFromView(view)
+    const html = renderToStaticMarkup(
+      <ConfigSection
+        t={t}
+        form={form}
+        view={view}
+        deviceNames={['Mac-mini.company', 'Mac-mini.home']}
+        dirty={false}
+        saving={false}
+        testing={false}
+        open
+        onToggle={() => undefined}
+        onChange={() => undefined}
+        onTest={() => undefined}
+        onSave={() => undefined}
+      />,
+    )
+    expect(html.match(/id="dgs-config-device"/g)).toHaveLength(1)
+    expect(html).not.toContain('id="dgs-config-device-existing"')
+    expect(html).not.toContain('<select')
+    expect(html).toContain('aria-haspopup="listbox"')
+    expect(html).toContain('aria-expanded="false"')
+  })
+})
