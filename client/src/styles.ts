@@ -741,7 +741,7 @@ export const CSS = `
 }
 .dgs-table {
   width: 100%;
-  max-width: 940px;
+  max-width: 1000px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
@@ -755,27 +755,14 @@ export const CSS = `
   width: 30px;
 }
 .dgs-colVersion {
-  width: 72px;
+  width: 84px;
 }
 .dgs-colStatus {
-  width: 64px;
-}
-.dgs-colVersionPair {
-  width: 138px;
+  width: 72px;
 }
 
 .dgs-colActions {
-  width: 88px;
-}
-
-.dgs-versionPair {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.dgs-versionArrow {
-  color: var(--dsw-alias-text-tertiary);
+  width: 96px;
 }
 
 .dgs-versionRemote {

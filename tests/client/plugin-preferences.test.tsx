@@ -71,14 +71,14 @@ function render(
 }
 
 describe('per-plugin preferences', () => {
-  it('shows a compact version pair and one action menu per row', () => {
+  it('shows separate local and remote version columns plus one action menu', () => {
     const html = render([row()])
     expect(html).not.toContain('>设置<')
     expect(html).not.toContain('安装范围')
     expect(html).not.toContain('启停')
-    expect(html).toContain('>版本<')
+    expect(html).toContain('>本机版本<')
+    expect(html).toContain('>仓库版本<')
     expect(html).toContain('>操作<')
-    expect(html).toContain('dgs-versionPair')
     expect(html).toContain('aria-label="操作: alpha"')
     expect(html).not.toContain('aria-label="仅本设备')
   })

@@ -323,7 +323,8 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
             <colgroup>
               <col className="dgs-colCheck" />
               <col />
-              <col className="dgs-colVersionPair" />
+              <col className="dgs-colVersion" />
+              <col className="dgs-colVersion" />
               <col className="dgs-colStatus" />
               <col className="dgs-colActions" />
             </colgroup>
@@ -342,7 +343,8 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                   />
                 </th>
                 <th>{t('pluginsName')}</th>
-                <th>{t('pluginsVersion')}</th>
+                <th>{t('pluginsLocalVersion')}</th>
+                <th>{t('pluginsRemoteVersion')}</th>
                 <th>{t('pluginsStatus')}</th>
                 <th>{t('pluginsActions')}</th>
               </tr>
@@ -384,21 +386,11 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                         )}
                       </span>
                     </td>
-                    <td className="dgs-nowrap">
-                      <span
-                        className="dgs-versionPair"
-                        title={`${t('pluginsLocalVersion')}: ${localVersion ?? t('notAvailable')} → ${t('pluginsRemoteVersion')}: ${remoteVersion ?? t('notAvailable')}`}
-                      >
-                        <span className="dgs-mono">
-                          {localVersion === null || localVersion === '' ? t('notAvailable') : localVersion}
-                        </span>
-                        <span className="dgs-versionArrow" aria-hidden="true">
-                          →
-                        </span>
-                        <span className="dgs-mono dgs-versionRemote">
-                          {remoteVersion === null || remoteVersion === '' ? t('notAvailable') : remoteVersion}
-                        </span>
-                      </span>
+                    <td className="dgs-nowrap dgs-mono" title={t('pluginsLocalVersion')}>
+                      {localVersion === null || localVersion === '' ? t('notAvailable') : localVersion}
+                    </td>
+                    <td className="dgs-nowrap dgs-mono dgs-versionRemote" title={t('pluginsRemoteVersion')}>
+                      {remoteVersion === null || remoteVersion === '' ? t('notAvailable') : remoteVersion}
                     </td>
                     <td className="dgs-nowrap">
                       <span className="dgs-pluginBadges">
