@@ -155,6 +155,10 @@ async function cloneRemote(remote: string): Promise<string> {
     const config = await runner.run(['config', key, value], { cwd: clone })
     expect(config.code).toBe(0)
   }
+  // The clone above may have checked text files out as CRLF (Windows default);
+  // rewrite every path from the index with the LF filter now that it is pinned.
+  const recheckout = await runner.run(['checkout-index', '-a', '-f'], { cwd: clone })
+  expect(recheckout.code).toBe(0)
   return clone
 }
 

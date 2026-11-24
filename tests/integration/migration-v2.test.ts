@@ -33,7 +33,9 @@ function git(bareRepo: string, args: string[]): string {
 /** Seed a v1 repository with one remote plugin (`beta`) and one device snapshot. */
 async function seedV1Repository(bareRepo: string, deviceId: string, deviceName: string): Promise<void> {
   const work = join(bareRepo, '..', 'seed-work')
-  execFileSync('git', ['clone', '-q', bareRepo, work], { stdio: 'pipe' })
+  execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'clone', '-q', bareRepo, work], { stdio: 'pipe' })
+  execFileSync('git', ['-C', work, 'config', 'core.autocrlf', 'false'], { stdio: 'pipe' })
+  execFileSync('git', ['-C', work, 'config', 'core.eol', 'lf'], { stdio: 'pipe' })
   execFileSync('git', ['-C', work, 'config', 'user.email', 'test@example.com'], { stdio: 'pipe' })
   execFileSync('git', ['-C', work, 'config', 'user.name', 'Test'], { stdio: 'pipe' })
   await mkdir(join(work, 'profiles', PROFILE), { recursive: true })

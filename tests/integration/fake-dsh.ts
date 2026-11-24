@@ -420,12 +420,15 @@ export async function readDeviceJson<T>(device: FakeDevice, relativePath: string
 /** Ensure an empty file exists (helper for malformed-manifest tests). */
 export async function writeRepoFileDirect(bareRepo: string, file: string, content: string, branch = 'main'): Promise<void> {
   const work = resolve(dirname(bareRepo), `mutate-${Math.random().toString(36).slice(2, 8)}`)
+  const lineEndings = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf']
   try {
-    execFileSync('git', ['clone', '-q', '--branch', branch, bareRepo, work], { stdio: 'pipe' })
+    execFileSync('git', [...lineEndings, 'clone', '-q', '--branch', branch, bareRepo, work], { stdio: 'pipe' })
   } catch {
-    execFileSync('git', ['clone', '-q', bareRepo, work], { stdio: 'pipe' })
+    execFileSync('git', [...lineEndings, 'clone', '-q', bareRepo, work], { stdio: 'pipe' })
     execFileSync('git', ['-C', work, 'checkout', '-B', branch], { stdio: 'pipe' })
   }
+  execFileSync('git', ['-C', work, 'config', 'core.autocrlf', 'false'], { stdio: 'pipe' })
+  execFileSync('git', ['-C', work, 'config', 'core.eol', 'lf'], { stdio: 'pipe' })
   execFileSync('git', ['-C', work, 'config', 'user.email', 'test@example.com'], { stdio: 'pipe' })
   execFileSync('git', ['-C', work, 'config', 'user.name', 'Test'], { stdio: 'pipe' })
   await writeFile(join(work, file), content, 'utf8')
