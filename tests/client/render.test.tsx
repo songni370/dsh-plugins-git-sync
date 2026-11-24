@@ -387,15 +387,14 @@ describe('settings page render', () => {
     expect(item?.textContent).toContain('1 个文件')
   })
 
-  it('starts the skill list collapsed', async () => {
+  it('starts the skill list expanded', async () => {
     await settle()
     const body = container.querySelector('#dgs-skills-body')
     expect(body).not.toBeNull()
-    expect(body?.hasAttribute('hidden')).toBe(true)
-    // The count stays visible in the card header while the rows are folded.
+    expect(body?.hasAttribute('hidden')).toBe(false)
     expect(container.textContent).toContain('共 1 个技能')
     const toggle = container.querySelector('button[aria-controls="dgs-skills-body"]') as HTMLButtonElement | null
-    expect(toggle?.textContent).toContain('展开列表')
+    expect(toggle?.textContent).toContain('收起列表')
   })
 
   it('renders the status tile row and metadata grid', async () => {
@@ -475,15 +474,12 @@ describe('settings page render', () => {
     open.mockRestore()
   })
 
-  it('starts the plugin list collapsed and expands on demand', async () => {
+  it('starts the plugin list expanded and collapses on demand', async () => {
     await settle()
     const body = container.querySelector('#dgs-plugins-body')
     expect(body).not.toBeNull()
-    expect(body?.hasAttribute('hidden')).toBe(true)
-    // The stylesheet must actually hide it (author display:flex would
-    // otherwise override the browser's default [hidden] rule).
-    expect(body === null ? '' : window.getComputedStyle(body).display).toBe('none')
-    // The refresh button now sits next to the filter inside the hidden body.
+    expect(body?.hasAttribute('hidden')).toBe(false)
+    expect(body === null ? '' : window.getComputedStyle(body).display).not.toBe('none')
     const refresh = Array.from(container.querySelectorAll('button')).find(button =>
       (button.textContent ?? '').includes('刷新列表'),
     )
@@ -493,12 +489,12 @@ describe('settings page render', () => {
     expect(filter).not.toBeNull()
     expect(body?.contains(filter)).toBe(true)
     const toggle = container.querySelector('button[aria-controls="dgs-plugins-body"]') as HTMLButtonElement
-    expect(toggle.textContent).toContain('展开列表')
+    expect(toggle.textContent).toContain('收起列表')
     await act(async () => {
       toggle.click()
     })
     const opened = container.querySelector('#dgs-plugins-body')
-    expect(opened?.hasAttribute('hidden')).toBe(false)
+    expect(opened?.hasAttribute('hidden')).toBe(true)
     // The filter and refresh share the same row when expanded.
     expect(opened?.querySelector('.dgs-pluginsFilterRow #dgs-plugins-filter')).not.toBeNull()
     expect(opened?.querySelector('.dgs-pluginsFilterRow')?.textContent).toContain('刷新列表')

@@ -2,8 +2,8 @@
  * "Skills" card: the DSH skills deployed on this device.
  *
  * The Host sends names, sizes and backup status only; skill file contents never
- * reach the settings page. The card sits below the plugin list, starts collapsed, and
- * paginates like the plugin list so a large skill library stays manageable.
+ * reach the settings page. The card sits below the plugin list, starts expanded,
+ * and paginates like the plugin list so a large skill library stays manageable.
  * @module ui/SkillsSection
  */
 
@@ -75,7 +75,7 @@ function skillActionOptions(
 export function SkillsSection(props: SkillsSectionProps): ReactElement {
   const { t, skills } = props
   const rows = skills === null ? [] : skills.skills
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(storedPageSize)
   const [prefBusy, setPrefBusy] = useState(false)

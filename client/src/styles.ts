@@ -573,11 +573,11 @@ export const CSS = `
 
 .dgs-skillTable {
   table-layout: fixed;
-  max-width: 860px;
+  max-width: 1000px;
 }
 
 .dgs-colSkillMeta {
-  width: 96px;
+  width: 124px;
 }
 
 .dgs-colSkillLocal {

@@ -1,4 +1,4 @@
-/** Skill card starts collapsed and paginates its rows. */
+/** Skill card starts expanded and paginates its rows. */
 
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -29,15 +29,14 @@ const skills: SkillListResponse = {
 }
 
 describe('skill card', () => {
-  it('starts collapsed so the card only shows the header and count', () => {
+  it('starts expanded and shows the rows', () => {
     const html = renderToStaticMarkup(
       <SkillsSection {...baseProps} skills={skills} />,
     )
     expect(html).toContain('id="dgs-skills-body"')
-    expect(html).toContain('id="dgs-skills-body" hidden=""')
-    expect(html).toContain('展开列表')
+    expect(html).not.toContain('id="dgs-skills-body" hidden=""')
+    expect(html).toContain('收起列表')
     expect(html).toContain('共 12 个技能')
-    expect(html).not.toContain('刷新')
   })
 
   it('shows a compact column header row', () => {

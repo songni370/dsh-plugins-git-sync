@@ -1,11 +1,11 @@
 /**
- * "Plugins" card: this device's plugins joined with the repository state, plus
- * the per-row sync switch and inline per-device preference actions.
+ * "Plugins" card: this device's plugins joined with the repository state.
  *
- * The switch is a check on top of the Host payload: it displays
- * `syncable`/`syncStatus` from `/plugins/list` and persists a change through
- * `config/save`'s `excludedPlugins` (the only exclusion endpoint the contract
- * has). Turning it off never uninstalls anything — it stops future syncs.
+ * The list starts expanded. Each row has one selection checkbox for bulk
+ * actions and one action menu for its sharing scope, backup switch and
+ * conflict resolution; the menu writes through the preference endpoints
+ * (or `config/save`'s `excludedPlugins` for the backup switch). Disabling a
+ * plugin never uninstalls it — it stops future syncs.
  * The per-row control is one 「仅本设备」 checkbox: unchecked means the plugin
  * stays in the public pool (every device gets it), checked means only this
  * device keeps it. Rows can be multi-selected so one choice applies to a whole
@@ -125,7 +125,7 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
       ? rows
       : rows.filter(row => `${row.displayName ?? ''}\n${row.name}\n${row.id}`.toLowerCase().includes(needle))
 
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(storedPageSize)
   // A new filter or page size always starts from the first page.
