@@ -811,19 +811,19 @@ export class SyncEngine {
           entry.updatedAt = now
           entry.updatedBy = selfId
           const scopeLabel =
-            item.update.scope === 'self' ? ' 仅本机 / this device only' : item.update.scope === 'all' ? ' 所有设备 / all devices' : ''
+            item.update.scope === 'self' ? ' private' : item.update.scope === 'all' ? ' shared' : ''
           const enabledLabel =
             item.update.sharedEnabled !== undefined
               ? item.update.sharedEnabled
-                ? ' 全部启用 / enabled everywhere'
-                : ' 全部停用 / disabled everywhere'
+                ? ' enabled everywhere'
+                : ' disabled everywhere'
               : item.update.enabledOverride === undefined
                 ? ''
                 : item.update.enabledOverride === null
                   ? ' 跟随全局 / follow shared'
                   : item.update.enabledOverride
-                    ? ' 本机启用 / enabled here'
-                    : ' 本机停用 / disabled here'
+                    ? ' enabled here'
+                    : ' disabled here'
           labels.push(`${item.record.name}${scopeLabel}${enabledLabel}`)
         }
         const relativeFiles = buildV2RepoFiles({
@@ -1034,7 +1034,7 @@ export class SyncEngine {
               scope: update.scope === 'self' ? { mode: 'devices', devices: [selfId] } : { mode: 'all' },
               updatedAt: now,
             }
-            labels.push(`${name} ${update.scope === 'self' ? '仅本机 / this device only' : '所有设备 / all devices'}`)
+            labels.push(`${name} ${update.scope === 'self' ? 'private' : 'shared'}`)
           }
         }
         const finalEntries: Record<string, DeviceSkillEntryV2> = {}

@@ -414,10 +414,15 @@ export const zh: Record<string, string> = {
   historyCount: '最近 {count} 条提交',
   historyPluginsCount: '{count} 个插件',
   op_backup: '备份',
+  op_preferences: '插件设置',
+  'op_skill-preferences': '技能设置',
+  op_unknown: '其他提交',
   op_restore: '恢复',
   op_sync: '同步',
   op_rollback: '历史恢复',
   resultOk: '成功',
+  resultMigrated: '已迁移',
+  resultNoChanges: '无改动',
   resultFailed: '失败',
 }
 
@@ -808,10 +813,15 @@ export const en: Record<string, string> = {
   historyCount: '{count} recent commits',
   historyPluginsCount: '{count} plugins',
   op_backup: 'Backup',
+  op_preferences: 'Plugin settings',
+  'op_skill-preferences': 'Skill settings',
+  op_unknown: 'Other commit',
   op_restore: 'Restore',
   op_sync: 'Sync',
   op_rollback: 'History restore',
   resultOk: 'Succeeded',
+  resultMigrated: 'Migrated',
+  resultNoChanges: 'No changes',
   resultFailed: 'Failed',
 }
 

@@ -18,7 +18,7 @@ import { useState } from 'react'
 import type { ReactElement } from 'react'
 import type { HistoryResponse } from '../../../src/http/api-types'
 import type { Translate } from '../i18n'
-import { formatDateTime, isGoodResult, operationLabel, resultLabel, shortCommit } from '../format'
+import { formatDateTime, historySubject, isGoodResult, operationLabel, resultLabel, shortCommit } from '../format'
 import { Badge, Banner, Button, Card, LinkButton, Loading } from './controls'
 
 /** Props for {@link HistorySection}. */
@@ -88,23 +88,26 @@ export function HistorySection(props: HistorySectionProps): ReactElement {
             const good = isGoodResult(entry.result)
             const hasResult = entry.result !== undefined && entry.result !== null && entry.result !== ''
             const dotTone = !hasResult ? 'dgs-historyDotIdle' : good ? 'dgs-historyDotOk' : 'dgs-historyDotFail'
+            const subject = historySubject(t, entry)
             return (
               <li className="dgs-historyItem" key={entry.commit}>
                 <span className={`dgs-historyDot ${dotTone}`} aria-hidden="true" />
                 <div className="dgs-historyMain">
                   <div className="dgs-historyTop">
                     <span className="dgs-historyOp">{operationLabel(t, entry.operation)}</span>
-                    <Badge tone={good ? 'success' : hasResult ? 'error' : 'idle'}>
-                      {resultLabel(t, entry.result)}
-                    </Badge>
+                    {hasResult ? (
+                      <Badge tone={good ? 'success' : 'error'}>{resultLabel(t, entry.result)}</Badge>
+                    ) : null}
                     {entry.pluginCount === undefined ? null : (
                       <span className="dgs-historyMeta">{t('historyPluginsCount', { count: entry.pluginCount })}</span>
                     )}
-                    <span className="dgs-historyMeta">{entry.deviceName ?? t('unknown')}</span>
+                    {entry.deviceName === undefined ? null : (
+                      <span className="dgs-historyMeta">{entry.deviceName}</span>
+                    )}
                   </div>
-                  {entry.subject === '' ? null : (
+                  {subject === '' ? null : (
                     <span className="dgs-historySubject" title={entry.subject}>
-                      {entry.subject}
+                      {subject}
                     </span>
                   )}
                   <div className="dgs-historyMetaRow">
