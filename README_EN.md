@@ -1,71 +1,114 @@
 # Plugin Backup
 
-> Display name: 插件备份 / Plugin Backup · Package / repository: `dsh-plugins-git-sync` · [中文](README.md)
+Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and deployed skills** across devices through your own **private Git repository**.
 
-Back up, restore, and synchronize **DeepSeek Harness (DSH) plugin lists and deployed skills** across devices through your own **Git repository**.
+> Display name: 插件备份 / Plugin Backup · Package: `dsh-plugins-git-sync` · [中文](README.md)
 
 [![npm](https://img.shields.io/npm/v/dsh-plugins-git-sync.svg)](https://www.npmjs.com/package/dsh-plugins-git-sync)
 [![CI](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml/badge.svg)](https://github.com/songni370/dsh-plugins-git-sync/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-![The Backup tab on the Plugins page](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/plugin-backup.png)
+Moving to a new machine or reinstalling DSH no longer means rebuilding your plugin list from memory: push the inventory and the deployed skill files to a private Git repository and pull them down on another device. The inventory is plain JSON and skills are stored as real files, so everything can be viewed, diffed and rolled back with ordinary Git tools.
 
-*Backup contents, repository settings, operations and sync status on the Backup tab.*
+![Plugin Backup settings page](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-overview.png?v=6)
 
-Reinstalling DSH or moving to another machine no longer means rebuilding a plugin list from memory: push the inventory and deployed skills to a private repository and pull them down elsewhere. The plugin inventory is plain JSON and skills are stored as real files, all readable and diffable with ordinary Git tools.
+*Settings → "Plugin Backup": repository configuration and sync controls on top, the plugin and skill lists below. The screenshots show the Chinese UI; the plugin follows your DSH language setting.*
 
-## What it does
+## Core concepts: public pool and this device
 
-- **Backup / restore**: push user-installed plugins (version, enabled state) to Git; install them back on another device.
-- **Skill backup**: capture deployed files under `~/.dsh/skills` (following symlinks to their content) as a real file tree at `profiles/<profile>/skills/<name>/...`; restore only missing skills and never overwrite an existing one.
-- **Two-way sync**: upload local changes, download repository changes; when both sides changed it stops and asks.
-- **Resolve conflicts per row**: a conflicting plugin row offers a Conflict dropdown with the choices valid for that conflict (use this device's version, use the repository version, delete the repository record, remove the local copy), so one plugin can be handled without deciding the whole sync.
-- **Immediate button feedback**: every async button shows a spinner and disables itself the moment it is clicked, covering save, refresh, restore and sync actions.
-- **Per-device declarations**: the repository uses a v2 model — each device declares its own plugins and skills, while repository policy controls deletion propagation and version policies. Existing v1 repositories migrate automatically on the first write (tagged `pre-v2-migration` for rollback) and the v1 mirror is still written for older clients. Each plugin row has one 「This device only」 checkbox: unchecked = public pool (every device installs it), checked = only this device keeps it. Select several rows and switch them between the pool and this device in one commit, without editing repository JSON. Deleting a pool plugin records a public-pool deletion intent and asks the other devices before they uninstall.
-- **Device identity**: the device name in the repository settings decides what is restored — reusing an existing name pulls the public pool plus that device's private plugins; a new name pulls the public pool only.
-- **Deletions do not resurrect**: only an explicit local uninstall records a deletion, and it propagates to the devices in scope; a device that still has the plugin stops and asks instead of silently re-uploading it.
-- **Device visibility**: the status card lists the devices sharing the repository with their last result; backup warns that it only uploads and suggests Sync when more than one device is present.
-- **Pending activation**: installs that the Host reports as `restart-required` are shown as pending instead of being reported as active.
-- **Conflict handling**: overwrite repository with this device / overwrite this device with repository / leave for now; each button explains what it will do. When this device removed a plugin that the repository still backs up, choose Delete from repository or Keep repository.
-- **History rollback**: restore this device to any previous commit; local safety snapshots keep the latest 20 automatically.
-- **Automatic sync**: on client startup and plugin install/update/remove; **no interval timer**; repeated failures are shown on the settings page and cleared by the next successful operation.
-- **Agent tools**: six tools for status, backup, restore, sync, diff and history.
-- **Preview before upload**: `Check differences` lists the plugins that will be uploaded, installed, upgraded or deleted, so you can confirm first.
-- **Feedback**: the button next to the section intro opens this project's GitHub issue form, prefilled with the plugin version, DSH version, OS and profile facts; paste a screenshot there.
-- **Safety**: no tokens, passwords or private keys are read or uploaded; **plugin configuration, Agent presets and UI settings are never backed up**; no force pushes; a snapshot precedes local changes.
+Every plugin and every skill has one of two destinations, chosen with the checkboxes on the right of the list:
 
-Only **user-installed third-party plugins** and **deployed DSH skills** participate. DSH built-ins, loader internals (`cordis:*`) and this plugin itself are never backed up.
+- **Public** (default): goes into the public pool and is installed on every device.
+- **This device**: belongs to the current device only; other devices neither see nor install it.
+
+Changes are not uploaded immediately — click **Save changes** above the list to write them to the repository. The **device name** stored in the repository decides what a device restores:
+
+| Device name | What the first sync pulls |
+| --- | --- |
+| Pick an existing device | The public pool plus the plugins and skills that device had marked as "this device" |
+| Enter a new name (or rename) | Only the public pool; no other device's private entries are inherited |
+
+> Two machines sharing the same device name also share the same "this device" list; use a distinct name per machine.
 
 ## UI
 
-Settings → "**Plugin Backup**". The Plugins page can also show a "Backup" tab with the same content.
-The plugin's own detail page also has a compact **Backup settings** card showing the scope and controlling whether that Backup tab appears.
+### Repository configuration
 
-![Sync status and automatic sync](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/settings-status.png?v=4)
+Enter the repository URL first and click **Test connection** to confirm access and load the devices already present in the repository; then pick the device name, branch and backup directory.
 
-*Sync status, count tiles and the automatic-sync switch on one page; nothing runs in the background until a repository is configured.*
+![Repository configuration](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/repo-config.png?v=6)
 
-- **Backup contents**: its own card above the repository card; plugin and skill switches are independent and both on by default. Turning one off stops uploading and restoring that content while existing repository backups remain.
-- **Repository card**: detects HTTPS / SSH / local paths, shows only the matching auth fields, and displays where plugin and skill files live in the repository; collapsed once configured.
-- **Operations**: `Sync`, `Check differences`, `Back up to Git` and `Restore from Git` are four direct buttons; nothing is hidden in a menu. `Check differences` opens its result in a dialog.
-  - `Sync` runs directly when there are no conflicts or delete/overwrite steps; only those open a confirmation preview.
-- **Sync status**: badge, plugin and skill count-tile groups (groups separated by spacing; local / repository / to upload / to download; plus conflicts for plugins and excluded for skills) and metadata, in the same card as the operations. The tile groups follow the backup-content switches, so a disabled scope hides its status.
-- **Automatic sync**: collapsed by default, shows on/off and trigger summary; expand to edit startup delay and triggers.
-- **Plugin list**: collapsed by default; filter, pagination (10 per page by default, 5/10/20/50/100) and per-plugin sync switch; deployed skills are listed below with file count, size and backup status (backed up / this device only / repository only / modified / excluded), collapsed and paginated like the plugin list. Each skill has the same leftmost sync checkbox as plugins; unchecking excludes it from uploads and restores while keeping its repository backup.
-- **Skill preferences**: each skill row has one 「This device only」 checkbox plus install / uninstall buttons. Uninstalling affects only this device, other devices keep the skill, and sync never restores it automatically; checking the box stops other devices from installing it.
-- **History**: collapsed by default and limited to the latest 10 commits; expand to restore a commit; long subjects are ellipsised.
+*The device name can be typed or picked from the devices already present in the repository.*
+
+- **HTTPS**: use the Git credential helper, or provide the **environment variable name** that holds the token (the token itself is never stored in the plugin config).
+- **SSH**: uses the system SSH agent / `~/.ssh` keys; nothing else to fill in.
+- **Backup directory**: optional. When set, plugins and skills are stored in a subdirectory of the repository and "Location in repository" shows the actual paths.
+
+### Plugin list
+
+Each row shows the local version, repository version, status, and the two **Public / This device** checkboxes. Conflicting rows expose a **Resolve** dropdown in the status column so that one plugin can be handled on its own.
+
+![Plugin list](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/plugins-list.png?v=6)
+
+*"Public" is the default; switching a row to "This device" takes effect after clicking "Save changes".*
+
+### Skill list
+
+Skills follow the same Public / This device rule. Sync fills in skills that are in the public pool but missing here; skills marked "this device" are only backed up for this machine and never installed elsewhere.
+
+![Skill list](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/skills-list.png?v=6)
+
+### Conflict handling
+
+When both sides changed, or one side deleted a plugin the other still uses, sync stops and offers the valid choices on the affected row (the "Resolve" control shown on the dshmarket row in the plugin-list screenshot); each row can be handled without deciding the whole sync at once. Every choice explains its consequence, and nothing is deleted or resurrected automatically by default.
+
+### History
+
+Every backup, sync, restore and settings change leaves a commit. History shows "Plugin settings / Sync / Other commit" and "Success / Migrated / No changes" directly, and any commit can be restored.
+
+![History](https://raw.githubusercontent.com/songni370/dsh-plugins-git-sync/main/docs/images/history.png?v=6)
+
+## What gets backed up
+
+| Content | Backed up | Notes |
+| --- | --- | --- |
+| Plugin inventory | ✅ | Package name, version, enabled state and install source |
+| Deployed skills | ✅ | Files of deployed skills under `~/.dsh/skills`, stored as a real file tree |
+| Plugin configuration | ❌ | May contain API keys, tokens or passwords; no heuristic filtering is attempted |
+| Agent presets | ❌ | May contain MCP credentials, environment variables and execution permissions |
+| UI settings | ❌ | Outside this plugin's backup scope |
+| Tokens / private keys / cookies | ❌ | Never read, written or uploaded |
+
+Sync only covers **user-installed third-party plugins** and **deployed skills**. DSH built-ins, `cordis:*` loader entries and this plugin itself never enter the backup.
+
+## Features
+
+- **Two-way sync**: local changes are uploaded and repository changes downloaded; when both sides changed it stops and asks, never merging or overwriting silently.
+- **Public pool + this device**: plugins and skills each have a Public / This device checkbox, public by default; edits are staged and committed together with one "Save changes", so changing ten rows creates one Git commit.
+- **Device identity**: the device name uniquely identifies a machine in the repository and decides whether a sync pulls only the public pool or also that device's private plugins. Keep the old name when moving machines to restore them.
+- **Deletions do not resurrect**: only an explicit local uninstall records a deletion; a device that still has the plugin stops and asks when it sees "deleted in the repository, still present here" instead of silently re-uploading it.
+- **Per-row conflict resolution**: the status column of a conflicting row offers "use this device's version / use the repository version / delete the repository record / remove the local copy", affecting only that plugin.
+- **Version policy**: tracks the newest version by default; downgrades require confirmation; versions that need a newer DSH are skipped and marked "DSH update required" instead of failing over and over.
+- **Pending activation**: installs that the host reports as `restart-required` are marked as pending, not reported as active.
+- **Device visibility**: the status card lists how many devices share the repository and each device's last sync result; with multiple devices, "Back up to Git" warns that it only uploads and suggests Sync instead.
+- **Backup scope switches**: plugins and skills can be enabled independently, both on by default; turning one off stops uploading and restoring that content while existing repository backups remain.
+- **Skill status**: the skill list distinguishes backed up / not uploaded / not installed / modified / excluded.
+- **History rollback**: restore to a recent commit; the latest 20 local safety snapshots are kept automatically.
+- **Automatic sync**: off by default. Triggered on client startup and plugin changes, with no interval timer; conflicts and destructive plans pause it until handled.
+- **Check differences**: preview what would be uploaded, installed, upgraded or deleted without touching the machine.
+- **Instant button feedback**: every async button shows a spinner and disables itself immediately — save, refresh, restore and sync all give instant feedback.
+- **Issue feedback**: the "Feedback" button on the intro row opens this project's GitHub issue form, prefilled with the plugin version, DSH version, OS and profile facts; paste a screenshot there.
+- **Agent tools**: six tools for status, backup, restore, sync, diff and history.
 
 ## Install
 
 ### From npm (recommended)
 
-Published on npm:
-
 ```sh
 dsh plugin --profile web add dsh-plugins-git-sync@latest
 ```
 
-Or through the DSH plugin manager / `plugin_manager.install_bundle`:
+Or through the DSH plugin manager / an agent's `plugin_manager.install_bundle`:
 
 ```
 dsh-plugins-git-sync
@@ -76,6 +119,8 @@ Update:
 ```sh
 dsh plugin --profile web update dsh-plugins-git-sync@latest
 ```
+
+> This document reflects the latest capabilities on `main`; the published npm version may lag slightly behind. Check the version number before installing.
 
 ### From the GitHub source (alternative)
 
@@ -93,58 +138,52 @@ The built `lib/` is committed, so a pnpm-based plugin manager needs no build ste
 git clone https://github.com/songni370/dsh-plugins-git-sync.git
 cd dsh-plugins-git-sync
 npm ci
-npm run build          # lib/ (host + browser half)
+npm run build
 ```
 
-Install with the local directory path via `plugin_manager.install_bundle`; rebuild and restart after changes.
+Pass the absolute path of that directory to `plugin_manager.install_bundle`. With a linked directory, rebuild and restart/refresh after changing code.
 
 ## Quick start
 
-1. Create a **private empty repository**.
-2. Settings → "Plugin Backup", enter the URL:
-   - **HTTPS**: use the Git credential helper, or "HTTPS token" and provide the *environment variable name* holding the token.
-   - **SSH**: use the SSH agent / keys in `~/.ssh`; nothing else to fill in.
-3. "Test connection" → save.
-4. Click "Sync" to create the first backup.
-5. On a second device: install the plugin, configure the same repository, save, then "Sync" (or "Restore from Git").
+1. Create a **private empty repository** on GitHub / GitLab (do not initialise it with a README).
+2. Open Settings → "Plugin Backup" and enter the repository URL (HTTPS or SSH).
+3. Click **Test connection**: confirm the repository is reachable; if it already has backups, the device dropdown lists the existing devices.
+4. Choose a device name: reuse the existing name when restoring or moving a machine, or enter a new name for a fresh machine.
+5. Optionally set the branch and backup directory, then click **Save**.
+6. Click **Sync**: the first run pulls the public pool and uploads this machine's new plugins and skills according to their Public / This device setting.
+7. For a second device: install the plugin → enter the same repository → Test connection → pick the existing device name (restores its private plugins) or a new name (public pool only) → Sync.
 
-The repository uses the v2 layout (`manifest.json` + `policies/<profile>.json` + `devices/<deviceId>/<profile>.json`) and still writes the v1 `profiles/<profile>/plugins.json` mirror; upgrading from an older repository migrates it automatically.
+The repository stores each device's declaration separately (`devices/<deviceId>/<profile>.json`) and records public-pool deletion intents in `pool/removed.json`; the legacy `profiles/<profile>/plugins.json` mirror is still written so older versions can read the repository. Upgrading from an older version migrates automatically on the first write, with no manual step.
 
-Each DSH profile installs and syncs separately; the repository separates them under `profiles/<profile>/`.
+Each DSH profile installs and syncs separately; the repository keeps profiles in separate directories, so they never overwrite each other.
 
 ## How sync decides
 
-The device keeps a **baseline** of the last agreed state and compares `base / local / remote`:
+Sync compares "public pool + this device's declaration" with the local state, using the last agreed baseline:
 
 | Situation | Action |
 | --- | --- |
-| Only local changed | Push to repository |
-| Only remote changed | Apply locally (install/upgrade/downgrade/enable/disable) |
-| Neither changed | Skip |
-| Both changed identically | Skip |
-| Present here, missing in the repository (no deletion record) | Back it up into the repository |
-| Present here, deleted in the repository by another device | Conflict: restore the repository copy or delete locally; it is not resurrected automatically |
-| Missing here, still in the repository | Conflict: delete from repository or keep repository |
-| Both changed differently | Conflict; wait for your choice |
+| In the repository, missing here | Install (a new device pulls the public pool on its first sync) |
+| Present here, missing in the repository (no deletion record) | Upload as Public or This device according to the checkbox |
+| Present here, deleted in the repository by another device | Conflict: restore the repository copy or remove it locally; never resurrected automatically |
+| Missing here, still in the repository (this device had it) | Conflict: delete from the repository or keep it there |
+| Only one side changed version / enabled state | Follow the changed side |
+| Both sides changed to different results | Conflict: overwrite the repository with this device, overwrite this device with the repository, or leave it for now |
 
-- Plugin configuration is never synchronized: only plugin names, versions, enabled state, install source and deployed skills are backed up.
-- A repository entry is only deleted after you explicitly choose “Delete from repository”; “Keep repository” keeps it and lets the rest of the sync run.
-- Deletion records follow the repository policy (propagate by default); other devices ask before removing or re-creating, never silently.
-- Version policy tracks the newest by default; downgrades need confirmation; plugins that require a newer DSH are skipped and marked blocked instead of failing repeatedly.
-- When the repository is missing a plugin this device has, nothing is removed here; it is backed up again.
-- Deleting repository entries is destructive and only runs after confirmation.
-- A local snapshot is taken before changing this device; enabled state is rolled back on failure when possible.
+- Checking "This device" only changes where a plugin is backed up; it does not change installation scope — other devices never had that backup.
+- Deleting a public-pool plugin records a deletion intent; other devices ask before uninstalling instead of deleting silently.
+- A local snapshot is taken before changing this device; enabled state is rolled back where possible on failure.
 - A rejected push is re-fetched, re-planned and retried; **never force-pushed**.
-- No empty commits are created when nothing changed.
+- Nothing to change means no empty commit.
 
 ## Automatic sync
 
-Off by default. Event-driven, with **no interval timer**:
+Off by default. Event-driven, **no interval timer**:
 
-- **Client startup**: configurable delay (15 seconds by default; below 5 seconds warns about racing DSH's own plugin installation).
-- **Plugin changes**: install/update/remove triggers a debounced run (~10 seconds).
+- **Client startup**: configurable delay (15 seconds by default).
+- **Plugin changes**: install / update / uninstall triggers a debounced run (~10 seconds).
 
-Automatic runs pause on conflicts or destructive plans and log the reason; no prompts and no silent deletions.
+Automatic runs pause on conflicts or destructive plans and log the reason; they never prompt or delete silently.
 
 ## Agent tools
 
@@ -152,30 +191,28 @@ Tool names remain `dsh_git_plugin_*` for compatibility with existing prompts:
 
 | Tool | Purpose |
 | --- | --- |
-| `dsh_git_plugin_status` | Status, pending counts, last error |
-| `dsh_git_plugin_backup` | Backup to the repository |
+| `dsh_git_plugin_status` | Status, pending counts and last error |
+| `dsh_git_plugin_backup` | Back up to the repository |
 | `dsh_git_plugin_restore` | Restore from the repository or a commit |
 | `dsh_git_plugin_sync` | Two-way sync |
 | `dsh_git_plugin_diff` | Read-only difference preview |
 | `dsh_git_plugin_history` | Commit history and snapshots |
 
-Destructive operations use two-phase confirmation: preview first, then `confirm: true`.
+Destructive operations use two-phase confirmation: preview first, then run with `confirm: true`.
 
-## Safety and limits
+## Security
 
-- Never collects or uploads tokens, passwords, private keys or cookies; HTTPS stores only the env-var name.
-- No absolute machine paths in backups; plugin configuration, Agent presets and UI settings are never read, written or backed up.
-- Skill files are uploaded verbatim and may contain private prompts or scripts; use a private repository. Restore only adds missing skills and never overwrites an existing one; uninstalling a skill here never propagates to other devices.
-- A plugin present here but missing in the repository is backed up again, never deleted; a plugin missing here but present in the repository needs an explicit delete-or-skip choice.
-- Syncs the active profile only; other profiles install and sync separately.
-- Local-dev plugins can be recorded but cannot be installed on another device.
-- It synchronizes plugin versions and enabled state; it does not check for newer versions or upgrade plugins for you.
+- Never collects or uploads tokens, passwords, private keys or cookies; HTTPS stores only the environment variable name.
+- No absolute machine paths are written to the repository; plugin configuration, Agent presets and UI settings are never read, written or backed up.
+- Skill files are uploaded verbatim and may contain private prompts or scripts; use a **private repository**.
+- Restoring skills only adds missing ones and never overwrites existing ones; a local uninstall affects only this machine and is not propagated.
+- It syncs plugin versions and enabled state; it does not look up newer versions or replace the plugin market.
 
 ## Data location
 
-`$DSH_HOME/dsh-plugins-git-sync/` (config, state, log, work tree, snapshots).
+Defaults to `$DSH_HOME/dsh-plugins-git-sync/` (config, state, log, work tree, snapshots).
 
-After upgrading from the old name, the plugin keeps using `$DSH_HOME/dsh-git-plugin-sync/` if that exists and the new directory does not, so configuration is preserved. Uninstalling does not delete this directory.
+When upgrading from an older version, the plugin keeps using `$DSH_HOME/dsh-git-plugin-sync/` if that directory exists and the new one does not, so configuration is preserved. Uninstalling the plugin does not delete this directory.
 
 ## Development
 
@@ -183,15 +220,15 @@ After upgrading from the old name, the plugin keeps using `$DSH_HOME/dsh-git-plu
 npm ci
 npm run typecheck
 npm run build
-npm test        # unit + integration + jsdom render tests
-npm pack
+npm test        # unit + integration + browser half-render tests
+npm pack        # inspect the published content
 ```
 
 Layout:
 
-- `src/` — host half (scanner, skills, Git, sync engine, HTTP routes, agent tools)
-- `client/src/` — settings-page browser half
-- `tests/` — unit, two-device integration against real temporary Git repos, jsdom rendering
+- `src/` — host half (plugin scanning, skills, Git, sync engine, HTTP routes, Agent tools)
+- `client/src/` — browser half for the settings page and the plugin detail page
+- `tests/` — unit tests, two-device integration against real temporary Git repositories, jsdom render tests
 - `docs/ARCHITECTURE.md` · `docs/SECURITY.md` · `docs/PUBLISHING.md`
 
 ## License

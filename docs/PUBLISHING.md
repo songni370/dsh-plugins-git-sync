@@ -8,7 +8,7 @@ This is the release manual: GitHub, npm, the DSH plugin market, and the versioni
 
 ## 0. 发布前检查清单
 
-- [ ] `package.json` 的 `version` 是本次要发布的版本（当前 `0.2.5`）；
+- [ ] `package.json` 的 `version` 是本次要发布的版本（当前 `0.3.0`）；
 - [ ] 若清单 schema 有变化，`src/constants.ts` 的 `MANIFEST_SCHEMA_VERSION` 已提升，并按 [架构文档的迁移策略](ARCHITECTURE.md#102-版本化与迁移) 处理旧数据；
 - [ ] 备份仓库里的 `generator.version` 是**运行中的插件版本**：`buildManifest({ generatorVersion })` / `buildSchemaDocument(pluginVersion)` 由引擎传入 `deps.pluginVersion`，无需手动改常量；确认 `package.json` 版本正确即可；
 - [ ] `CHANGELOG.md` 有本次版本的条目（日期、Added/Fixed/Security、`verified on DSH <version>`）；
