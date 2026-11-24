@@ -233,3 +233,28 @@ describe('device name field', () => {
     expect(html).toContain('aria-expanded="false"')
   })
 })
+
+describe('repository field order', () => {
+  it('shows the in-repository location only after a backup directory is entered', () => {
+    const withoutDir = render('git@github.com:owner/repo.git', 'ssh', { backupDir: '' })
+    expect(withoutDir).not.toContain('仓库内位置')
+    const withDir = render('git@github.com:owner/repo.git', 'ssh', { backupDir: 'dsh-plugins' })
+    expect(withDir).toContain('仓库内位置')
+    expect(withDir).toContain('dsh-plugins/profiles/desktop/plugins.json')
+  })
+
+  it('places the connection test after the address and before the device picker', () => {
+    const html = render('git@github.com:owner/repo.git', 'ssh', { backupDir: 'dsh-plugins' })
+    const repo = html.indexOf('id="dgs-config-repo"')
+    const test = html.indexOf('>测试连接<')
+    const device = html.indexOf('id="dgs-config-device"')
+    const location = html.indexOf('仓库内位置')
+    const actions = html.indexOf('dgs-formActions')
+    expect(repo).toBeGreaterThan(-1)
+    expect(test).toBeGreaterThan(repo)
+    expect(device).toBeGreaterThan(test)
+    expect(location).toBeGreaterThan(device)
+    expect(html.indexOf('>测试连接<', test + 1)).toBe(-1)
+    expect(test).toBeLessThan(actions)
+  })
+})

@@ -459,6 +459,11 @@ export function Page({ t }: PageProps): ReactElement {
     setTesting(true)
     try {
       const result = await api.testConnection(form === null ? {} : { config: configPayloadFromForm(form) })
+      if (result.ok) {
+        // A successful probe primes the repository: the device picker and the
+        // repository paths then reflect what actually exists on the remote.
+        await refreshStatus()
+      }
       showFeedback(
         'config',
         result.ok ? 'success' : 'error',

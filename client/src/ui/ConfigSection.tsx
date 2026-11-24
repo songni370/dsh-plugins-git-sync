@@ -303,43 +303,39 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
       <div id="dgs-config-body" hidden={!props.open}>
         <div className="dgs-formRows">
           <FormRow label={t('configRepoUrl')}>
-            <div className="dgs-inputWithBadge">
-              <TextInput
-                id="dgs-config-repo"
-                value={form.repoUrl}
-                placeholder="https://github.com/you/dsh-plugins.git"
-                disabled={busy}
-                inputMode="url"
-                onChange={value => {
-                  props.onChange({ repoUrl: value })
-                }}
-              />
-              {transport === 'none' ? null : <Badge tone="idle">{meta.label}</Badge>}
-            </div>
-            {transport === 'none' ? (
-              <span className="dgs-formRowHint">{t('configRepoUrlHint')}</span>
-            ) : transport === 'https' ? null : (
-              // HTTPS is explained by its auth rows below; SSH/local/other
-              // keep one short hint under the address.
-              <span className="dgs-formRowHint">{meta.hint}</span>
-            )}
-          </FormRow>
-
-          {form.repoUrl.trim() === '' ? null : (
-            <FormRow label={t('configLocation')} className="dgs-repoLocationForm">
-              <div className="dgs-repoLocation">
-                <div className="dgs-repoLocationRow">
-                  <span>{t('configLocationPlugins')}</span>
-                  <code>{location.plugins}</code>
-                </div>
-                <div className="dgs-repoLocationRow">
-                  <span>{t('configLocationSkills')}</span>
-                  <code>{location.skills}</code>
-                </div>
-                <span className="dgs-formRowHint">{t('configLocationHint')}</span>
+            <div className="dgs-inlineRow">
+              <div className="dgs-grow">
+                <TextInput
+                  id="dgs-config-repo"
+                  value={form.repoUrl}
+                  placeholder="https://github.com/you/dsh-plugins.git"
+                  disabled={busy}
+                  inputMode="url"
+                  onChange={value => {
+                    props.onChange({ repoUrl: value })
+                  }}
+                />
               </div>
-            </FormRow>
-          )}
+              <Button
+                small
+                onClick={props.onTest}
+                disabled={busy || form.repoUrl.trim() === ''}
+                loading={props.testing}
+              >
+                {props.testing ? t('configTesting') : t('configTest')}
+              </Button>
+            </div>
+            <div className="dgs-rowMeta">
+              {transport === 'none' ? null : <Badge tone="idle">{meta.label}</Badge>}
+              <span className="dgs-formRowHint">
+                {form.repoUrl.trim() === ''
+                  ? t('configRepoUrlHint')
+                  : transport === 'https'
+                    ? t('configTestFirstHint')
+                    : meta.hint}
+              </span>
+            </div>
+          </FormRow>
 
           {transport === 'https' ? (
             <>
@@ -404,6 +400,52 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
             </>
           ) : null}
 
+          <FormRow label={t('configDeviceName')}>
+            <DeviceNameInput
+              t={t}
+              value={form.deviceName}
+              options={props.deviceNames ?? []}
+              disabled={busy}
+              onChange={value => {
+                props.onChange({ deviceName: value })
+              }}
+            />
+            <span className="dgs-formRowHint">
+              {(props.deviceNames ?? []).length === 0
+                ? t('configDeviceEmptyHint')
+                : t('configDeviceExistingHint')}
+            </span>
+          </FormRow>
+
+          <FormRow label={t('configBackupDir')}>
+            <TextInput
+              id="dgs-config-backup-dir"
+              value={form.backupDir}
+              placeholder="dsh-plugins"
+              disabled={busy}
+              onChange={value => {
+                props.onChange({ backupDir: value })
+              }}
+            />
+            <span className="dgs-formRowHint">{t('configBackupDirHint')}</span>
+          </FormRow>
+
+          {form.repoUrl.trim() === '' || form.backupDir.trim() === '' ? null : (
+            <FormRow label={t('configLocation')} className="dgs-repoLocationForm">
+              <div className="dgs-repoLocation">
+                <div className="dgs-repoLocationRow">
+                  <span>{t('configLocationPlugins')}</span>
+                  <code>{location.plugins}</code>
+                </div>
+                <div className="dgs-repoLocationRow">
+                  <span>{t('configLocationSkills')}</span>
+                  <code>{location.skills}</code>
+                </div>
+                <span className="dgs-formRowHint">{t('configLocationHint')}</span>
+              </div>
+            </FormRow>
+          )}
+
           <div className="dgs-advanced">
             <button
               type="button"
@@ -438,44 +480,18 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
                   }}
                 />
               </FormRow>
-              <FormRow label={t('configBackupDir')}>
-                <TextInput
-                  id="dgs-config-backup-dir"
-                  value={form.backupDir}
-                  placeholder="dsh-plugins"
-                  disabled={busy}
-                  onChange={value => {
-                    props.onChange({ backupDir: value })
-                  }}
-                />
-                <span className="dgs-formRowHint">{t('configBackupDirHint')}</span>
-              </FormRow>
-              <FormRow label={t('configDeviceName')}>
-                <DeviceNameInput
-                  t={t}
-                  value={form.deviceName}
-                  options={props.deviceNames ?? []}
-                  disabled={busy}
-                  onChange={value => {
-                    props.onChange({ deviceName: value })
-                  }}
-                />
-                <span className="dgs-formRowHint">{t('configDeviceExistingHint')}</span>
-              </FormRow>
-              <FormRow label={t('configClient')}>
-                <div className="dgs-btnRow">
-                  <Badge tone="success">{clientLabel(t, view.activeProfile)}</Badge>
-                </div>
-                <span className="dgs-formRowHint">{t('configClientHint')}</span>
-              </FormRow>
             </div>
           </div>
+
+          <FormRow label={t('configClient')}>
+            <div className="dgs-btnRow">
+              <Badge tone="success">{clientLabel(t, view.activeProfile)}</Badge>
+            </div>
+            <span className="dgs-formRowHint">{t('configClientHint')}</span>
+          </FormRow>
         </div>
 
         <div className="dgs-formActions">
-          <Button onClick={props.onTest} disabled={busy} loading={props.testing}>
-            {props.testing ? t('configTesting') : t('configTest')}
-          </Button>
           <Button variant="primary" onClick={props.onSave} disabled={busy || !dirty} loading={props.saving}>
             {props.saving ? t('saving') : t('save')}
           </Button>

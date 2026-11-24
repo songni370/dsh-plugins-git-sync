@@ -391,6 +391,20 @@ export const CSS = `
   cursor: not-allowed;
   background: var(--dsw-alias-bg-layer-2, #f7f8fa);
 }
+.dgs-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.dgs-inlineRow > .dgs-btn {
+  flex: none;
+}
+.dgs-rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
 .dgs-inlineRow {
   display: flex;
   align-items: center;

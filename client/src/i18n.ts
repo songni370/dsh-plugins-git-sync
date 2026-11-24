@@ -323,6 +323,8 @@ export const zh: Record<string, string> = {
   pluginBulkPrivate: '设为仅本设备',
   pluginBulkPublic: '设为所有设备',
   configDeviceExisting: '选择已有设备或输入新名称',
+  configTestFirstHint: '先测试连接，确认仓库可访问，并载入仓库里已有的设备。',
+  configDeviceEmptyHint: '先测试连接；仓库里已有的设备会出现在下拉列表里。',
   configDeviceExistingHint:
     '选择已有的设备名称：会拉取公共插件，并恢复这台设备原来的独立插件。输入新名称：只拉取公共插件。',
   skillsTitle: '技能',
@@ -712,6 +714,8 @@ export const en: Record<string, string> = {
   pluginBulkPrivate: 'Only this device',
   pluginBulkPublic: 'All devices',
   configDeviceExisting: 'Pick a device or type a new name',
+  configTestFirstHint: 'Test the connection first to verify the repository and load its existing devices.',
+  configDeviceEmptyHint: 'Test the connection first; devices already in the repository will appear here.',
   configDeviceExistingHint:
     'Pick an existing device name to get the public pool plus that device’s private plugins; enter a new name to get the public pool only.',
   skillsTitle: 'Skills',
