@@ -79,7 +79,7 @@ describe('PlanPreview', () => {
       />,
     )
     expect(html).toContain('需要你决定')
-    expect(html).toContain('本机和仓库都改过，结果不同')
+    expect(html).toContain('两边都改过，结果不同')
     expect(html).toContain('本机 1.0.0 · 仓库 2.0.0')
     expect(html).toContain('来自 device-b')
     expect(html).toContain('用本机覆盖仓库')

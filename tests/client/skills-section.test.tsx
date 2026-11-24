@@ -50,7 +50,7 @@ describe('skill card', () => {
     )
     expect(editableHtml).toContain('>操作<')
     expect(editableHtml).toContain('保存更改（0）')
-    expect(editableHtml).toContain('勾选后点击保存')
+    expect(editableHtml).toContain('勾选后点「保存更改」才会生效')
   })
 
   it('shows the backup status for every skill', () => {
@@ -68,8 +68,8 @@ describe('skill card', () => {
       <SkillsSection {...baseProps} skills={mixed} />,
     )
     expect(html).toContain('已备份')
-    expect(html).toContain('仅本机')
-    expect(html).toContain('仅仓库')
+    expect(html).toContain('未上传')
+    expect(html).toContain('未安装')
     expect(html).toContain('有修改')
     expect(html).toContain('已排除')
   })

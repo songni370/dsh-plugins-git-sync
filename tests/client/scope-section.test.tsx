@@ -20,7 +20,7 @@ describe('backup contents card', () => {
     expect(html).toContain('aria-label="插件"')
     expect(html).toContain('aria-label="技能"')
     expect(html.match(/aria-checked="true"/g)).toHaveLength(2)
-    expect(html).toContain('不含插件配置')
+    expect(html).toContain('不含插件设置')
     expect(html).toContain('建议使用私有仓库')
   })
 

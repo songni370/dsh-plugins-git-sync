@@ -34,7 +34,7 @@ describe('PluginDetailSection', () => {
     const html = renderToStaticMarkup(<PluginDetailSection t={t} subject={subject} />)
     expect(html).toContain('备份设置')
     expect(html).toContain('插件 + 技能')
-    expect(html).toContain('插件清单与已部署技能')
+    expect(html).toContain('插件清单和已部署技能')
     expect(html).toContain('在「插件」页面显示「备份」标签页')
     expect(html).toContain('aria-checked="true"')
   })

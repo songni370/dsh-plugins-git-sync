@@ -255,7 +255,7 @@ describe('settings page render', () => {
 
   it('shows skill tiles in the sync status area', async () => {
     await settle()
-    expect(container.textContent).toContain('本地技能')
+    expect(container.textContent).toContain('本机技能')
     expect(container.textContent).toContain('仓库技能')
     expect(container.textContent).toContain('已排除')
   })
@@ -400,7 +400,7 @@ describe('settings page render', () => {
   it('renders the status tile row and metadata grid', async () => {
     await settle()
     const text = container.textContent ?? ''
-    for (const label of ['本地插件', '仓库插件', '待上传', '待下载', '冲突', '设备', '分支', '上次同步']) {
+    for (const label of ['本机插件', '仓库插件', '待上传', '待下载', '冲突', '设备', '分支', '上次同步']) {
       expect(text).toContain(label)
     }
     expect(container.querySelector('.dgs-statusTiles')).not.toBeNull()
@@ -416,7 +416,7 @@ describe('settings page render', () => {
     const text = container.textContent ?? ''
     expect(text).toContain('通过 Git 仓库备份、恢复并跨设备同步 DSH 插件与技能。')
     expect(text).toContain('dsh-context')
-    expect(text).toContain('有待上传变更')
+    expect(text).toContain('有改动待上传')
   })
 
   it('primes the repository before loading the lists when the remote side is unknown', async () => {

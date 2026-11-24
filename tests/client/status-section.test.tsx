@@ -121,20 +121,20 @@ describe('device list', () => {
 describe('sync status tiles', () => {
   it('shows plugin and skill tiles when both scopes are enabled', () => {
     const html = render({ plugins: true, skills: true })
-    expect(html).toContain('本地插件')
-    expect(html).toContain('本地技能')
+    expect(html).toContain('本机插件')
+    expect(html).toContain('本机技能')
     expect(html).toContain('仓库技能')
   })
 
   it('hides plugin tiles when plugin backup is off', () => {
     const html = render({ plugins: false, skills: true })
-    expect(html).not.toContain('本地插件')
-    expect(html).toContain('本地技能')
+    expect(html).not.toContain('本机插件')
+    expect(html).toContain('本机技能')
   })
 
   it('hides skill tiles when skill backup is off', () => {
     const html = render({ plugins: true, skills: false })
-    expect(html).toContain('本地插件')
-    expect(html).not.toContain('本地技能')
+    expect(html).toContain('本机插件')
+    expect(html).not.toContain('本机技能')
   })
 })

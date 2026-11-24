@@ -87,7 +87,7 @@ describe('per-plugin preferences', () => {
     expect(html).toContain('aria-label="公共: alpha"')
     expect(html).toContain('aria-label="本设备: alpha"')
     expect(html).toContain('保存更改（0）')
-    expect(html).toContain('勾选后点击保存')
+    expect(html).toContain('勾选后点「保存更改」才会生效')
     expect(html).not.toContain('>选择插件')
     expect(html).not.toContain('dgs-bulkBar')
     expect(html).not.toContain('aria-haspopup="menu"')
