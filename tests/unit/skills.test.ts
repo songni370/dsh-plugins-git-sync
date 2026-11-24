@@ -34,7 +34,8 @@ describe('skills backup', () => {
     const files = backup.skills[0]!.files
     expect(files.map(file => file.path)).toEqual(['SKILL.md', 'bin/run', 'logo.bin'])
     expect(files.find(file => file.path === 'SKILL.md')?.content).toBe('# Demo\n')
-    expect(files.find(file => file.path === 'bin/run')?.executable).toBe(true)
+    // Windows has no POSIX execute bit; chmod cannot make the scanner report it.
+    expect(files.find(file => file.path === 'bin/run')?.executable).toBe(process.platform !== 'win32')
     expect(files.find(file => file.path === 'logo.bin')?.encoding).toBe('base64')
     expect(warnings.some(line => line.includes('符号链接'))).toBe(true)
   })
@@ -85,7 +86,9 @@ describe('skills backup', () => {
     expect(result.skipped).toEqual(['existing'])
     expect(await readFile(join(home, 'skills', 'existing', 'SKILL.md'), 'utf8')).toBe('keep me')
     expect(await readFile(join(home, 'skills', 'new-skill', 'SKILL.md'), 'utf8')).toBe('hello')
-    expect((await stat(join(home, 'skills', 'new-skill', 'bin', 'run'))).mode & 0o111).not.toBe(0)
+    if (process.platform !== 'win32') {
+      expect((await stat(join(home, 'skills', 'new-skill', 'bin', 'run'))).mode & 0o111).not.toBe(0)
+    }
   })
 
   it('classifies backup status by local and repository copies', () => {
