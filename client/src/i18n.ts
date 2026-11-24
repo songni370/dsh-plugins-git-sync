@@ -97,7 +97,7 @@ export const zh: Record<string, string> = {
 
   // Repository configuration.
   configTitle: '仓库配置',
-  configDesc: '连接到你的备份仓库；更多选项在「高级设置」中。',
+  configDesc: '连接到你的备份仓库；先测试连接，再选择设备、分支与备份目录。',
   configRepoUrl: '仓库地址',
   configRepoUrlHint: '支持 https、ssh、scp 形式或 file:// 路径。',
   configScope: '备份内容',
@@ -490,7 +490,7 @@ export const en: Record<string, string> = {
   sectionCrash: 'The settings page failed to render. Reopen settings; details are in the console.',
 
   configTitle: 'Repository',
-  configDesc: 'Repository URL and authentication. The token stays in an environment variable; this page neither reads nor displays it.',
+  configDesc: 'Connect to your backup repository; test the connection, then pick the device, branch and backup folder.',
   configRepoUrl: 'Repository URL',
   configRepoUrlHint: 'Accepts https, ssh, scp-style, or a file:// path.',
   configScope: 'Backup contents',

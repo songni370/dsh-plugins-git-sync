@@ -167,16 +167,14 @@ describe('repository card transport fields', () => {
     expect(html).not.toContain('DSH Profile')
   })
 
-  it('secondary options are collapsed on a configured card', () => {
+  it('keeps the branch field inline above the backup directory and drops the advanced section', () => {
     const html = render('https://github.com/songni370/dsh-plugins-git-sync.git', 'credential-helper')
-    expect(html).toContain('高级设置')
-    expect(html).toContain('id="dgs-config-advanced" class="dgs-formRows dgs-advancedBody" hidden')
-  })
-
-  it('secondary options are expanded on a fresh card', () => {
-    const html = render('', 'credential-helper')
-    expect(html).toContain('高级设置')
-    expect(html).toContain('id="dgs-config-advanced" class="dgs-formRows dgs-advancedBody"><')
+    expect(html).not.toContain('高级设置')
+    expect(html).not.toContain('dgs-config-advanced')
+    const branch = html.indexOf('id="dgs-config-branch"')
+    const backupDir = html.indexOf('id="dgs-config-backup-dir"')
+    expect(branch).toBeGreaterThan(-1)
+    expect(branch).toBeLessThan(backupDir)
   })
 
   it('empty address: nothing auth-related is shown before detection', () => {

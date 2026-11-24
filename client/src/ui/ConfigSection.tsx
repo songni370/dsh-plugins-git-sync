@@ -252,9 +252,6 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
   const meta = transportMeta(t, transport)
   const effectiveAuth = authForTransport(transport, form.authMode)
   const tokenVisible = transport === 'https' && effectiveAuth === 'https-token'
-  // A fresh install opens the secondary options; a configured device keeps the
-  // card short and puts them one click away.
-  const [advancedOpen, setAdvancedOpen] = useState(() => view.repoUrl.trim() === '')
 
   const tokenState =
     form.tokenEnvVar !== view.tokenEnvVar ? (
@@ -417,6 +414,18 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
             </span>
           </FormRow>
 
+          <FormRow label={t('configBranch')}>
+            <TextInput
+              id="dgs-config-branch"
+              value={form.branch}
+              placeholder="main"
+              disabled={busy}
+              onChange={value => {
+                props.onChange({ branch: value })
+              }}
+            />
+          </FormRow>
+
           <FormRow label={t('configBackupDir')}>
             <TextInput
               id="dgs-config-backup-dir"
@@ -445,43 +454,6 @@ export function ConfigSection(props: ConfigSectionProps): ReactElement {
               </div>
             </FormRow>
           )}
-
-          <div className="dgs-advanced">
-            <button
-              type="button"
-              className="dgs-advancedToggle"
-              aria-expanded={advancedOpen}
-              aria-controls="dgs-config-advanced"
-              onClick={() => {
-                setAdvancedOpen(current => !current)
-              }}
-            >
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-                <path
-                  d="M4 6.5 8 10.5 12 6.5"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span>{t('configAdvanced')}</span>
-            </button>
-            <div id="dgs-config-advanced" className="dgs-formRows dgs-advancedBody" hidden={!advancedOpen}>
-              <FormRow label={t('configBranch')}>
-                <TextInput
-                  id="dgs-config-branch"
-                  value={form.branch}
-                  placeholder="main"
-                  disabled={busy}
-                  onChange={value => {
-                    props.onChange({ branch: value })
-                  }}
-                />
-              </FormRow>
-            </div>
-          </div>
 
           <FormRow label={t('configClient')}>
             <div className="dgs-btnRow">
