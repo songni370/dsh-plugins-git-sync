@@ -34,8 +34,10 @@ describe('skills backup', () => {
     const files = backup.skills[0]!.files
     expect(files.map(file => file.path)).toEqual(['SKILL.md', 'bin/run', 'logo.bin'])
     expect(files.find(file => file.path === 'SKILL.md')?.content).toBe('# Demo\n')
-    // Windows has no POSIX execute bit; chmod cannot make the scanner report it.
-    expect(files.find(file => file.path === 'bin/run')?.executable).toBe(process.platform !== 'win32')
+    // Windows has no POSIX execute bit; the scanner omits the flag there.
+    expect(files.find(file => file.path === 'bin/run')?.executable).toBe(
+      process.platform === 'win32' ? undefined : true,
+    )
     expect(files.find(file => file.path === 'logo.bin')?.encoding).toBe('base64')
     expect(warnings.some(line => line.includes('符号链接'))).toBe(true)
   })
