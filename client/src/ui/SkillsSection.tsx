@@ -10,10 +10,11 @@
 import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { SkillListResponse, SkillPreferenceUpdate, SkillSummary } from '../../../src/http/api-types'
+import { PreferenceDropdown } from './PreferenceDropdown'
 import type { Translate } from '../i18n'
 import { formatBytes } from '../format'
 import type { Tone } from './controls'
-import { Badge, Banner, Button, Card, Checkbox, LinkButton, Loading, Select } from './controls'
+import { Badge, Banner, Button, Card, LinkButton, Loading, Select } from './controls'
 
 /** Rows-per-page choices for the skill list. */
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const
@@ -51,6 +52,23 @@ export interface SkillsSectionProps {
   onRefresh: () => void | Promise<unknown>
   /** Apply one preference update for this device's skill declaration. */
   onApplyPreferences?: (updates: SkillPreferenceUpdate[]) => Promise<void>
+}
+
+/** Row actions offered by the single "操作" menu. */
+function skillActionOptions(
+  t: Translate,
+  skill: SkillSummary,
+  excluded: boolean,
+  installed: boolean,
+  canInstall: boolean,
+): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = []
+  if (skill.scopeSelfOnly === true) options.push({ value: 'scope-all', label: t('pluginScopeAllAction') })
+  else options.push({ value: 'scope-self', label: t('pluginScopeSelfAction') })
+  if (installed) options.push({ value: 'uninstall', label: t('skillUninstall') })
+  else if (canInstall) options.push({ value: 'install', label: t('skillInstall') })
+  options.push(excluded ? { value: 'resume', label: t('pluginResumeBackup') } : { value: 'pause', label: t('pluginPauseBackup') })
+  return options
 }
 
 /** Render the deployed-skill list card. */
@@ -136,21 +154,17 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
         <div className="dgs-tableWrap">
           <table className="dgs-table dgs-skillTable">
             <colgroup>
-              <col className="dgs-colCheck" />
               <col />
               <col className="dgs-colSkillMeta" />
               <col className="dgs-colStatus" />
-              {editable ? <col className="dgs-colPrivate" /> : null}
-              {editable ? <col className="dgs-colSkillLocal" /> : null}
+              {editable ? <col className="dgs-colActions" /> : null}
             </colgroup>
             <thead>
               <tr>
-                <th className="dgs-tableCellCheck">{t('pluginsSyncable')}</th>
                 <th>{t('skillsColumnName')}</th>
                 <th>{t('skillsColumnMeta')}</th>
                 <th>{t('pluginsStatus')}</th>
-                {editable ? <th>{t('pluginPrivateColumn')}</th> : null}
-                {editable ? <th>{t('skillLocalColumn')}</th> : null}
+                {editable ? <th>{t('pluginsActions')}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -162,25 +176,17 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                   (skill.presence === 'both' || skill.presence === 'local-only' || skill.presence === undefined)
                 const canInstall =
                   skill.presence === 'both' || skill.presence === 'remote-only' || skill.presence === undefined
-                const localOptions = installed
-                  ? [{ value: 'uninstall', label: t('skillUninstall') }]
-                  : canInstall
-                    ? [{ value: 'install', label: t('skillInstall') }]
-                    : []
                 return (
                   <tr className="dgs-skillItem" key={skill.name}>
-                    <td className="dgs-tableCellCheck">
-                      <Checkbox
-                        checked={!excluded}
-                        disabled={props.busy}
-                        label={`${t('pluginsSyncable')}: ${skill.name}`}
-                        onChange={next => {
-                          props.onToggle(skill, next)
-                        }}
-                      />
-                    </td>
                     <td>
-                      <span className="dgs-skillName">{skill.name}</span>
+                      <span className="dgs-pluginCell">
+                        <span className="dgs-pluginLine">
+                          <span className="dgs-skillName" title={skill.name}>
+                            {skill.name}
+                          </span>
+                          {skill.scopeSelfOnly === true ? <Badge tone="idle">{t('pluginPrivateBadge')}</Badge> : null}
+                        </span>
+                      </span>
                     </td>
                     <td className="dgs-nowrap">
                       <span className="dgs-skillMeta">
@@ -191,32 +197,27 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
                       <Badge tone={meta.tone}>{t(meta.key)}</Badge>
                     </td>
                     {editable ? (
-                      <td className="dgs-tableCellCheck">
-                        <Checkbox
-                          checked={skill.scopeSelfOnly === true}
+                      <td className="dgs-nowrap">
+                        <PreferenceDropdown
+                          label={t('pluginsActions')}
+                          ariaLabel={`${t('pluginsActions')}: ${skill.name}`}
+                          title={t('pluginActionsHint')}
                           disabled={prefBusy || props.busy}
-                          label={`${t('pluginPrivateColumn')}: ${skill.name}`}
-                          onChange={next => {
-                            void applySkillPreference({ skillName: skill.name, scope: next ? 'self' : 'all' })
+                          busy={prefBusy}
+                          options={skillActionOptions(t, skill, excluded, installed, canInstall)}
+                          onSelect={value => {
+                            if (value === 'scope-self' || value === 'scope-all') {
+                              void applySkillPreference({
+                                skillName: skill.name,
+                                scope: value === 'scope-self' ? 'self' : 'all',
+                              })
+                            } else if (value === 'install' || value === 'uninstall') {
+                              void applySkillPreference({ skillName: skill.name, action: value })
+                            } else {
+                              props.onToggle(skill, value === 'resume')
+                            }
                           }}
                         />
-                      </td>
-                    ) : null}
-                    {editable ? (
-                      <td className="dgs-nowrap">
-                        <Button
-                          small
-                          disabled={prefBusy || props.busy || (!installed && !canInstall)}
-                          loading={prefBusy}
-                          onClick={() => {
-                            void applySkillPreference({
-                              skillName: skill.name,
-                              action: installed ? 'uninstall' : 'install',
-                            })
-                          }}
-                        >
-                          {installed ? t('skillUninstall') : t('skillInstall')}
-                        </Button>
                       </td>
                     ) : null}
                   </tr>
@@ -225,7 +226,6 @@ export function SkillsSection(props: SkillsSectionProps): ReactElement {
             </tbody>
           </table>
         </div>
-
         {rows.length === 0 ? null : (
           <div className="dgs-pagination">
             <span className="dgs-hint">

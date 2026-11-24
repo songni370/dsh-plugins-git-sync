@@ -102,6 +102,19 @@ function conflictOptions(t: Translate, reason: string): { value: string; label: 
   ]
 }
 
+/** Row actions offered by the single "操作" menu. */
+function rowActionOptions(t: Translate, row: PluginListRow, excluded: boolean): { value: string; label: string }[] {
+  if (row.conflictInfo !== undefined) return []
+  const scope =
+    row.scopeSelfOnly === true
+      ? { value: 'scope-all', label: t('pluginScopeAllAction') }
+      : { value: 'scope-self', label: t('pluginScopeSelfAction') }
+  const backup = excluded
+    ? { value: 'resume', label: t('pluginResumeBackup') }
+    : { value: 'pause', label: t('pluginPauseBackup') }
+  return [scope, backup]
+}
+
 /** Render the plugin list card. */
 export function PluginsSection(props: PluginsSectionProps): ReactElement {
   const { t } = props
@@ -309,13 +322,10 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
           <table className="dgs-table">
             <colgroup>
               <col className="dgs-colCheck" />
-              <col className="dgs-colSync" />
               <col />
-              <col className="dgs-colVersion" />
-              <col className="dgs-colVersion" />
+              <col className="dgs-colVersionPair" />
               <col className="dgs-colStatus" />
-              {props.onApplyPreferences === undefined ? null : <col className="dgs-colPrivate" />}
-              {props.onResolveConflict === undefined ? null : <col className="dgs-colResolve" />}
+              <col className="dgs-colActions" />
             </colgroup>
             <thead>
               <tr>
@@ -331,22 +341,20 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                     onChange={toggleSelectPage}
                   />
                 </th>
-                <th className="dgs-tableCellCheck">{t('pluginsSyncable')}</th>
                 <th>{t('pluginsName')}</th>
-                <th>{t('pluginsLocalVersion')}</th>
-                <th>{t('pluginsRemoteVersion')}</th>
+                <th>{t('pluginsVersion')}</th>
                 <th>{t('pluginsStatus')}</th>
-                {props.onApplyPreferences === undefined ? null : <th>{t('pluginPrivateColumn')}</th>}
-                {props.onResolveConflict === undefined ? null : <th>{t('conflictColumn')}</th>}
+                <th>{t('pluginsActions')}</th>
               </tr>
             </thead>
             <tbody>
               {pageRows.map(row => {
                 const excluded = props.exclusions.has(row.id) || row.syncStatus === 'excluded'
-                const checked = row.syncable && !excluded
                 const meta = SYNC_META[row.syncStatus] ?? SYNC_META.excluded
                 const localVersion = row.local?.version ?? row.version
                 const remoteVersion = row.remoteVersion ?? row.remote?.version ?? null
+                const conflict = row.conflictInfo
+                const actionsDisabled = prefBusy || props.busy
                 return (
                   <tr key={row.id}>
                     <td className="dgs-tableCellCheck">
@@ -359,24 +367,15 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                         }}
                       />
                     </td>
-                    <td className="dgs-tableCellCheck">
-                      <Checkbox
-                        checked={checked}
-                        disabled={!row.syncable || props.busy}
-                        label={
-                          row.syncable
-                            ? `${t('pluginsSyncable')}: ${row.displayName ?? row.name}`
-                            : `${t('pluginsNotSyncable')}: ${row.displayName ?? row.name}`
-                        }
-                        onChange={next => {
-                          props.onToggle(row, next)
-                        }}
-                      />
-                    </td>
                     <td>
                       <span className="dgs-pluginCell">
-                        <span className="dgs-pluginName" title={row.displayName ?? row.name}>
-                          {row.displayName ?? row.name}
+                        <span className="dgs-pluginLine">
+                          <span className="dgs-pluginName" title={row.displayName ?? row.name}>
+                            {row.displayName ?? row.name}
+                          </span>
+                          {row.scopeSelfOnly === true ? (
+                            <Badge tone="idle">{t('pluginPrivateBadge')}</Badge>
+                          ) : null}
                         </span>
                         {row.id === (row.displayName ?? row.name) ? null : (
                           <span className="dgs-pluginId dgs-mono" title={row.id}>
@@ -385,46 +384,56 @@ export function PluginsSection(props: PluginsSectionProps): ReactElement {
                         )}
                       </span>
                     </td>
-                    <td className="dgs-nowrap dgs-mono" title={localVersion ?? undefined}>
-                      {localVersion === null || localVersion === '' ? t('notAvailable') : localVersion}
-                    </td>
-                    <td className="dgs-nowrap dgs-mono" title={remoteVersion ?? undefined}>
-                      {remoteVersion === null || remoteVersion === '' ? t('notAvailable') : remoteVersion}
+                    <td className="dgs-nowrap">
+                      <span
+                        className="dgs-versionPair"
+                        title={`${t('pluginsLocalVersion')}: ${localVersion ?? t('notAvailable')} → ${t('pluginsRemoteVersion')}: ${remoteVersion ?? t('notAvailable')}`}
+                      >
+                        <span className="dgs-mono">
+                          {localVersion === null || localVersion === '' ? t('notAvailable') : localVersion}
+                        </span>
+                        <span className="dgs-versionArrow" aria-hidden="true">
+                          →
+                        </span>
+                        <span className="dgs-mono dgs-versionRemote">
+                          {remoteVersion === null || remoteVersion === '' ? t('notAvailable') : remoteVersion}
+                        </span>
+                      </span>
                     </td>
                     <td className="dgs-nowrap">
                       <span className="dgs-pluginBadges">
                         <Badge tone={excluded ? 'idle' : meta.tone}>{excluded ? t('statusExcluded') : t(meta.key)}</Badge>
                       </span>
                     </td>
-                    {props.onApplyPreferences === undefined ? null : (
-                      <td className="dgs-tableCellCheck">
-                        <Checkbox
-                          checked={row.scopeSelfOnly === true}
-                          disabled={!eligibleRow(row) || prefBusy}
-                          label={t('pluginPrivateLabel', { name: row.displayName ?? row.name })}
-                          onChange={next => {
-                            void applyPreferences([{ pluginId: row.id, scope: next ? 'self' : 'all' }])
-                          }}
-                        />
-                      </td>
-                    )}
-                    {props.onResolveConflict === undefined ? null : (
-                      <td className="dgs-nowrap">
-                        {row.conflictInfo === undefined ? null : (
-                          <PreferenceDropdown
-                            label={t('conflictResolve')}
-                            ariaLabel={`${t('conflictColumn')}: ${row.displayName ?? row.name}`}
-                            title={t(conflictReasonKey(row.conflictInfo.reason))}
-                            disabled={prefBusy || props.busy}
-                            busy={prefBusy}
-                            options={conflictOptions(t, row.conflictInfo.reason)}
-                            onSelect={value => {
-                              void resolveConflict(row.id, value === 'local' ? 'local' : 'remote')
-                            }}
-                          />
-                        )}
-                      </td>
-                    )}
+                    <td className="dgs-nowrap">
+                      <PreferenceDropdown
+                        label={conflict === undefined ? t('pluginsActions') : t('conflictResolve')}
+                        ariaLabel={`${t('pluginsActions')}: ${row.displayName ?? row.name}`}
+                        title={
+                          conflict === undefined
+                            ? t('pluginActionsHint')
+                            : t(conflictReasonKey(conflict.reason))
+                        }
+                        disabled={actionsDisabled}
+                        busy={prefBusy}
+                        options={
+                          conflict === undefined
+                            ? rowActionOptions(t, row, excluded)
+                            : conflictOptions(t, conflict.reason)
+                        }
+                        onSelect={value => {
+                          if (value === 'local' || value === 'remote') {
+                            void resolveConflict(row.id, value)
+                          } else if (value === 'scope-self') {
+                            void applyPreferences([{ pluginId: row.id, scope: 'self' }])
+                          } else if (value === 'scope-all') {
+                            void applyPreferences([{ pluginId: row.id, scope: 'all' }])
+                          } else {
+                            props.onToggle(row, value === 'resume')
+                          }
+                        }}
+                      />
+                    </td>
                   </tr>
                 )
               })}

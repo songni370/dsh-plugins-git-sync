@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Per-plugin preference controls: every row exposes one 「仅本设备」 checkbox,
- * and a multi-selection can be switched between the public pool and this
- * device in a single request (no second dialog).
+ * Per-plugin preference controls: each row shows a compact version pair and a
+ * single action menu; a multi-selection can be switched between the public
+ * pool and this device in one request (no second dialog).
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -71,13 +71,16 @@ function render(
 }
 
 describe('per-plugin preferences', () => {
-  it('exposes one 仅本设备 checkbox per row instead of dropdowns', () => {
+  it('shows a compact version pair and one action menu per row', () => {
     const html = render([row()])
     expect(html).not.toContain('>设置<')
-    expect(html).toContain('>仅本设备<')
     expect(html).not.toContain('安装范围')
     expect(html).not.toContain('启停')
-    expect(html).toContain('aria-label="仅本设备：alpha"')
+    expect(html).toContain('>版本<')
+    expect(html).toContain('>操作<')
+    expect(html).toContain('dgs-versionPair')
+    expect(html).toContain('aria-label="操作: alpha"')
+    expect(html).not.toContain('aria-label="仅本设备')
   })
 
   it('hides a repeated id line but keeps a distinct display name', () => {
@@ -87,10 +90,10 @@ describe('per-plugin preferences', () => {
     expect(distinct).toContain('Better Sidebar')
   })
 
-  it('checks the row checkbox when the plugin is private to this device', () => {
+  it('shows a 仅本机 badge when the plugin is private to this device', () => {
     const html = render([row({ scopeSelfOnly: true, scopeDevices: ['dev-a'] })])
-    const checkbox = html.split('aria-label="仅本设备：alpha"')[0] ?? ''
-    expect(checkbox).toContain('checked=""')
+    expect(html).toContain('仅本机')
+    expect(html).toContain('aria-label="操作: alpha"')
   })
 
   it('offers a per-row resolution dropdown for a conflicting plugin', () => {
@@ -109,8 +112,8 @@ describe('per-plugin preferences', () => {
       },
     })
     const html = render([conflicted], async () => undefined)
-    expect(html).toContain('冲突处理')
-    expect(html).toContain('aria-label="冲突处理: alpha"')
+    expect(html).toContain('>处理<')
+    expect(html).toContain('aria-label="操作: alpha"')
     expect(html).toContain('本机已卸载')
   })
 })

@@ -40,12 +40,16 @@ describe('skill card', () => {
     expect(html).not.toContain('刷新')
   })
 
-  it('shows a column header row like the plugin list', () => {
+  it('shows a compact column header row', () => {
     const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={skills} />)
-    expect(html).toContain('>备份<')
+    expect(html).not.toContain('>备份<')
     expect(html).toContain('>技能<')
     expect(html).toContain('>文件 / 大小<')
     expect(html).toContain('>状态<')
+    const editableHtml = renderToStaticMarkup(
+      <SkillsSection {...baseProps} skills={skills} onApplyPreferences={async () => undefined} />,
+    )
+    expect(editableHtml).toContain('>操作<')
   })
 
   it('shows the backup status for every skill', () => {
@@ -69,14 +73,19 @@ describe('skill card', () => {
     expect(html).toContain('已排除')
   })
 
-  it('renders the leftmost sync checkbox and honors exclusions', () => {
+  it('moves backup exclusions into the row action menu', () => {
     const html = renderToStaticMarkup(
-      <SkillsSection {...baseProps} skills={skills} exclusions={new Set(['skill-1'])} />,
+      <SkillsSection
+        {...baseProps}
+        skills={skills}
+        exclusions={new Set(['skill-1'])}
+        onApplyPreferences={async () => undefined}
+      />,
     )
-    expect(html.match(/type="checkbox"/g)).toHaveLength(10)
-    expect(html).toContain('aria-label="备份: skill-0"')
-    expect(html).toContain('aria-label="备份: skill-1"')
-    expect(html).not.toContain('aria-label="备份: skill-10"')
+    expect(html.match(/type="checkbox"/g)).toBeNull()
+    expect(html).toContain('已排除')
+    expect(html).toContain('aria-label="操作: skill-1"')
+    expect(html).not.toContain('aria-label="操作: skill-10"')
   })
 
   it('shows only the first ten skills on the default page', () => {
@@ -107,20 +116,19 @@ describe('skill preference controls', () => {
     warnings: [],
   }
 
-  it('shows a 仅本设备 checkbox and a local install button without a dialog', () => {
+  it('shows a 仅本机 badge and one action menu per row', () => {
     const html = renderToStaticMarkup(
       <SkillsSection {...baseProps} skills={editableSkills} onApplyPreferences={async () => undefined} />,
     )
-    expect(html).toContain('>仅本设备<')
-    expect(html).toContain('>本机<')
-    expect(html).toContain('aria-label="仅本设备: alpha"')
-    expect(html).toContain('本机卸载')
+    expect(html).toContain('仅本机')
+    expect(html).toContain('aria-label="操作: alpha"')
+    expect(html).not.toContain('aria-label="仅本设备')
     expect(html).not.toContain('role="menu"')
   })
 
-  it('omits the controls when the Host does not offer them', () => {
+  it('omits the action column when the Host does not offer preferences', () => {
     const html = renderToStaticMarkup(<SkillsSection {...baseProps} skills={editableSkills} />)
-    expect(html).not.toContain('>仅本设备<')
-    expect(html).not.toContain('本机卸载')
+    expect(html).not.toContain('aria-label="操作: alpha"')
+    expect(html).not.toContain('>操作<')
   })
 })

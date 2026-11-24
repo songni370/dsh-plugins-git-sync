@@ -760,6 +760,35 @@ export const CSS = `
 .dgs-colStatus {
   width: 64px;
 }
+.dgs-colVersionPair {
+  width: 138px;
+}
+
+.dgs-colActions {
+  width: 88px;
+}
+
+.dgs-versionPair {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dgs-versionArrow {
+  color: var(--dsw-alias-text-tertiary);
+}
+
+.dgs-versionRemote {
+  color: var(--dsw-alias-text-secondary);
+}
+
+.dgs-pluginLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .dgs-colPrivate {
   width: 92px;
 }
