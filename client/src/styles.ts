@@ -854,7 +854,9 @@ export const CSS = `
 .dgs-tableWrap {
   width: 100%;
   min-width: 0;
-  overflow-x: auto;
+  /* The fixed column budget below fits every cell, so the tables must never
+     introduce a horizontal scrollbar inside the settings dialog. */
+  overflow-x: visible;
 }
 .dgs-table {
   width: 100%;
@@ -879,7 +881,8 @@ export const CSS = `
 }
 
 .dgs-colActions {
-  width: 96px;
+  /* Wide enough for the 公共 / 本设备 checkbox pair without wrapping. */
+  width: 140px;
 }
 
 .dgs-versionRemote {
