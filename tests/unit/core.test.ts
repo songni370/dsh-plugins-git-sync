@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import {
   dataDirFor,
   expandHomePath,
@@ -68,7 +68,7 @@ describe('path safety', () => {
   })
 
   it('joins inside a root and refuses escapes', () => {
-    expect(safeJoin('/data/work', 'profiles/desktop/plugins.json')).toBe(join('/data/work', 'profiles/desktop/plugins.json'))
+    expect(safeJoin('/data/work', 'profiles/desktop/plugins.json')).toBe(resolve('/data/work', 'profiles/desktop/plugins.json'))
     expect(() => safeJoin('/data/work', '../escape')).toThrow()
     expect(() => safeJoin('/data/work', '/etc/passwd')).toThrow()
   })

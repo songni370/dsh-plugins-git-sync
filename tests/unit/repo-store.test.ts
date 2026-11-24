@@ -162,6 +162,11 @@ async function cloneRemote(remote: string): Promise<string> {
   return clone
 }
 
+/** Read a text file from a test clone, normalizing any CRLF checkout. */
+async function readCloneText(clone: string, ...parts: string[]): Promise<string> {
+  return (await readFile(join(clone, ...parts), 'utf8')).replaceAll('\r\n', '\n')
+}
+
 /** A store whose work tree lives under `root`. */
 function makeStore(
   root: string,
@@ -279,9 +284,9 @@ describeGit('RepoStore (real git)', () => {
 
     // The push really landed: clone the remote and inspect it.
     const clone = await cloneRemote(remote)
-    expect(await readFile(join(clone, 'README.md'), 'utf8')).toBe(BACKUP_README)
+    expect(await readCloneText(clone, 'README.md')).toBe(BACKUP_README)
     expect((await readJsonObject(join(clone, 'manifest.json'))).schemaVersion).toBe(MANIFEST_SCHEMA_VERSION)
-    expect(await readFile(join(clone, 'profiles', 'default', 'configs', 'dsh-plugin-demo.json'), 'utf8')).toContain(
+    expect(await readCloneText(clone, 'profiles', 'default', 'configs', 'dsh-plugin-demo.json')).toContain(
       '"timeout": 30',
     )
 
@@ -403,7 +408,7 @@ describeGit('RepoStore (real git)', () => {
     expect(writeB.changed).toBe(true)
 
     const clone = await cloneRemote(remote)
-    expect(await readFile(join(clone, 'shared.txt'), 'utf8')).toBe('A\n+B\n')
+    expect(await readCloneText(clone, 'shared.txt')).toBe('A\n+B\n')
     const log = await runner.run(['log', '--format=%H'], { cwd: clone })
     const commits = log.stdout.trim().split('\n')
     expect(commits).toHaveLength(2)
@@ -549,7 +554,7 @@ describeGit('RepoStore (real git)', () => {
     expect(snapshots[DEVICE.id]?.profile).toBe('default')
 
     const clone = await cloneRemote(remote)
-    expect(await readFile(join(clone, 'backup', 'README.md'), 'utf8')).toBe(BACKUP_README)
+    expect(await readCloneText(clone, 'backup', 'README.md')).toBe(BACKUP_README)
     expect((await readJsonObject(join(clone, 'backup', 'metadata', 'schema.json'))).note).toBe('test')
     // Both caller path forms are accepted: backup-relative and repository-relative.
     if (paths.root !== '') {
@@ -775,10 +780,10 @@ describeGit('RepoStore (real git)', () => {
     expect(writeB.retried).toBe(true)
     expect(writeB.pushed).toBe(true)
     const clone = await cloneRemote(remote)
-    expect(await readFile(join(clone, 'keep.txt'), 'utf8')).toBe('A\n+B\n')
+    expect(await readCloneText(clone, 'keep.txt')).toBe('A\n+B\n')
     await expect(readFile(join(clone, 'obsolete.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     // Device A''s files survive because the retry rebuilt on top of the pulled tree.
-    expect(await readFile(join(clone, 'manifest.json'), 'utf8')).toContain('"schemaVersion"')
+    expect(await readCloneText(clone, 'manifest.json')).toContain('"schemaVersion"')
   })
 
   it('accepts backup-relative file paths when backupDir is set', async () => {
