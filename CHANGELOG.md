@@ -6,6 +6,16 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-25
+
+修复 Windows 上的换行符与可执行位问题，让备份仓库在不同平台之间保持字节一致；同时修好 Windows CI。
+
+### Fixed
+
+- 备份仓库工作区固定使用 LF：准备仓库时（克隆后、检出前）设置仓库级 `core.autocrlf=false` 与 `core.eol=lf`，避免 Windows 默认的 CRLF 转换改写技能文件和 README；跨设备同步的技能内容不再因平台不同而变化。
+- 技能可执行位改为显式写入 Git index（`git update-index --chmod=+x`），读取时从 `git ls-tree` 的 `100755` 模式判断，不再依赖 Windows 上不存在的文件系统可执行位；在 Windows 上备份或还原带脚本的技能时不会丢失 `+x`。
+- 测试可在 Windows 运行：路径断言改为平台感知（`resolve`/`join`/分隔符），测试用克隆固定 LF 并强制重检，状态计数先失效扫描缓存，本地路径断言用 `realpath` 规范化。
+
 ## [0.3.0] - 2026-11-24
 
 多设备同步重构：仓库升级为 v2 模型（每台设备声明自己的期望状态 + 仓库策略），删除、版本与安装行为都有明确规则；旧仓库首次写入时自动迁移，v1 镜像继续保留供旧版读取。
@@ -220,7 +230,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 - 设置页基础界面、HTTP 路由与 6 个 Agent 工具。
 - 单元测试、双设备集成测试与 CI（macOS / Windows / Linux）。
 
-[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.13...v0.3.0
 [0.2.13]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.11...v0.2.12
