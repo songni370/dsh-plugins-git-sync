@@ -6,6 +6,15 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-25
+
+修复 scoped npm 包（`@scope/name`）被误判成本地插件、因而无法备份的问题。
+
+### Fixed
+
+- 插件来源判定不再把带版本号的 scoped 包名当成相对路径：DSH 上报的 `source` 形如 `@scope/name@1.2.3`，整串不匹配 npm 包名、却又含有 `/`，以前会命中「本地路径」分支，被记为 `local:`、`installSpec=null`、不可备份，还会拼出一个不存在的本地目录。现在先按 npm 来源识别，生成可复现的 `@scope/name@version` 安装源。影响所有从 npm 安装的 scoped 插件（例如 `@michengai/dsh-skills-manager`）。
+- 新增回归测试覆盖 scoped npm 来源的分类。
+
 ## [0.3.1] - 2026-11-25
 
 修复 Windows 上的换行符与可执行位问题，让备份仓库在不同平台之间保持字节一致；同时修好 Windows CI。
@@ -230,7 +239,8 @@ This file follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [
 - 设置页基础界面、HTTP 路由与 6 个 Agent 工具。
 - 单元测试、双设备集成测试与 CI（macOS / Windows / Linux）。
 
-[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.13...v0.3.0
 [0.2.13]: https://github.com/songni370/dsh-plugins-git-sync/compare/v0.2.12...v0.2.13
