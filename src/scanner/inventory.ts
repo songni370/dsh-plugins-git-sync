@@ -169,7 +169,9 @@ function isLocalSpec(spec: string): boolean {
   if (spec === '~' || spec.startsWith('~/') || spec.startsWith('~\\')) return true
   if (spec === '.' || spec === '..') return true
   if (spec.startsWith('./') || spec.startsWith('../') || spec.startsWith('.\\') || spec.startsWith('..\\')) return true
-  return !NPM_NAME_PATTERN.test(spec) && /[\\/]/.test(spec)
+  // A scoped `@scope/name@version` spec contains a slash but is a registry
+  // spec (the Host reports `source` that way), never a relative path.
+  return !isNpmSpec(spec) && /[\\/]/.test(spec)
 }
 
 /** npm version range, exact version, or dist-tag. */

@@ -181,6 +181,38 @@ describe('createScanner inventory', () => {
     ])
   })
 
+  it('classifies a scoped npm name@version source as npm, not a local path', async () => {
+    const root = await makeTempDir()
+    const profilesRoot = join(root, 'profiles')
+    const services = {
+      pluginManager: fakeManager(
+        [
+          bundle({
+            name: '@acme/scoped-plugin',
+            version: '1.5.4',
+            source: '@acme/scoped-plugin@1.5.4',
+            rows: [{ rowId: 'scoped-row', moduleName: '@acme/scoped-plugin', entryId: 'entry-scoped' }],
+          }),
+        ],
+        [plugin({ entryId: 'entry-scoped', moduleName: '@acme/scoped-plugin', enabled: true })],
+      ),
+    }
+
+    const inventory = await scannerFor(profilesRoot, services).scan({
+      config: makeConfig(),
+      profile: 'default',
+    })
+
+    expect(recordById(inventory, '@acme/scoped-plugin')).toMatchObject({
+      name: '@acme/scoped-plugin',
+      version: '1.5.4',
+      origin: 'npm',
+      installSpec: '@acme/scoped-plugin@1.5.4',
+      syncable: true,
+      pathOnly: false,
+    })
+  })
+
   it('detects git, credentialed git and tarball origins', async () => {
     const root = await makeTempDir()
     const profilesRoot = join(root, 'profiles')
